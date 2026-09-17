@@ -1,0 +1,79 @@
+{
+  "name": "@codepiddy/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main/index.js",
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "npm run build:main && npm run build:renderer",
+    "build:main": "node scripts/build-main.mjs",
+    "build:renderer": "vite build",
+    "typecheck": "tsgo -p tsconfig.node.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "electron .",
+    "package:dir": "electron-builder --dir --win --x64",
+    "package:win": "electron-builder --win nsis --x64",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@codepiddy/core": "0.1.0",
+    "@codepiddy/shared": "0.1.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "shx": "0.4.0",
+    "vite": "8.3.0",
+    "vitest": "4.1.11"
+  },
+  "description": "A workflow-oriented Windows coding agent client powered by Pi.",
+  "author": "CodePIddy",
+  "build": {
+    "appId": "com.codepiddy.desktop",
+    "productName": "CodePIddy",
+    "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "../../.artifacts/release",
+      "buildResources": "resources/icons"
+    },
+    "files": [
+      "dist/**/*",
+      "resources/icons/codepiddy-icon-1024.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../.artifacts/codepiddy-runtime",
+        "to": "runtime"
+      }
+    ],
+    "win": {
+      "icon": "resources/icons/codepiddy-icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CodePIddy",
+      "deleteAppDataOnUninstall": false
+    },
+    "electronDist": "../../node_modules/electron/dist",
+    "afterPack": "scripts/after-pack.cjs"
+  }
+}

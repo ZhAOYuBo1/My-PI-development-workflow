@@ -1,115 +1,183 @@
 <p align="center">
-  <a href="https://pi.dev">
-    <img alt="pi logo" src="https://pi.dev/logo-auto.svg" width="128">
-  </a>
+  <img src="packages/codepiddy-desktop/public/codepiddy-icon.png" alt="CodePIddy" width="112" />
 </p>
+
+<h1 align="center">CodePIddy</h1>
+
+<p align="center">A workflow-oriented Windows coding agent desktop client powered by Pi.</p>
+
 <p align="center">
-  <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
-  <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@earendil-works/pi-coding-agent?style=flat-square" /></a>
+  <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-2563eb?style=flat-square" />
+  <img alt="Electron" src="https://img.shields.io/badge/client-Electron-334155?style=flat-square" />
+  <img alt="Pi runtime" src="https://img.shields.io/badge/runtime-Pi-111827?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square" />
+  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-f59e0b?style=flat-square" />
 </p>
 
-> New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
+<p align="center">
+  <img src="docs/images/codepiddy-overview.png" alt="CodePIddy project workflow" width="920" />
+</p>
 
-# Pi Agent Harness
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/codepiddy-agent.png" alt="CodePIddy agent conversation" /></td>
+    <td width="50%"><img src="docs/images/codepiddy-settings.png" alt="CodePIddy per-role skill settings" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Pi conversation, tools and context</strong></td>
+    <td align="center"><strong>Per-role Skill management</strong></td>
+  </tr>
+</table>
 
-This is the home of the Pi agent harness project including our self extensible coding agent.
+> [!WARNING]
+> CodePIddy is under active development. The current repository is suitable for development and testing, not unattended production use.
 
-* **[@earendil-works/pi-coding-agent](packages/coding-agent)**: Interactive coding agent CLI
-* **[@earendil-works/pi-agent-core](packages/agent)**: Agent runtime with tool calling and state management
-* **[@earendil-works/pi-ai](packages/ai)**: Unified multi-provider LLM API (OpenAI, Anthropic, Google, …)
+## What it is
 
-To learn more about Pi:
+CodePIddy adds a desktop workflow layer on top of the Pi agent runtime. It is not a TUI skin and it does not automatically chain agents. The user creates and controls long-lived agents inside isolated Work Items.
 
-* [Visit pi.dev](https://pi.dev), the project website with demos
-* [Read the documentation](https://pi.dev/docs/latest), but you can also ask the agent to explain itself
+Each opened project has two work lanes:
 
-## All Packages
-
-| Package | Description |
-|---------|-------------|
-| **[@earendil-works/chord](packages/chord)** | Standalone application-composition runtime for services, replicated state, RPC, and plugins |
-| **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
-| **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
-| **[@earendil-works/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
-
-For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
-
-## Permissions & Containerization
-
-Pi does not include a built-in permission system for restricting filesystem, process, network, or credential access. By default, it runs with the permissions of the user and process that launched it.
-
-If you need stronger boundaries, containerize or sandbox Pi. See [packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for three patterns:
-
-- **Gondolin extension**: keep `pi` and provider auth on the host while routing built-in tools and `!` commands into a local Linux micro-VM.
-- **Plain Docker**: run the whole `pi` process in a local container for simple isolation.
-- **OpenShell**: run the whole `pi` process in a policy-controlled sandbox.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).  Longer term plans for Pi can also be found in [RFCs](https://rfc.earendil.com/keyword/pi/).
-
-## Development
-
-```bash
-npm install --ignore-scripts  # Install all dependencies without running lifecycle scripts
-npm run build         # Refresh model data, then build all packages
-npm run build:offline # Rebuild using existing model data without network access
-npm run check         # Lint, format, and type check
-./test.sh            # Run tests (skips LLM-dependent tests without API keys)
-./pi-test.sh         # Run pi from sources (can be run from any directory)
+```text
+New requirement: Requirement Analysis -> Coding -> Review
+Bug fix:        Bug Fix -> Review
 ```
 
-## Building standalone binaries from release source
+Agents hand work to the next role through files inside the current Work Item. The user decides when to create, switch, retry, reset, review, archive, or delete an item.
 
-GitHub releases include a versioned source archive covered by the release's `SHA256SUMS` file. Extract it and run the same build script used for the official standalone binaries:
+## Current capabilities
 
-```bash
-VERSION="<release-version>"
-tar -xzf "pi-${VERSION}-source.tar.gz"
-cd "pi-${VERSION}"
-./scripts/build-binaries.sh --offline-model-data --platform linux-x64 --out "$PWD/out"
+- Electron desktop client for Windows
+- Recent-project persistence with SQLite
+- Isolated requirement and bug-fix Work Items
+- One long-lived Pi session per Agent Slot
+- Pi RPC streaming, tool cards, thinking blocks, interruption, retry and context usage
+- Dynamic Pi slash commands and model selection
+- Session tree, fork, clone, reset and compaction
+- Configurable permission approval UI
+- Project-level single-writer lease
+- Tavily search-only MCP integration
+- Per-role Skill assignment
+- Requirement approval and document handoff gates
+
+## Workflow boundaries
+
+### Requirement Analysis Agent
+
+Starts from the title and description supplied by the user. It has no prerequisite handoff documents and creates:
+
+```text
+requirement.md
+design.md
+tasks.md
 ```
 
-The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the executable with its runtime assets; pass `--skip-install` if dependencies are already provided.
+### Coding Agent
 
-## Supply-chain hardening
+Reads the approved requirement handoff, implements the change, and creates:
 
-We treat npm dependency changes as reviewed code changes.
+```text
+implementation.md
+```
 
-- Direct external dependencies are pinned to exact versions. Internal workspace packages remain version-ranged.
-- `.npmrc` sets `save-exact=true` and `min-release-age=2` to avoid same-day dependency releases during npm resolution.
-- `package-lock.json` is the dependency ground truth. Pre-commit blocks accidental lockfile commits unless `PI_ALLOW_LOCKFILE_CHANGE=1` is set.
-- `npm run check` verifies pinned direct deps, native TypeScript import compatibility, and the generated coding-agent shrinkwrap.
-- The published CLI package includes `packages/coding-agent/npm-shrinkwrap.json`, generated from the root lockfile, to pin transitive deps for npm users.
-- Release smoke tests use `npm run release:local` to build, pack, and create isolated npm and Bun installs outside the repo before tagging a release.
-- Local release installs, documented npm installs, and `pi update --self` use `--ignore-scripts` where supported.
-- CI installs with `npm ci --ignore-scripts`, and a scheduled GitHub workflow runs `npm audit --omit=dev` plus `npm audit signatures --omit=dev`.
-- Shrinkwrap generation has an explicit allowlist for dependency lifecycle scripts; new lifecycle-script deps fail checks until reviewed.
+### Bug Fix Agent
 
-## Share your OSS coding agent sessions
+Starts from the user-provided bug description, reproduces and fixes the problem, and creates:
 
-If you use Pi or other coding agents for open source work, please share your sessions.
+```text
+fix.md
+```
 
-Public OSS session data helps improve coding agents with real-world tasks, tool use, failures, and fixes instead of toy benchmarks.
+### Review Agent
 
-For the full explanation, see [this post on X](https://x.com/badlogicgames/status/2037811643774652911).
+Reads the implementation or fix handoff, independently inspects the real code changes, adds or updates tests, and creates:
 
-To publish sessions, use [`badlogic/pi-share-hf`](https://github.com/badlogic/pi-share-hf). Read its README.md for setup instructions. All you need is a Hugging Face account, the Hugging Face CLI, and `pi-share-hf`.
+```text
+review.md
+```
 
-You can also watch [this video](https://x.com/badlogicgames/status/2041151967695634619), where I show how I publish my `pi-mono` sessions.
+## Development status
 
-I regularly publish my own `pi-mono` work sessions here:
+As of September 17, 2026:
 
-- [badlogicgames/pi-mono on Hugging Face](https://huggingface.co/datasets/badlogicgames/pi-mono)
+- Workflow MVP: approximately 85%
+- Desktop interaction completeness: approximately 75%
+- Production-release readiness: approximately 60%
+
+Major remaining work includes RPC soak testing and recovery, structured handoff validation, Electron E2E tests, runtime IPC validation, transcript virtualization, draft persistence, code signing, auto-update and crash diagnostics.
+
+See [`docs/codepiddy/MVP_SPEC.md`](docs/codepiddy/MVP_SPEC.md) and [`docs/codepiddy/DECISIONS.md`](docs/codepiddy/DECISIONS.md) for product decisions and implementation boundaries.
+
+## Requirements
+
+- Windows 10 or Windows 11
+- Node.js 22.19 or newer
+- npm
+- At least one Pi-supported model/provider configuration
+
+Pi provider and model configuration is read from its native files:
+
+```text
+~/.pi/agent/models.json
+~/.pi/agent/settings.json
+```
+
+## Run locally
+
+```powershell
+npm ci
+npm run build:codepiddy
+npm start --workspace=@codepiddy/desktop
+```
+
+Run the CodePIddy checks:
+
+```powershell
+npm test --workspace=@codepiddy/core
+npm test --workspace=@codepiddy/desktop
+npm run check
+```
+
+Prepare a local Windows installer only when a release build is required:
+
+```powershell
+npm run prepare:codepiddy-package
+npm run package:win --workspace=@codepiddy/desktop
+```
+
+Build output is written under `.artifacts/` and is not committed.
+
+## Repository layout
+
+```text
+packages/codepiddy-desktop/              Electron Main, Preload and React Renderer
+packages/codepiddy-core/                 Work Items, Agent registry, Pi RPC process and write lease
+packages/codepiddy-shared/               Shared IPC and workflow types
+packages/codepiddy-agent-skills/         Bundled per-role Skills
+packages/codepiddy-permission-extension/ Permission-system integration
+packages/codepiddy-tavily-search-mcp/    Tavily MCP server
+packages/codepiddy-tavily-tool-extension Pi tool wrapper for search-only web access
+docs/codepiddy/                          Product decisions, architecture and workflow documentation
+```
+
+## Security notes
+
+- Electron uses context isolation, a sandboxed renderer and disabled Node integration.
+- Secrets saved by CodePIddy use Electron `safeStorage` when available.
+- The current Windows MVP does not provide a strong execution sandbox.
+- Agent processes run with the operating-system permissions of the current user.
+- Review permission policy before allowing commands or filesystem writes.
+
+See [`SECURITY.md`](SECURITY.md).
+
+## Upstream Pi
+
+CodePIddy is derived from the open-source Pi Agent Harness. Pi remains the model, tool, session, Skill and slash-command runtime; CodePIddy supplies the desktop workflow and project-management layer.
+
+- Upstream project: `earendil-works/pi`
+- Original upstream README: [`docs/upstream/PI_README.md`](docs/upstream/PI_README.md)
+- Upstream GitHub automation is preserved in the baseline commit but removed from the active CodePIddy tree.
 
 ## License
 
-MIT
-
-<p align="center">
-  <a href="https://pi.dev">pi.dev</a> domain graciously donated by
-  <br /><br />
-  <a href="https://exe.dev"><img src="packages/coding-agent/docs/images/exy.png" alt="Exy mascot" width="48" /><br />exe.dev</a>
-</p>
+This repository retains the upstream MIT license. See [`LICENSE`](LICENSE).

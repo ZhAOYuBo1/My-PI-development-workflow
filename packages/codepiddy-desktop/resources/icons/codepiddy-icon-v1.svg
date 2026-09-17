@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="126" y1="102" x2="874" y2="934" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7749FF"/>
+      <stop offset="0.48" stop-color="#4C55F6"/>
+      <stop offset="1" stop-color="#20D7C4"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="324" y1="414" x2="702" y2="654" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5262F6"/>
+      <stop offset="0.58" stop-color="#426FEF"/>
+      <stop offset="1" stop-color="#17C9C0"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="276" y1="170" x2="628" y2="552" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="148" y="128" width="744" height="748" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#242080" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- transparent canvas with a friendly rounded app tile -->
+  <rect x="48" y="48" width="928" height="928" rx="232" fill="url(#bg)"/>
+  <path d="M124 307C188 157 321 84 484 71C324 129 224 246 190 397C164 375 142 345 124 307Z" fill="url(#shine)"/>
+
+  <!-- cat-like buddy ears merged into a geometric Pi silhouette -->
+  <g filter="url(#shadow)">
+    <path d="M236 359L270 205C279 164 328 149 359 178L468 279H556L665 178C696 149 745 164 754 205L788 359L719 390H305L236 359Z" fill="white"/>
+
+    <!-- Pi top bar and rounded robot head -->
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M246 322C246 278 282 242 326 242H698C742 242 778 278 778 322V615C778 682 735 741 671 762V827C671 855 648 878 620 878H575C547 878 524 855 524 827V780H500V827C500 855 477 878 449 878H404C376 878 353 855 353 827V762C289 741 246 682 246 615V322ZM317 441C317 385 362 340 418 340H606C662 340 707 385 707 441V557C707 613 662 658 606 658H418C362 658 317 613 317 557V441Z" fill="white"/>
+
+    <!-- friendly screen -->
+    <rect x="317" y="340" width="390" height="318" rx="112" fill="url(#screen)"/>
+    <path d="M363 389C404 353 458 340 511 340H606C662 340 707 385 707 441V462C610 391 477 378 363 430V389Z" fill="white" fill-opacity="0.12"/>
+
+    <!-- CodeBuddy-inspired expressive eyes -->
+    <rect x="412" y="438" width="56" height="112" rx="28" transform="rotate(-28 412 438)" fill="white"/>
+    <rect x="557" y="409" width="56" height="112" rx="28" transform="rotate(-28 557 409)" fill="white"/>
+
+    <!-- subtle Pi center notch -->
+    <path d="M488 682H536V780H488V682Z" fill="#4D55F5" fill-opacity="0.22"/>
+  </g>
+
+  <!-- small companion spark -->
+  <path d="M818 678C818 648 842 624 872 624C842 624 818 600 818 570C818 600 794 624 764 624C794 624 818 648 818 678Z" fill="white" fill-opacity="0.92"/>
+</svg>

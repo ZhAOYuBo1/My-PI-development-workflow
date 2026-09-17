@@ -25,6 +25,7 @@ import {
 	waitForRawStdoutBackpressure,
 	writeRawStdout,
 } from "../../core/output-guard.ts";
+import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { type Theme, theme } from "../interactive/theme/theme.ts";
 import { toJsonEvent } from "../json-event.ts";
@@ -667,6 +668,11 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "set_session_name");
 			}
 
+			case "reload": {
+				await session.reload();
+				return success(id, "reload");
+			}
+
 			// =================================================================
 			// Messages
 			// =================================================================
@@ -680,7 +686,29 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// =================================================================
 
 			case "get_commands": {
-				const commands: RpcSlashCommand[] = [];
+				const desktopSupportedBuiltins = new Set([
+					"settings",
+					"model",
+					"tree",
+					"thinking",
+					"export",
+					"copy",
+					"name",
+					"session",
+					"fork",
+					"clone",
+					"new",
+					"compact",
+					"reload",
+				]);
+				const commands: RpcSlashCommand[] = BUILTIN_SLASH_COMMANDS.filter((command) =>
+					desktopSupportedBuiltins.has(command.name),
+				).map((command) => ({
+					name: command.name,
+					description: command.description,
+					...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
+					source: "builtin" as const,
+				}));
 
 				for (const command of session.extensionRunner.getRegisteredCommands()) {
 					commands.push({
@@ -702,7 +730,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 
 				for (const skill of session.resourceLoader.getSkills().skills) {
 					commands.push({
-						name: `skill:${skill.name}`,
+						name: skill.name.startsWith("skill:") ? skill.name : `skill:${skill.name}`,
 						description: skill.description,
 						source: "skill",
 						sourceInfo: skill.sourceInfo,

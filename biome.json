@@ -26,6 +26,7 @@
 	"files": {
 		"includes": [
 			"packages/*/src/**/*.ts",
+			"packages/*/src/**/*.tsx",
 			"packages/*/test/**/*.ts",
 			"packages/session-backends/*/src/**/*.ts",
 			"packages/session-backends/*/test/**/*.ts",
@@ -35,6 +36,7 @@
 			"!**/models.generated.ts",
 			"!**/*.models.ts",
 			"!packages/mom/data/**/*",
+			"!packages/codepiddy-permission-extension/**/*",
 			"!!**/node_modules"
 		]
 	}

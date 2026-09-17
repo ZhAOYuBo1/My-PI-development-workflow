@@ -66,6 +66,7 @@ export type RpcCommand =
 	| { id?: string; type: "get_tree" }
 	| { id?: string; type: "get_last_assistant_text" }
 	| { id?: string; type: "set_session_name"; name: string }
+	| { id?: string; type: "reload" }
 
 	// Messages
 	| { id?: string; type: "get_messages" }
@@ -83,10 +84,11 @@ export interface RpcSlashCommand {
 	name: string;
 	/** Human-readable description */
 	description?: string;
+	argumentHint?: string;
 	/** What kind of command this is */
-	source: "extension" | "prompt" | "skill";
-	/** Source metadata for the owning resource */
-	sourceInfo: SourceInfo;
+	source: "builtin" | "extension" | "prompt" | "skill";
+	/** Source metadata for the owning resource. Built-in commands have no source file. */
+	sourceInfo?: SourceInfo;
 }
 
 // ============================================================================
@@ -222,6 +224,7 @@ export type RpcResponse =
 			data: { text: string | null };
 	  }
 	| { id?: string; type: "response"; command: "set_session_name"; success: true }
+	| { id?: string; type: "response"; command: "reload"; success: true }
 
 	// Messages
 	| { id?: string; type: "response"; command: "get_messages"; success: true; data: { messages: AgentMessage[] } }

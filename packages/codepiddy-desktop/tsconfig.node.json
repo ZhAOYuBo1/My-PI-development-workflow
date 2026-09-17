@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "paths": {
+      "@codepiddy/core": ["../codepiddy-core/src/index.ts"],
+      "@codepiddy/shared": ["../codepiddy-shared/src/index.ts"]
+    }
+  },
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

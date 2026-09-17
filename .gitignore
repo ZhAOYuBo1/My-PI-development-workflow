@@ -43,3 +43,22 @@ plans/
 .pi/hf-sessions-backup/
 collect.sh
 packages/agent/docs/extensions/pi-server-artifact/index.md
+
+# CodePIddy local state
+.codepiddy/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Local secrets and certificates
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Windows packaging and diagnostics
+*.dmp
+*.blockmap

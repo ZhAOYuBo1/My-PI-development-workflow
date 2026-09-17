@@ -42,6 +42,8 @@
 			"@earendil-works/pi-server": ["./packages/server/src/index.ts"],
 			"@earendil-works/pi-server/unix": ["./packages/server/src/transports/unix/index.ts"],
 			"@earendil-works/pi-server/*": ["./packages/server/src/*"],
+			"@codepiddy/shared": ["./packages/codepiddy-shared/src/index.ts"],
+			"@codepiddy/core": ["./packages/codepiddy-core/src/index.ts"],
 			"typebox": ["./node_modules/typebox"],
 			"@earendil-works/pi-tui": ["./packages/tui/src/index.ts"],
 			"@earendil-works/pi-tui/*": ["./packages/tui/src/*"],
@@ -50,5 +52,10 @@
 		}
 	},
 	"include": ["packages/*/src/**/*", "packages/*/test/**/*", "packages/session-backends/*/src/**/*", "packages/session-backends/*/test/**/*", "packages/coding-agent/examples/**/*"],
-	"exclude": ["**/dist/**", "packages/coding-agent/examples/extensions/gondolin/**"]
+	"exclude": [
+		"**/dist/**",
+		"packages/coding-agent/examples/extensions/gondolin/**",
+		"packages/codepiddy-desktop/src/renderer/**",
+		"packages/codepiddy-permission-extension/**"
+	]
 }
