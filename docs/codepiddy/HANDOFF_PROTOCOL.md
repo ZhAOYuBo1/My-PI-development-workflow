@@ -24,7 +24,7 @@ Requirement Analysis Agent
 
 User Approval Gate
   -> 用户在客户端批准需求
-  -> Host 校验三个交接文档非空
+  -> Host 校验三个交接文档存在、内容充足并包含规定章节
 
 Coding Agent
   <- requirement.md + design.md + tasks.md
@@ -39,11 +39,12 @@ Review Agent
 
 ```text
 Bug Fix Agent
-  <- bug.md + 上一次 review.md
+  <- 用户原始标题与描述（第一次处理）
+  <- 上一次 review.md（修正轮次，可选）
   -> fix.md
 
 Review Agent
-  <- bug.md + fix.md + Git diff
+  <- fix.md + Git diff
   -> review.md
 ```
 
@@ -55,11 +56,28 @@ Review Agent
 | `design.md` | Requirement Analysis | 只读 |
 | `tasks.md` | Requirement Analysis | 只读 |
 | `implementation.md` | Coding | Review 只读 |
-| `bug.md` | 用户/Bug Fix | Review 只读 |
 | `fix.md` | Bug Fix | Review 只读 |
 | `review.md` | Review | Coding/Bug Fix 只读 |
 
 用户可以编辑所有文档。Agent 在覆盖用户修改前必须先读取最新版本。
+
+## 结构化解锁规则
+
+### Requirement Approval
+
+- `requirement.md`：`## 目标`、`## 功能需求`、`## 验收条件`；
+- `design.md`：`## 设计方案`、`## 影响范围`、`## 验证策略`；
+- `tasks.md`：`## 任务拆解`，且至少包含一个 `- [ ]` 任务项。
+
+### Feature Review
+
+- `implementation.md`：`## 实现摘要`、`## 修改文件`、`## 测试结果`、`## 审查重点`。
+
+### Bug Review
+
+- `fix.md`：`## 根因`、`## 修改文件`、`## 验证结果`、`## 审查重点`。
+
+仅有文件或标题但内容明显过短，仍视为未完成。Host 会在客户端阻止下游 Agent，并列出缺失文件、章节或内容长度问题。
 
 ## 最小文档规则
 

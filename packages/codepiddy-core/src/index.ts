@@ -1,5 +1,12 @@
 export { AgentRegistry, type StoredAgentInstance } from "./agent-registry.ts";
 export { searchProjectFiles } from "./file-search.ts";
+export {
+	type HandoffDocumentIssue,
+	type HandoffStage,
+	type HandoffValidationResult,
+	handoffValidationMessage,
+	validateHandoff,
+} from "./handoff-validation.ts";
 export { PiRpcProcess, type PiRpcProcessOptions } from "./pi-rpc-process.ts";
 export {
 	approveRequirement,

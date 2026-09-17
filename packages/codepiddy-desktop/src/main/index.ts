@@ -195,6 +195,7 @@ function roleDocumentContract(agent: StoredAgentInstance): string {
 			`Maintain: ${document("design.md")}`,
 			`Maintain: ${document("tasks.md")}`,
 			"Use the grill-with-docs skill for requirement clarification and domain modeling.",
+			"Host-required headings: requirement.md = 目标 / 功能需求 / 验收条件; design.md = 设计方案 / 影响范围 / 验证策略; tasks.md = 任务拆解 plus Markdown task checkboxes.",
 		].join("\n");
 	}
 	if (agent.role === "coding") {
@@ -206,7 +207,7 @@ function roleDocumentContract(agent: StoredAgentInstance): string {
 			`Read: ${document("tasks.md")}`,
 			`Optional review input: ${document("review.md")}`,
 			`Required output: ${document("implementation.md")}`,
-			"implementation.md must list every changed project-relative file, key symbols or code regions, behavior changes, commands, tests, known issues, and review focus.",
+			"Host-required headings in implementation.md: 实现摘要 / 修改文件 / 测试结果 / 审查重点. It must list every changed project-relative file, key symbols or code regions, behavior changes, commands, tests, and known issues.",
 		].join("\n");
 	}
 	if (agent.role === "bug-fix") {
@@ -215,7 +216,7 @@ function roleDocumentContract(agent: StoredAgentInstance): string {
 			"There are no prerequisite handoff documents for this role. Start from the user-provided title and description in the runtime context, then inspect the project to reproduce the bug.",
 			`Optional review input for a later correction pass: ${document("review.md")}`,
 			`Required output: ${document("fix.md")}`,
-			"fix.md must list the reproduction, root cause, every changed project-relative file, key symbols or code regions, behavior changes, commands, tests, remaining risks, and review focus.",
+			"Host-required headings in fix.md: 根因 / 修改文件 / 验证结果 / 审查重点. It must list the reproduction, root cause, every changed project-relative file, key symbols or code regions, behavior changes, commands, tests, and remaining risks.",
 		].join("\n");
 	}
 	return [

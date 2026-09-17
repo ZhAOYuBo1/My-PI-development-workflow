@@ -4,11 +4,11 @@ import type { AgentRole } from "@codepiddy/shared";
 
 export const DEFAULT_KICKOFF_PROMPTS: Record<AgentRole, string> = {
 	"requirement-analysis":
-		"请从客户端提供的原始标题与描述开始，使用 Grill With Docs 澄清需求，并创建 requirement.md、design.md 和 tasks.md。文档完成后停止，等待用户在客户端批准需求。",
+		"请从客户端提供的原始标题与描述开始，使用 Grill With Docs 澄清需求，并按规定章节创建 requirement.md、design.md 和 tasks.md。文档完成后停止，等待用户在客户端批准需求。",
 	coding:
-		"请读取当前 Work Item 的 requirement.md、design.md、tasks.md 以及存在的 review.md，按照交接文档编写或修复代码，并更新 implementation.md。",
+		"请读取当前 Work Item 的 requirement.md、design.md、tasks.md 以及存在的 review.md，按照交接文档编写或修复代码，并按规定章节更新 implementation.md。",
 	"bug-fix":
-		"请从客户端提供的原始标题与描述开始复现问题、定位根因并修复代码；完成后创建 fix.md，后续修正轮次再读取存在的 review.md。",
+		"请从客户端提供的原始标题与描述开始复现问题、定位根因并修复代码；完成后按规定章节创建 fix.md，后续修正轮次再读取存在的 review.md。",
 	review:
 		"请读取当前 Work Item 的交接文档并独立检查真实 Git diff。补充或修改测试并执行审核，不要修改生产代码，最后更新 review.md。",
 };
@@ -36,11 +36,11 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 ## 必须维护
 
-- requirement.md：目标、非目标、场景、功能需求、边界和验收条件；
-- design.md：设计方案、影响范围、关键决策、风险和验证策略；
-- tasks.md：Coding Agent 可执行的任务拆解和注意事项。
+- requirement.md：必须包含 “## 目标”、“## 功能需求”、“## 验收条件”；可补充非目标、场景和边界；
+- design.md：必须包含 “## 设计方案”、“## 影响范围”、“## 验证策略”；可补充关键决策和风险；
+- tasks.md：必须包含 “## 任务拆解”，并使用 “- [ ]” Markdown 任务项形成依赖有序的执行清单。
 
-文档必须保持人类可读，不要把完整聊天记录复制进去。
+这些标题是 Host 批准门的结构化契约，不得改名或省略。文档必须保持人类可读，不要把完整聊天记录复制进去。
 `,
 	coding: `# Coding Agent
 
@@ -68,7 +68,9 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 ## 必须维护
 
-- implementation.md：必须记录实现摘要、每个修改文件的项目相对路径、关键符号或代码区域、行为变化、执行命令、测试结果、计划偏差、已知问题，以及交给 Review Agent 的重点。Review Agent 应仅凭该文档和真实 diff 就能定位本次代码。
+- implementation.md：必须包含 “## 实现摘要”、“## 修改文件”、“## 测试结果”、“## 审查重点”。在这些章节中记录每个修改文件的项目相对路径、关键符号或代码区域、行为变化、执行命令、测试结果、计划偏差和已知问题。Review Agent 应仅凭该文档和真实 diff 就能定位本次代码。
+
+这些标题是 Review Agent 解锁门的结构化契约，不得改名或省略。
 `,
 	"bug-fix": `# Bug Fix Agent
 
@@ -91,7 +93,9 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 ## 必须维护
 
-- fix.md：必须记录复现方式、根因、修复摘要、每个修改文件的项目相对路径、关键符号或代码区域、行为变化、验证命令与结果、剩余风险，以及交给 Review Agent 的重点。Review Agent 应仅凭该文档和真实 diff 就能定位本次修复。
+- fix.md：必须包含 “## 根因”、“## 修改文件”、“## 验证结果”、“## 审查重点”。在这些章节中记录复现方式、修复摘要、每个修改文件的项目相对路径、关键符号或代码区域、行为变化、验证命令与结果和剩余风险。Review Agent 应仅凭该文档和真实 diff 就能定位本次修复。
+
+这些标题是 Review Agent 解锁门的结构化契约，不得改名或省略。
 `,
 	review: `# Review Agent
 
@@ -124,7 +128,7 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 ## 必须维护
 
-- review.md：实际 diff、测试变更、执行命令、测试结果、Finding、风险和 verdict。
+- review.md：建议固定包含 “## 审查范围”、“## 测试结果”、“## Findings”、“## 风险”、“## Verdict”，记录实际 diff、测试变更、执行命令和最终结论。
 `,
 };
 

@@ -21,4 +21,10 @@ Work in two explicit phases:
 
 Use only the exact workflow document paths supplied in the CodePIddy runtime context. Empty files mean the document has not been written yet; do not search sibling Work Items or invent alternate `.codepiddy` paths.
 
+Use the exact Host-validated headings:
+
+- `requirement.md`: `## 目标`, `## 功能需求`, `## 验收条件`
+- `design.md`: `## 设计方案`, `## 影响范围`, `## 验证策略`
+- `tasks.md`: `## 任务拆解` followed by Markdown `- [ ]` task items
+
 Stop after the three handoff documents are coherent and testable. Tell the user they are ready for manual approval; do not start implementation.

@@ -14,6 +14,7 @@ import type {
 	WorkItemStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
+import { handoffValidationMessage, validateHandoff } from "./handoff-validation.ts";
 import { DEFAULT_KICKOFF_PROMPTS, ensureDefaultRoleProfiles } from "./role-profiles.ts";
 
 const CODEPIDDY_DIRECTORY_NAME = ".codepiddy";
@@ -81,29 +82,19 @@ async function removeEmptyWorkflowDocuments(directory: string, lane: LaneKind): 
 	);
 }
 
-async function fileHasContent(filePath: string): Promise<boolean> {
-	try {
-		return (await readFile(filePath, "utf8")).trim().length > 0;
-	} catch {
-		return false;
-	}
-}
-
 async function createAgentSlots(
 	lane: LaneKind,
 	directory: string,
 	manifest: WorkItemManifest,
 ): Promise<AgentSlotSummary[]> {
-	const reviewInputReady = await fileHasContent(
-		path.join(directory, lane === "requirements" ? "implementation.md" : "fix.md"),
-	);
+	const reviewHandoff = await validateHandoff(directory, lane === "requirements" ? "feature-review" : "bug-review");
 	return rolesForLane(lane).map((role) => {
 		let blockedReason: string | undefined;
 		if (role === "coding" && !manifest.requirementApprovedAt) {
 			blockedReason = "需求文档尚未由用户批准";
-		} else if (role === "review" && !reviewInputReady) {
-			blockedReason =
-				lane === "requirements" ? "等待 Coding Agent 生成 implementation.md" : "等待 Bug Fix Agent 生成 fix.md";
+		} else if (role === "review" && !reviewHandoff.ready) {
+			const producer = lane === "requirements" ? "Coding Agent" : "Bug Fix Agent";
+			blockedReason = `等待 ${producer} 完成交接：${handoffValidationMessage(reviewHandoff)}`;
 		}
 		return {
 			role,
@@ -333,14 +324,8 @@ export async function approveRequirement(input: ApproveRequirementInput): Promis
 	if (manifest.id !== input.workItemId || manifest.lane !== "requirements") {
 		throw new Error("Work item identity mismatch");
 	}
-	const requiredDocuments = ["requirement.md", "design.md", "tasks.md"];
-	const missing: string[] = [];
-	for (const documentName of requiredDocuments) {
-		if (!(await fileHasContent(path.join(directory, documentName)))) missing.push(documentName);
-	}
-	if (missing.length > 0) {
-		throw new Error(`批准需求前必须完成交接文档：${missing.join("、")}`);
-	}
+	const handoff = await validateHandoff(directory, "requirement-approval");
+	if (!handoff.ready) throw new Error(`批准需求前必须完成结构化交接：${handoffValidationMessage(handoff)}`);
 	const next: WorkItemManifest = {
 		...manifest,
 		requirementApprovedAt: new Date().toISOString(),
