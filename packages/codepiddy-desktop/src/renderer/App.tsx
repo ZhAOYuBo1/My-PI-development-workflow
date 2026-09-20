@@ -19,7 +19,7 @@ import type {
 	SettingsStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
@@ -489,27 +489,63 @@ function RichText({ text }: { text: string }) {
 	return <>{blocks}</>;
 }
 
-function MessageContent({ text }: { text: string }) {
-	const parts: Array<{ type: "text" | "code"; value: string; language?: string }> = [];
-	const pattern = /```([^\n`]*)\n?([\s\S]*?)```/g;
-	let cursor = 0;
-	for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
-		if (match.index > cursor) parts.push({ type: "text", value: text.slice(cursor, match.index) });
-		parts.push({ type: "code", value: match[2] ?? "", language: match[1]?.trim() || undefined });
-		cursor = match.index + match[0].length;
+function MessageCodeBlock({ value, language }: { value: string; language?: string }) {
+	const [copied, setCopied] = useState(false);
+	const [collapsed, setCollapsed] = useState(value.length > 3000 || value.split("\n").length > 24);
+	const [wrapped, setWrapped] = useState(false);
+	async function copyCode(): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(value.replace(/\n$/, ""));
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1400);
+		} catch {}
 	}
-	if (cursor < text.length) parts.push({ type: "text", value: text.slice(cursor) });
-	if (parts.length === 0) parts.push({ type: "text", value: text });
+	return (
+		<div className={`message-code-block ${collapsed ? "collapsed" : ""} ${wrapped ? "wrapped" : ""}`}>
+			<div className="message-code-toolbar">
+				<span>{language || "code"}</span>
+				<div>
+					<button type="button" onClick={() => setWrapped((current) => !current)}>
+						{wrapped ? "不换行" : "自动换行"}
+					</button>
+					<button type="button" onClick={() => void copyCode()}>
+						{copied ? "已复制" : "复制代码"}
+					</button>
+					<button type="button" onClick={() => setCollapsed((current) => !current)}>
+						{collapsed ? "展开" : "折叠"}
+					</button>
+				</div>
+			</div>
+			<pre>
+				<code>{value.replace(/\n$/, "")}</code>
+			</pre>
+		</div>
+	);
+}
+
+const MessageContent = memo(function MessageContent({ text }: { text: string }) {
+	const parts = useMemo(() => {
+		const result: Array<{ type: "text" | "code"; value: string; language?: string }> = [];
+		const pattern = /```([^\n`]*)\n?([\s\S]*?)```/g;
+		let cursor = 0;
+		for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+			if (match.index > cursor) result.push({ type: "text", value: text.slice(cursor, match.index) });
+			result.push({ type: "code", value: match[2] ?? "", language: match[1]?.trim() || undefined });
+			cursor = match.index + match[0].length;
+		}
+		if (cursor < text.length) result.push({ type: "text", value: text.slice(cursor) });
+		if (result.length === 0) result.push({ type: "text", value: text });
+		return result;
+	}, [text]);
 	return (
 		<>
 			{parts.map((part, index) =>
 				part.type === "code" ? (
-					<div className="message-code-block" key={`${index}-${part.value.slice(0, 20)}`}>
-						{part.language ? <div className="message-code-language">{part.language}</div> : null}
-						<pre>
-							<code>{part.value.replace(/\n$/, "")}</code>
-						</pre>
-					</div>
+					<MessageCodeBlock
+						key={`${index}-${part.value.slice(0, 20)}`}
+						value={part.value}
+						language={part.language}
+					/>
 				) : (
 					<div className="message-rich-text" key={`${index}-${part.value.slice(0, 20)}`}>
 						<RichText text={part.value} />
@@ -518,7 +554,7 @@ function MessageContent({ text }: { text: string }) {
 			)}
 		</>
 	);
-}
+});
 
 function formatMessageTime(value: string | undefined): string | null {
 	if (!value) return null;
@@ -527,7 +563,7 @@ function formatMessageTime(value: string | undefined): string | null {
 	return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-function TranscriptMessage({
+const TranscriptMessage = memo(function TranscriptMessage({
 	item,
 	assistantModel,
 }: {
@@ -618,7 +654,7 @@ function TranscriptMessage({
 			) : null}
 		</div>
 	);
-}
+});
 
 function clientErrorMessage(caught: unknown, fallback: string): string {
 	let message = caught instanceof Error ? caught.message : typeof caught === "string" ? caught : fallback;

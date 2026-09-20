@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { classifyToolFailure, toolFailureGuidance, toolFailureLabel } from "./tool-failure-utils.ts";
 
 export interface ToolCallCardItem {
@@ -46,7 +46,7 @@ function Output({ item, showAll }: { item: ToolCallCardItem; showAll: boolean })
 	return <pre className={terminal ? "terminal-output" : ""}>{text}</pre>;
 }
 
-export function ToolCallCard({ item }: { item: ToolCallCardItem }) {
+export const ToolCallCard = memo(function ToolCallCard({ item }: { item: ToolCallCardItem }) {
 	const [expanded, setExpanded] = useState(false);
 	const [showAll, setShowAll] = useState(false);
 	const friendlyText = friendlyToolText(item);
@@ -93,4 +93,4 @@ export function ToolCallCard({ item }: { item: ToolCallCardItem }) {
 			) : null}
 		</div>
 	);
-}
+});
