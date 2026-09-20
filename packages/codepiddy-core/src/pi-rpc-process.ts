@@ -115,6 +115,30 @@ export class PiRpcProcess {
 		await this.send({ type: "clone" });
 	}
 
+	async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+		const response = await this.send({ type: "switch_session", sessionPath });
+		const data = response.data;
+		return {
+			cancelled:
+				typeof data !== "object" ||
+				data === null ||
+				Array.isArray(data) ||
+				(data as Record<string, unknown>).cancelled !== false,
+		};
+	}
+
+	async importSession(inputPath: string): Promise<{ cancelled: boolean }> {
+		const response = await this.send({ type: "import_jsonl", inputPath });
+		const data = response.data;
+		return {
+			cancelled:
+				typeof data !== "object" ||
+				data === null ||
+				Array.isArray(data) ||
+				(data as Record<string, unknown>).cancelled !== false,
+		};
+	}
+
 	async getSessionTree(): Promise<{ tree: unknown[]; leafId: string | null }> {
 		const response = await this.send({ type: "get_tree" });
 		const data = response.data;

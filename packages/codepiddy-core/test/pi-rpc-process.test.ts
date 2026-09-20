@@ -40,4 +40,27 @@ describe("PiRpcProcess prompting", () => {
 		expect(rpcRequestTimeoutMs("abort")).toBe(120_000);
 		expect(rpcRequestTimeoutMs("compact")).toBe(600_000);
 	});
+	test("forwards session resume and import commands", async () => {
+		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
+		const send = vi
+			.fn()
+			.mockResolvedValueOnce({
+				type: "response",
+				command: "switch_session",
+				success: true,
+				data: { cancelled: false },
+			})
+			.mockResolvedValueOnce({
+				type: "response",
+				command: "import_jsonl",
+				success: true,
+				data: { cancelled: false },
+			});
+		(rpc as unknown as PiRpcPrivate).send = send;
+
+		expect(await rpc.switchSession("session.jsonl")).toEqual({ cancelled: false });
+		expect(await rpc.importSession("import.jsonl")).toEqual({ cancelled: false });
+		expect(send).toHaveBeenNthCalledWith(1, { type: "switch_session", sessionPath: "session.jsonl" });
+		expect(send).toHaveBeenNthCalledWith(2, { type: "import_jsonl", inputPath: "import.jsonl" });
+	});
 });

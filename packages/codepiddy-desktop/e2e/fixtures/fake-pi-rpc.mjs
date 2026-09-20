@@ -100,6 +100,10 @@ input.on("line", (line) => {
 					{ name: "model", description: "Select model", source: "builtin" },
 					{ name: "thinking", description: "Set thinking", source: "builtin" },
 					{ name: "compact", description: "Compact", source: "builtin" },
+					{ name: "hotkeys", description: "Show hotkeys", source: "builtin" },
+					{ name: "ext-test", description: "Extension test command", source: "extension" },
+					{ name: "prompt-test", description: "Prompt template test", source: "prompt" },
+					{ name: "skill:test", description: "Skill test", source: "skill" },
 				],
 			});
 			break;

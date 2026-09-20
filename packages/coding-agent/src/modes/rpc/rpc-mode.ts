@@ -611,6 +611,12 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "switch_session", result);
 			}
 
+			case "import_jsonl": {
+				const result = await runtimeHost.importFromJsonl(command.inputPath, command.cwdOverride);
+				if (!result.cancelled) await rebindSession();
+				return success(id, "import_jsonl", result);
+			}
+
 			case "fork": {
 				const result = await runtimeHost.fork(command.entryId);
 				if (!result.cancelled) {
@@ -692,13 +698,18 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 					"tree",
 					"thinking",
 					"export",
+					"import",
 					"copy",
 					"name",
 					"session",
+					"hotkeys",
 					"fork",
 					"clone",
 					"new",
 					"compact",
+					"resume",
+					"trust",
+					"quit",
 					"reload",
 				]);
 				const commands: RpcSlashCommand[] = BUILTIN_SLASH_COMMANDS.filter((command) =>

@@ -1,4 +1,4 @@
-import { mkdir, readFile, realpath } from "node:fs/promises";
+import { copyFile, mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -655,10 +655,55 @@ class AgentManager {
 			await broadcastHistory();
 			return { message: "已创建新的 Pi Session。", sessionReset: true };
 		}
+		if (input.name === "resume" || input.name === "import") {
+			let sessionPath = args;
+			if (!sessionPath) {
+				const selected = await dialog.showOpenDialog({
+					title: input.name === "resume" ? "恢复 Pi Session" : "导入 Pi Session",
+					properties: ["openFile"],
+					filters: [{ name: "Pi Session", extensions: ["jsonl"] }],
+				});
+				sessionPath = selected.filePaths[0] ?? "";
+				if (selected.canceled || !sessionPath)
+					return { message: `${input.name === "resume" ? "恢复" : "导入"} Session 已取消。` };
+			}
+			const result =
+				input.name === "resume"
+					? await process.switchSession(sessionPath)
+					: await process.importSession(sessionPath);
+			if (result.cancelled) return { message: `${input.name === "resume" ? "恢复" : "导入"} Session 已取消。` };
+			await broadcastHistory();
+			return {
+				message: `已${input.name === "resume" ? "恢复" : "导入"} Pi Session：${sessionPath}`,
+				sessionReset: true,
+			};
+		}
 		if (input.name === "export") {
+			if (args.toLowerCase().endsWith(".jsonl")) {
+				const stateResponse = await process.getState();
+				const state = isRecord(stateResponse.data) ? stateResponse.data : {};
+				if (typeof state.sessionFile !== "string") throw new Error("当前 Session 没有可导出的 JSONL 文件");
+				const destination = path.resolve(agent.projectRoot, args);
+				await copyFile(state.sessionFile, destination);
+				shell.showItemInFolder(destination);
+				return { message: `Session 已导出：${destination}` };
+			}
 			const exportedPath = await process.exportHtml(args || undefined);
 			shell.showItemInFolder(exportedPath);
 			return { message: `Session 已导出：${exportedPath}` };
+		}
+		if (input.name === "trust") {
+			return { message: "CodePIddy 以 --approve 模式启动当前 Pi 项目；项目资源已在本次运行中允许加载。" };
+		}
+		if (input.name === "hotkeys") {
+			return {
+				message:
+					"CodePIddy 快捷键：Enter 发送；Shift+Enter 换行；Esc 中断当前 Agent 或关闭弹窗；模型选择器中使用 ↑/↓ 和 Enter。",
+			};
+		}
+		if (input.name === "quit") {
+			setTimeout(() => app.quit(), 100);
+			return { message: "正在退出 CodePIddy。" };
 		}
 		if (input.name === "reload") {
 			await process.reload();

@@ -72,3 +72,19 @@ test("offers a manual continuation when a failed tool ends without a final respo
 	await expect(page.getByText("Fake Pi 已完成当前请求。")).toBeVisible();
 	await expect(page.getByText("工具失败后本轮已结束")).toBeHidden();
 });
+
+
+test("executes desktop built-ins and forwards extension commands to Pi", async () => {
+	const { page } = client;
+	await createFeatureWorkItem(page);
+	await openRequirementAgent(page);
+	const composer = page.locator(".composer textarea");
+
+	await composer.fill("/hotkeys");
+	await composer.press("Enter");
+	await expect(page.getByText(/CodePIddy 快捷键/)).toBeVisible();
+
+	await composer.fill("/ext-test");
+	await composer.press("Enter");
+	await expect(page.getByText("Fake Pi 已完成当前请求。")).toBeVisible();
+});
