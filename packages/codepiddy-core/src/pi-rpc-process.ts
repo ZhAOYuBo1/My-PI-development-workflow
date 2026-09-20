@@ -7,6 +7,26 @@ interface PendingRequest {
 	timer: NodeJS.Timeout;
 }
 
+const STDERR_LIMIT = 64 * 1024;
+
+export function rpcRequestTimeoutMs(commandType: string): number {
+	if (commandType === "compact") return 10 * 60_000;
+	if (commandType === "abort") return 2 * 60_000;
+	if (commandType === "prompt") return 90_000;
+	if (
+		commandType === "reload" ||
+		commandType === "new_session" ||
+		commandType === "clone" ||
+		commandType === "export_html"
+	) {
+		return 2 * 60_000;
+	}
+	if (commandType.startsWith("get_") || commandType === "set_model" || commandType === "set_thinking_level") {
+		return 30_000;
+	}
+	return 60_000;
+}
+
 export interface PiRpcProcessOptions {
 	command: string;
 	args: string[];
@@ -21,6 +41,7 @@ export class PiRpcProcess {
 	private readonly pending = new Map<string, PendingRequest>();
 	private requestId = 0;
 	private stderr = "";
+	private stopping = false;
 
 	constructor(options: PiRpcProcessOptions) {
 		this.options = options;
@@ -28,6 +49,8 @@ export class PiRpcProcess {
 
 	async start(): Promise<void> {
 		if (this.child) return;
+		this.stderr = "";
+		this.stopping = false;
 		const child = spawn(this.options.command, this.options.args, {
 			cwd: this.options.cwd,
 			env: { ...process.env, ...this.options.env },
@@ -35,7 +58,7 @@ export class PiRpcProcess {
 		});
 		this.child = child;
 		child.stderr.on("data", (chunk: Buffer) => {
-			this.stderr += chunk.toString("utf8");
+			this.stderr = `${this.stderr}${chunk.toString("utf8")}`.slice(-STDERR_LIMIT);
 		});
 		const decoder = new StringDecoder("utf8");
 		let buffer = "";
@@ -51,18 +74,28 @@ export class PiRpcProcess {
 		});
 		child.once("exit", (code, signal) => {
 			if (this.child !== child) return;
-			const error = new Error(`Pi RPC exited (code=${code} signal=${signal}). ${this.stderr}`);
-			for (const request of this.pending.values()) {
-				clearTimeout(request.timer);
-				request.reject(error);
-			}
-			this.pending.clear();
+			const expected = this.stopping;
+			const error = new Error(
+				expected
+					? "Pi RPC process stopped."
+					: `Pi RPC exited (code=${code} signal=${signal}). ${this.stderr.slice(-4096)}`,
+			);
+			this.rejectPending(error);
 			this.child = null;
-			this.emit({ type: "process_exit", code, signal, error: error.message });
+			this.emit({ type: "process_exit", code, signal, expected, error: error.message });
 		});
-		child.once("error", (error) => this.emit({ type: "process_error", error: error.message }));
-		await new Promise((resolve) => setTimeout(resolve, 150));
-		if (child.exitCode !== null) throw new Error(`Pi RPC failed to start. ${this.stderr}`);
+		child.once("error", (error) => {
+			this.rejectPending(error);
+			this.emit({ type: "process_error", expected: this.stopping, error: error.message });
+		});
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		if (child.exitCode !== null) throw new Error(`Pi RPC failed to start. ${this.stderr.slice(-4096)}`);
+		try {
+			await this.send({ type: "get_state" }, 90_000);
+		} catch (error) {
+			await this.stop().catch(() => undefined);
+			throw new Error(`Pi RPC startup handshake failed. ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	get isRunning(): boolean {
@@ -252,6 +285,7 @@ export class PiRpcProcess {
 	async stop(): Promise<void> {
 		const child = this.child;
 		if (!child) return;
+		this.stopping = true;
 		child.kill("SIGTERM");
 		await new Promise<void>((resolve) => {
 			const timer = setTimeout(() => {
@@ -263,6 +297,7 @@ export class PiRpcProcess {
 				resolve();
 			});
 		});
+		this.rejectPending(new Error("Pi RPC process stopped."));
 		if (this.child === child) this.child = null;
 	}
 
@@ -272,22 +307,38 @@ export class PiRpcProcess {
 		child.stdin.write(`${JSON.stringify(command)}\n`);
 	}
 
-	private async send(command: Record<string, unknown>): Promise<Record<string, unknown>> {
+	private async send(command: Record<string, unknown>, timeoutOverride?: number): Promise<Record<string, unknown>> {
 		const child = this.child;
 		if (!child || child.stdin.destroyed || !child.stdin.writable) throw new Error("Pi RPC process is not available");
 		const id = `codepiddy_${++this.requestId}`;
+		const commandType = typeof command.type === "string" ? command.type : "unknown";
+		const timeoutMs = timeoutOverride ?? rpcRequestTimeoutMs(commandType);
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
-				reject(
-					new Error(
-						`Timed out waiting for Pi RPC response to ${String(command.type ?? "unknown")}. ${this.stderr}`,
-					),
+				const error = new Error(
+					`Timed out waiting for Pi RPC response to ${commandType} after ${Math.round(timeoutMs / 1000)}s. ${this.stderr.slice(-4096)}`,
 				);
-			}, 60000);
+				this.emit({
+					type: "rpc_timeout",
+					command: commandType,
+					timeoutMs,
+					pendingRequestCount: this.pending.size,
+					error: error.message,
+				});
+				reject(error);
+			}, timeoutMs);
 			this.pending.set(id, { resolve, reject, timer });
 			child.stdin.write(`${JSON.stringify({ ...command, id })}\n`);
 		});
+	}
+
+	private rejectPending(error: Error): void {
+		for (const request of this.pending.values()) {
+			clearTimeout(request.timer);
+			request.reject(error);
+		}
+		this.pending.clear();
 	}
 
 	private handleLine(line: string): void {
@@ -308,8 +359,8 @@ export class PiRpcProcess {
 				if (event.success === false)
 					request.reject(new Error(typeof event.error === "string" ? event.error : "Pi RPC error"));
 				else request.resolve(event);
-				return;
 			}
+			return;
 		}
 		this.emit(event);
 	}

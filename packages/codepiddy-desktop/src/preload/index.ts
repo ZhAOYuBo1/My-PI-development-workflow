@@ -22,6 +22,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 const channels = {
 	abortAgent: "codepiddy:agent:abort",
+	reconnectAgent: "codepiddy:agent:reconnect",
 	compactAgent: "codepiddy:agent:compact",
 	invokeAgentBuiltinCommand: "codepiddy:agent:command:invoke",
 	cloneAgentSession: "codepiddy:agent:session:clone",
@@ -93,6 +94,7 @@ const api: CodePIddyClientApi = {
 	activateAgent: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.activateAgent, input),
 	sendAgentPrompt: (input: SendAgentPromptInput) => ipcRenderer.invoke(channels.sendAgentPrompt, input),
 	abortAgent: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.abortAgent, input),
+	reconnectAgent: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.reconnectAgent, input),
 	compactAgent: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.compactAgent, input),
 	invokeAgentBuiltinCommand: (input: InvokeAgentBuiltinCommandInput) =>
 		ipcRenderer.invoke(channels.invokeAgentBuiltinCommand, input),

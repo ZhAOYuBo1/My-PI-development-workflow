@@ -107,7 +107,7 @@ type TranscriptItem =
 
 interface AgentActivity {
 	label: string;
-	kind: "working" | "tool" | "compaction" | "retry" | "waiting";
+	kind: "working" | "tool" | "compaction" | "retry" | "waiting" | "reconnecting";
 	queued: number;
 }
 
@@ -1289,6 +1289,70 @@ export function App() {
 				);
 				return;
 			}
+			if (type === "rpc_timeout") {
+				const command = typeof event.command === "string" ? event.command : "unknown";
+				updateAgentActivity(agentInstanceId, {
+					label: `Pi RPC 超时（${command}），可从 Agent 菜单重新连接`,
+					kind: "retry",
+					queued: 0,
+				});
+				updateTranscript(agentInstanceId, (items) => [
+					...items,
+					{
+						id: crypto.randomUUID(),
+						type: "system",
+						text: `Pi RPC 命令 ${command} 响应超时。进程可能仍在运行；如果状态没有恢复，请使用“重新连接 Pi”。`,
+						createdAt: new Date().toISOString(),
+					},
+				]);
+				return;
+			}
+			if (type === "process_recovery_start") {
+				const attempt = typeof event.attempt === "number" ? event.attempt : 1;
+				finishActiveAssistant(undefined, "error");
+				updateAgentActivity(agentInstanceId, {
+					label: event.manual === true ? "正在重新连接 Pi" : `Pi 意外退出，正在恢复连接（${attempt}/2）`,
+					kind: "reconnecting",
+					queued: 0,
+				});
+				return;
+			}
+			if (type === "process_recovered") {
+				updateAgentActivity(agentInstanceId, null);
+				updateAgentStatus(clientEvent, "idle");
+				updateTranscript(agentInstanceId, (items) => [
+					...items,
+					{
+						id: crypto.randomUUID(),
+						type: "system",
+						text:
+							event.manual === true
+								? "已重新连接 Pi，并恢复当前 Session。"
+								: "Pi 进程已自动恢复并重新载入当前 Session。中断前尚未完成的请求需要重新发送。",
+						createdAt: new Date().toISOString(),
+					},
+				]);
+				void refreshAgentSessionSnapshot(locator);
+				return;
+			}
+			if (type === "process_recovery_failed") {
+				const attempt = typeof event.attempt === "number" ? event.attempt : 1;
+				const maxAttempts = typeof event.maxAttempts === "number" ? event.maxAttempts : 2;
+				if (attempt >= maxAttempts) {
+					updateAgentActivity(agentInstanceId, null);
+					updateAgentStatus(clientEvent, "failed");
+					updateTranscript(agentInstanceId, (items) => [
+						...items,
+						{
+							id: crypto.randomUUID(),
+							type: "system",
+							text: `Pi 自动恢复失败：${typeof event.error === "string" ? event.error : "未知错误"}。请使用 Agent 菜单手动重新连接。`,
+							createdAt: new Date().toISOString(),
+						},
+					]);
+				}
+				return;
+			}
 			if (type === "agent_configuration_warning" && typeof event.error === "string") {
 				const warning = event.error;
 				updateTranscript(agentInstanceId, (items) => [
@@ -1297,15 +1361,14 @@ export function App() {
 				]);
 				return;
 			}
-			if ((type === "process_error" || type === "process_exit") && typeof event.error === "string") {
+			if (type === "process_error" || type === "process_exit") {
+				if (event.expected === true) return;
 				finishActiveAssistant(undefined, "error");
-				updateAgentActivity(agentInstanceId, null);
-				updateAgentStatus(clientEvent, "failed");
-				const errorMessage = event.error;
-				updateTranscript(agentInstanceId, (items) => [
-					...items,
-					{ id: crypto.randomUUID(), type: "system", text: errorMessage, createdAt: new Date().toISOString() },
-				]);
+				updateAgentActivity(agentInstanceId, {
+					label: "Pi 连接已中断，等待自动恢复",
+					kind: "reconnecting",
+					queued: 0,
+				});
 			}
 		},
 		[refreshAgentSessionSnapshot, updateAgentActivity, updateAgentStatus, updateTranscript],
@@ -2133,6 +2196,25 @@ export function App() {
 		}
 	}
 
+	async function reconnectAgent(slot: AgentSlotSummary): Promise<void> {
+		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
+		setBusy(true);
+		setError(null);
+		setAgentActionsOpen(null);
+		try {
+			await window.codepiddy.reconnectAgent({
+				agentInstanceId: slot.currentInstanceId,
+				projectId: project.id,
+				workItemId: selectedWorkItem.id,
+				role: slot.role,
+			});
+		} catch (caught) {
+			setError(clientErrorMessage(caught, "重新连接 Pi 失败"));
+		} finally {
+			setBusy(false);
+		}
+	}
+
 	async function resetSelectedAgent(): Promise<void> {
 		if (!project || !resetAgentDialog) return;
 		const { workItem, slot } = resetAgentDialog;
@@ -2645,6 +2727,9 @@ export function App() {
 											</button>
 											<button type="button" onClick={() => void cloneAgentSession(slot)} disabled={busy}>
 												克隆当前会话
+											</button>
+											<button type="button" onClick={() => void reconnectAgent(slot)} disabled={busy}>
+												重新连接 Pi
 											</button>
 											<button
 												type="button"

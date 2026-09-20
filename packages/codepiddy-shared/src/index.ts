@@ -185,6 +185,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	activateAgent(input: AgentInstanceLocator): Promise<void>;
 	sendAgentPrompt(input: SendAgentPromptInput): Promise<void>;
 	abortAgent(input: AgentInstanceLocator): Promise<void>;
+	reconnectAgent(input: AgentInstanceLocator): Promise<void>;
 	compactAgent(input: AgentInstanceLocator): Promise<void>;
 	invokeAgentBuiltinCommand(input: InvokeAgentBuiltinCommandInput): Promise<AgentBuiltinCommandResult>;
 	cloneAgentSession(input: AgentInstanceLocator): Promise<void>;

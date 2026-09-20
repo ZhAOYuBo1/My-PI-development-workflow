@@ -1283,3 +1283,5 @@ button { color: inherit; }
   .pi-config-paths { grid-template-columns: 1fr; }
   .pi-config-paths span { margin-bottom: 5px; }
 }
+.activity-reconnecting { background: #edf1f6; color: #4d6077; }
+.activity-reconnecting .activity-spinner { border-top-color: #55708f; }

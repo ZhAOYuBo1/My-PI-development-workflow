@@ -52,6 +52,7 @@ import { discoverAgentSkills, resolveRoleSkillPaths } from "./skill-catalog.ts";
 
 const channels = {
 	abortAgent: "codepiddy:agent:abort",
+	reconnectAgent: "codepiddy:agent:reconnect",
 	compactAgent: "codepiddy:agent:compact",
 	invokeAgentBuiltinCommand: "codepiddy:agent:command:invoke",
 	cloneAgentSession: "codepiddy:agent:session:clone",
@@ -500,6 +501,36 @@ class AgentManager {
 		if (process) await process.abort();
 	}
 
+	async reconnect(input: AgentInstanceLocator): Promise<void> {
+		const agent = await this.resolve(input);
+		this.broadcast({
+			agentInstanceId: agent.id,
+			projectId: agent.projectId,
+			workItemId: agent.workItemId,
+			role: agent.role,
+			event: { type: "process_recovery_start", attempt: 1, manual: true },
+		});
+		const current = this.processes.get(agent.id);
+		this.processes.delete(agent.id);
+		this.processAgents.delete(agent.id);
+		if (current) await current.stop();
+		if (agent.role !== "requirement-analysis") await this.writeLeases.release(agent.projectId, agent.id);
+		try {
+			await this.ensureProcess(agent);
+			await this.registry.setStatus(agent, "idle");
+			this.broadcast({
+				agentInstanceId: agent.id,
+				projectId: agent.projectId,
+				workItemId: agent.workItemId,
+				role: agent.role,
+				event: { type: "process_recovered", manual: true },
+			});
+		} catch (error) {
+			await this.registry.setStatus(agent, "failed");
+			throw error;
+		}
+	}
+
 	async compact(input: AgentInstanceLocator): Promise<void> {
 		await (await this.ensureProcess(await this.resolve(input))).compact();
 	}
@@ -667,12 +698,12 @@ class AgentManager {
 			) {
 				void this.registry.setStatus(agent, "waiting");
 			} else if (event.type === "process_error" || event.type === "process_exit") {
-				if (this.processes.get(agent.id) === rpc) {
-					this.processes.delete(agent.id);
-					this.processAgents.delete(agent.id);
-				}
-				void this.registry.setStatus(agent, "failed");
+				if (event.expected === true || this.processes.get(agent.id) !== rpc) return;
+				this.processes.delete(agent.id);
+				this.processAgents.delete(agent.id);
 				if (agent.role !== "requirement-analysis") void this.writeLeases.release(agent.projectId, agent.id);
+				if (event.type === "process_error") void rpc.stop().catch(() => undefined);
+				void this.recoverProcess(agent);
 			}
 		});
 		try {
@@ -714,6 +745,46 @@ class AgentManager {
 			await rpc.stop().catch(() => undefined);
 			throw error;
 		}
+	}
+
+	private async recoverProcess(agent: StoredAgentInstance): Promise<void> {
+		for (let attempt = 1; attempt <= 2; attempt++) {
+			this.broadcast({
+				agentInstanceId: agent.id,
+				projectId: agent.projectId,
+				workItemId: agent.workItemId,
+				role: agent.role,
+				event: { type: "process_recovery_start", attempt, maxAttempts: 2, manual: false },
+			});
+			await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+			if (this.processes.get(agent.id)?.isRunning) return;
+			try {
+				await this.ensureProcess(agent);
+				await this.registry.setStatus(agent, "idle");
+				this.broadcast({
+					agentInstanceId: agent.id,
+					projectId: agent.projectId,
+					workItemId: agent.workItemId,
+					role: agent.role,
+					event: { type: "process_recovered", attempt, manual: false },
+				});
+				return;
+			} catch (error) {
+				this.broadcast({
+					agentInstanceId: agent.id,
+					projectId: agent.projectId,
+					workItemId: agent.workItemId,
+					role: agent.role,
+					event: {
+						type: "process_recovery_failed",
+						attempt,
+						maxAttempts: 2,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			}
+		}
+		await this.registry.setStatus(agent, "failed");
 	}
 
 	async removeWorkItem(projectId: string, workItemId: string): Promise<void> {
@@ -869,6 +940,7 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.activateAgent, (_event, input: AgentInstanceLocator) => agentManager.activate(input));
 	ipcMain.handle(channels.sendAgentPrompt, (_event, input: SendAgentPromptInput) => agentManager.prompt(input));
 	ipcMain.handle(channels.abortAgent, (_event, input: AgentInstanceLocator) => agentManager.abort(input));
+	ipcMain.handle(channels.reconnectAgent, (_event, input: AgentInstanceLocator) => agentManager.reconnect(input));
 	ipcMain.handle(channels.compactAgent, (_event, input: AgentInstanceLocator) => agentManager.compact(input));
 	ipcMain.handle(channels.invokeAgentBuiltinCommand, (_event, input: InvokeAgentBuiltinCommandInput) =>
 		agentManager.invokeBuiltinCommand(input),
