@@ -3395,6 +3395,45 @@ export function App() {
 									>
 										<AppIcon name="more" />
 									</IconButton>
+									{agentActionsOpen === agentId ? (
+										<div className="agent-actions-menu" role="menu" aria-label="Agent 操作">
+											<button
+												type="button"
+												role="menuitem"
+												onClick={() => void openSessionPanel(slot)}
+												disabled={sessionPanelLoading}
+											>
+												会话树与 Fork
+											</button>
+											<button
+												role="menuitem"
+												type="button"
+												onClick={() => void cloneAgentSession(slot)}
+												disabled={busy}
+											>
+												克隆当前会话
+											</button>
+											<button
+												role="menuitem"
+												type="button"
+												onClick={() => void reconnectAgent(slot)}
+												disabled={busy}
+											>
+												重新连接 Pi
+											</button>
+											<button
+												type="button"
+												role="menuitem"
+												className="danger-menu-item"
+												onClick={() => {
+													setAgentActionsOpen(null);
+													setResetAgentDialog({ workItem: selectedWorkItem, slot });
+												}}
+											>
+												重置 Agent
+											</button>
+										</div>
+									) : null}
 								</div>
 							</div>
 						) : (
@@ -3409,29 +3448,6 @@ export function App() {
 							</button>
 						)}
 					</header>
-					{agentId && agentActionsOpen === agentId ? (
-						<div className="agent-actions-panel" role="toolbar" aria-label="Agent 操作">
-							<button type="button" onClick={() => void openSessionPanel(slot)} disabled={sessionPanelLoading}>
-								会话树与 Fork
-							</button>
-							<button type="button" onClick={() => void cloneAgentSession(slot)} disabled={busy}>
-								克隆当前会话
-							</button>
-							<button type="button" onClick={() => void reconnectAgent(slot)} disabled={busy}>
-								重新连接 Pi
-							</button>
-							<button
-								type="button"
-								className="danger-menu-item"
-								onClick={() => {
-									setAgentActionsOpen(null);
-									setResetAgentDialog({ workItem: selectedWorkItem, slot });
-								}}
-							>
-								重置 Agent
-							</button>
-						</div>
-					) : null}
 					{agentId ? (
 						<>
 							<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>

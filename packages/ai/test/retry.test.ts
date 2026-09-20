@@ -51,6 +51,17 @@ describe("provider retry classification", () => {
 		).toBe(true);
 	});
 
+	it("matches gateway concurrency limit responses", () => {
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", {
+					stopReason: "error",
+					errorMessage: "gateway_concurrency_limit: Concurrency limit exceeded for user, please retry later",
+				}),
+			),
+		).toBe(true);
+	});
+
 	it.each([
 		wrappedDnsLookupError,
 		"connect ENOTFOUND api.example.com",

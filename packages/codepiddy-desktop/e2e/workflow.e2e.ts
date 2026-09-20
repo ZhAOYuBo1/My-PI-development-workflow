@@ -18,13 +18,17 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 	await createFeatureWorkItem(page);
 	await openRequirementAgent(page);
 	await page.getByRole("button", { name: "Agent 操作" }).click();
-	const actionsPanel = page.getByRole("toolbar", { name: "Agent 操作" });
-	await expect(actionsPanel).toBeVisible();
-	const panelBox = await actionsPanel.boundingBox();
+	const actionsMenu = page.getByRole("menu", { name: "Agent 操作" });
+	await expect(actionsMenu).toBeVisible();
+	const headerBox = await page.locator(".content-header").boundingBox();
+	const menuBox = await actionsMenu.boundingBox();
 	const transcriptBox = await page.locator(".transcript").boundingBox();
-	expect(panelBox).not.toBeNull();
+	expect(headerBox).not.toBeNull();
+	expect(menuBox).not.toBeNull();
 	expect(transcriptBox).not.toBeNull();
-	expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(transcriptBox!.y + 1);
+	expect(menuBox!.y).toBeGreaterThanOrEqual(headerBox!.y + headerBox!.height + 6);
+	expect(menuBox!.y).toBeLessThan(transcriptBox!.y + transcriptBox!.height);
+	expect(await actionsMenu.evaluate((element) => getComputedStyle(element).zIndex)).toBe("40");
 	await page.getByRole("button", { name: "Agent 操作" }).click();
 
 	const composer = page.locator(".composer textarea");

@@ -28,6 +28,8 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"overloaded",
 	"rate.?limit",
 	"too many requests",
+	"gateway_concurrency_limit",
+	"concurrency.?limit",
 	"429",
 	"500",
 	"502",

@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS, type Model, type Transport } from "@earendil-works/pi-ai";
+import type { Model, Transport } from "@earendil-works/pi-ai";
 import type { TuiMode as RendererTuiMode, ScrollViewScrollbar, TerminalCapabilities } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -40,9 +40,9 @@ export interface ProviderRetrySettings {
 
 export interface RetrySettings {
 	enabled?: boolean; // default: true
-	maxRetries?: number; // default: 3
-	baseDelayMs?: number; // default: 2000 (exponential backoff: 2s, 4s, 8s)
-	maxAgentDelayMs?: number; // default: 60000
+	maxRetries?: number; // default: 5
+	baseDelayMs?: number; // default: 1000 (exponential backoff: 1s, 2s, 4s, 5s, 5s)
+	maxAgentDelayMs?: number; // default: 5000
 	provider?: ProviderRetrySettings;
 }
 
@@ -927,9 +927,9 @@ export class SettingsManager {
 	getRetrySettings(): { enabled: boolean; maxRetries: number; baseDelayMs: number; maxAgentDelayMs: number } {
 		return {
 			enabled: this.getRetryEnabled(),
-			maxRetries: this.settings.retry?.maxRetries ?? 3,
-			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
-			maxAgentDelayMs: this.settings.retry?.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+			maxRetries: this.settings.retry?.maxRetries ?? 5,
+			baseDelayMs: this.settings.retry?.baseDelayMs ?? 1000,
+			maxAgentDelayMs: this.settings.retry?.maxAgentDelayMs ?? 5000,
 		};
 	}
 
