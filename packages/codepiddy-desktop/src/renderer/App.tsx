@@ -9,6 +9,7 @@ import type {
 	AgentSlotSummary,
 	AgentStatus,
 	LaneKind,
+	PendingPermissionRequest,
 	ProjectSummary,
 	ProjectWriteLeaseStatus,
 	RecentProject,
@@ -104,6 +105,27 @@ type TranscriptItem =
 			status: "running" | "completed";
 			isError: boolean;
 	  };
+
+interface ToolRecoveryOffer {
+	toolName: string;
+	reason: string;
+}
+
+function extensionDialogFromPermission(request: PendingPermissionRequest): ExtensionDialogState {
+	return {
+		agentInstanceId: request.agentInstanceId,
+		projectId: request.projectId,
+		workItemId: request.workItemId,
+		role: request.role,
+		requestId: request.requestId,
+		method: request.method,
+		title: request.title,
+		message: request.message,
+		options: request.options,
+		placeholder: request.placeholder,
+		value: request.prefill,
+	};
+}
 
 interface AgentActivity {
 	label: string;
@@ -854,6 +876,10 @@ export function App() {
 	);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
 	const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>({});
+	const [pendingPermissionRequests, setPendingPermissionRequests] = useState<Record<string, PendingPermissionRequest>>(
+		{},
+	);
+	const [toolRecoveryOffers, setToolRecoveryOffers] = useState<Record<string, ToolRecoveryOffer>>({});
 	const [agentSessionSnapshots, setAgentSessionSnapshots] = useState<Record<string, AgentSessionSnapshot>>(
 		demoMode ? { "CODE-001": demoSessionSnapshot } : {},
 	);
@@ -885,6 +911,7 @@ export function App() {
 	const [modelPickerSelectedIndex, setModelPickerSelectedIndex] = useState(0);
 	const [fileMatches, setFileMatches] = useState<string[]>([]);
 	const activeAssistantIds = useRef(new Map<string, string>());
+	const pendingToolFailures = useRef(new Map<string, ToolRecoveryOffer>());
 	const agentCommandLoads = useRef(new Map<string, Promise<AgentCommandOption[]>>());
 	const projectRef = useRef<ProjectSummary | null>(project);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -1028,13 +1055,16 @@ export function App() {
 			};
 			if (type === "extension_ui_request") {
 				const method = event.method;
-				if (method === "select" || method === "confirm" || method === "input" || method === "editor") {
-					setExtensionDialog({
+				if (
+					typeof event.id === "string" &&
+					(method === "select" || method === "confirm" || method === "input" || method === "editor")
+				) {
+					const request: PendingPermissionRequest = {
 						agentInstanceId,
 						projectId: clientEvent.projectId,
 						workItemId: clientEvent.workItemId,
 						role: clientEvent.role,
-						requestId: typeof event.id === "string" ? event.id : crypto.randomUUID(),
+						requestId: event.id,
 						method,
 						title: typeof event.title === "string" ? event.title : "需要确认",
 						message: typeof event.message === "string" ? event.message : "",
@@ -1042,8 +1072,11 @@ export function App() {
 							? event.options.filter((option): option is string => typeof option === "string")
 							: [],
 						placeholder: typeof event.placeholder === "string" ? event.placeholder : "",
-						value: typeof event.prefill === "string" ? event.prefill : "",
-					});
+						prefill: typeof event.prefill === "string" ? event.prefill : "",
+						createdAt: new Date().toISOString(),
+					};
+					setPendingPermissionRequests((current) => ({ ...current, [agentInstanceId]: request }));
+					if (activeAgentId === agentInstanceId) setExtensionDialog(extensionDialogFromPermission(request));
 					updateAgentStatus(clientEvent, "waiting");
 					updateAgentActivity(agentInstanceId, { label: "等待权限确认", kind: "waiting", queued: 0 });
 				}
@@ -1081,7 +1114,28 @@ export function App() {
 				return;
 			}
 			if (type === "agent_settled") {
+				setPendingPermissionRequests((current) => {
+					if (!(agentInstanceId in current)) return current;
+					const next = { ...current };
+					delete next[agentInstanceId];
+					return next;
+				});
+				if (extensionDialog?.agentInstanceId === agentInstanceId) setExtensionDialog(null);
 				finishActiveAssistant(undefined);
+				const unresolvedToolFailure = pendingToolFailures.current.get(agentInstanceId);
+				if (unresolvedToolFailure) {
+					pendingToolFailures.current.delete(agentInstanceId);
+					setToolRecoveryOffers((current) => ({ ...current, [agentInstanceId]: unresolvedToolFailure }));
+					updateTranscript(agentInstanceId, (items) => [
+						...items,
+						{
+							id: crypto.randomUUID(),
+							type: "system",
+							text: `本轮在 ${unresolvedToolFailure.toolName} 工具失败后结束，Pi 没有产生最终文本回复。你可以让 Pi 使用替代方案继续处理。`,
+							createdAt: new Date().toISOString(),
+						},
+					]);
+				}
 				updateAgentActivity(agentInstanceId, null);
 				updateAgentStatus(clientEvent, "idle");
 				setAbortingAgents((current) => ({ ...current, [agentInstanceId]: false }));
@@ -1129,6 +1183,13 @@ export function App() {
 					const update = assistantEvent;
 					if (update.type === "text_delta" && typeof update.delta === "string") {
 						const delta = update.delta;
+						pendingToolFailures.current.delete(agentInstanceId);
+						setToolRecoveryOffers((current) => {
+							if (!(agentInstanceId in current)) return current;
+							const next = { ...current };
+							delete next[agentInstanceId];
+							return next;
+						});
 						const id = activeAssistantIds.current.get(agentInstanceId) ?? crypto.randomUUID();
 						if (!activeAssistantIds.current.has(agentInstanceId))
 							activeAssistantIds.current.set(agentInstanceId, id);
@@ -1203,6 +1264,7 @@ export function App() {
 				return;
 			}
 			if (type === "tool_execution_start" && typeof event.toolCallId === "string") {
+				pendingToolFailures.current.delete(agentInstanceId);
 				const toolCallId = event.toolCallId;
 				const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
 				updateAgentActivity(agentInstanceId, { label: `正在运行 ${toolName}`, kind: "tool", queued: 0 });
@@ -1233,6 +1295,12 @@ export function App() {
 			}
 			if (type === "tool_execution_end" && typeof event.toolCallId === "string") {
 				const toolCallId = event.toolCallId;
+				if (event.isError === true) {
+					pendingToolFailures.current.set(agentInstanceId, {
+						toolName: typeof event.toolName === "string" ? event.toolName : "tool",
+						reason: extractMessageText(event.result) || "工具执行失败",
+					});
+				}
 				updateAgentActivity(
 					agentInstanceId,
 					event.isError === true
@@ -1308,6 +1376,13 @@ export function App() {
 				return;
 			}
 			if (type === "process_recovery_start") {
+				setPendingPermissionRequests((current) => {
+					if (!(agentInstanceId in current)) return current;
+					const next = { ...current };
+					delete next[agentInstanceId];
+					return next;
+				});
+				if (extensionDialog?.agentInstanceId === agentInstanceId) setExtensionDialog(null);
 				const attempt = typeof event.attempt === "number" ? event.attempt : 1;
 				finishActiveAssistant(undefined, "error");
 				updateAgentActivity(agentInstanceId, {
@@ -1371,7 +1446,14 @@ export function App() {
 				});
 			}
 		},
-		[refreshAgentSessionSnapshot, updateAgentActivity, updateAgentStatus, updateTranscript],
+		[
+			activeAgentId,
+			extensionDialog,
+			refreshAgentSessionSnapshot,
+			updateAgentActivity,
+			updateAgentStatus,
+			updateTranscript,
+		],
 	);
 
 	useEffect(() => {
@@ -1408,6 +1490,14 @@ export function App() {
 		void window.codepiddy
 			.activateAgent(locator)
 			.then(async () => {
+				const permission = await window.codepiddy.getPendingPermissionRequest(locator);
+				if (permission) {
+					setPendingPermissionRequests((current) => ({
+						...current,
+						[slot.currentInstanceId!]: permission,
+					}));
+					setExtensionDialog(extensionDialogFromPermission(permission));
+				}
 				const [modelResult, commandResult, snapshotResult] = await Promise.allSettled([
 					window.codepiddy.getAgentModelSelection(locator),
 					loadAgentCommands(locator),
@@ -1422,6 +1512,7 @@ export function App() {
 						[slot.currentInstanceId!]: snapshotResult.value,
 					}));
 				}
+
 				if (modelResult.status === "rejected") {
 					setError(modelResult.reason instanceof Error ? modelResult.reason.message : "读取 Pi 模型失败");
 				} else if (commandResult.status === "rejected") {
@@ -1434,6 +1525,18 @@ export function App() {
 			})
 			.catch((caught: unknown) => setError(caught instanceof Error ? caught.message : "恢复 Agent 失败"));
 	}, [loadAgentCommands, project, selectedWorkItem, selection]);
+
+	useEffect(() => {
+		if (!activeAgentId) {
+			setExtensionDialog(null);
+			return;
+		}
+		const pending = pendingPermissionRequests[activeAgentId];
+		setExtensionDialog((current) => {
+			if (current?.agentInstanceId === activeAgentId) return current;
+			return pending ? extensionDialogFromPermission(pending) : null;
+		});
+	}, [activeAgentId, pendingPermissionRequests]);
 
 	useEffect(() => {
 		if (
@@ -2024,6 +2127,13 @@ export function App() {
 				streamingBehavior: "steer",
 			});
 			setDrafts((current) => ({ ...current, [agentId]: "" }));
+			pendingToolFailures.current.delete(agentId);
+			setToolRecoveryOffers((current) => {
+				if (!(agentId in current)) return current;
+				const next = { ...current };
+				delete next[agentId];
+				return next;
+			});
 			const delivery = slot.status === "running" ? "steer" : undefined;
 			updateTranscript(agentId, (items) => [
 				...items,
@@ -2046,6 +2156,16 @@ export function App() {
 			} catch {}
 			setError(clientErrorMessage(caught, "发送消息失败"));
 		}
+	}
+
+	async function continueAfterToolFailure(slot: AgentSlotSummary): Promise<void> {
+		if (!slot.currentInstanceId) return;
+		const offer = toolRecoveryOffers[slot.currentInstanceId];
+		if (!offer) return;
+		await sendPrompt(
+			slot,
+			`上一个 ${offer.toolName} 工具调用失败了。请阅读失败原因，不要原样重复相同调用；优先使用允许的路径、替代工具或无工具方案继续处理。如果无法恢复，请明确说明阻塞原因。`,
+		);
 	}
 
 	async function clearStaleWriteLease(): Promise<void> {
@@ -2088,6 +2208,17 @@ export function App() {
 					await window.codepiddy.respondToExtensionUi({ ...locator, requestId, cancelled: true });
 				}
 				await window.codepiddy.abortAgent(locator);
+				setPendingPermissionRequests((current) => {
+					const next = { ...current };
+					delete next[agentId];
+					return next;
+				});
+				pendingToolFailures.current.delete(agentId);
+				setToolRecoveryOffers((current) => {
+					const next = { ...current };
+					delete next[agentId];
+					return next;
+				});
 				updateAgentStatus({ ...locator, event: {} }, "idle");
 				void refreshAgentSessionSnapshot(locator);
 			} catch (caught) {
@@ -2270,24 +2401,34 @@ export function App() {
 		if (!extensionDialog || !("codepiddy" in window)) return;
 		const current = extensionDialog;
 		setExtensionDialog(null);
-		await window.codepiddy.respondToExtensionUi({
-			agentInstanceId: current.agentInstanceId,
-			projectId: current.projectId,
-			workItemId: current.workItemId,
-			role: current.role,
-			requestId: current.requestId,
-			...response,
-		});
-		updateAgentStatus(
-			{
+		try {
+			await window.codepiddy.respondToExtensionUi({
 				agentInstanceId: current.agentInstanceId,
 				projectId: current.projectId,
 				workItemId: current.workItemId,
 				role: current.role,
-				event: {},
-			},
-			"running",
-		);
+				requestId: current.requestId,
+				...response,
+			});
+			setPendingPermissionRequests((permissions) => {
+				const next = { ...permissions };
+				delete next[current.agentInstanceId];
+				return next;
+			});
+			updateAgentStatus(
+				{
+					agentInstanceId: current.agentInstanceId,
+					projectId: current.projectId,
+					workItemId: current.workItemId,
+					role: current.role,
+					event: {},
+				},
+				"running",
+			);
+		} catch (caught) {
+			setExtensionDialog(current);
+			setError(clientErrorMessage(caught, "提交权限响应失败"));
+		}
 	}
 
 	useEffect(() => {
@@ -2683,6 +2824,7 @@ export function App() {
 			const items = agentId ? (transcripts[agentId] ?? []) : [];
 			const draft = agentId ? (drafts[agentId] ?? "") : "";
 			const activity = agentId ? agentActivities[agentId] : undefined;
+			const toolRecoveryOffer = agentId ? toolRecoveryOffers[agentId] : undefined;
 			const sessionSnapshot = agentId ? agentSessionSnapshots[agentId] : undefined;
 			const canAbort = Boolean(agentId && (activity || slot.status === "running" || slot.status === "waiting"));
 			return (
@@ -2828,6 +2970,19 @@ export function App() {
 										}))
 									}
 								/>
+								{toolRecoveryOffer ? (
+									<div className="tool-recovery-offer">
+										<div>
+											<strong>工具失败后本轮已结束</strong>
+											<span title={toolRecoveryOffer.reason}>
+												{toolRecoveryOffer.toolName}：{toolRecoveryOffer.reason}
+											</span>
+										</div>
+										<button type="button" onClick={() => void continueAfterToolFailure(slot)}>
+											让 Pi 继续处理
+										</button>
+									</div>
+								) : null}
 								{activity ? (
 									<div className={`agent-activity activity-${activity.kind}`}>
 										<span className="activity-spinner" aria-hidden="true" />

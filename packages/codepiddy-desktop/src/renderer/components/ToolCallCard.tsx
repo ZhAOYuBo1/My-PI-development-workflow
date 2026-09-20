@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { classifyToolFailure, toolFailureGuidance, toolFailureLabel } from "./tool-failure-utils.ts";
 
 export interface ToolCallCardItem {
 	id: string;
@@ -50,12 +51,14 @@ export function ToolCallCard({ item }: { item: ToolCallCardItem }) {
 	const [showAll, setShowAll] = useState(false);
 	const friendlyText = friendlyToolText(item);
 	const truncated = friendlyText.length > OUTPUT_PREVIEW_LIMIT;
+	const failureKind = item.isError ? classifyToolFailure(friendlyText) : null;
 	return (
 		<div className={`tool-block ${item.isError ? "error" : ""}`}>
 			<button className="tool-summary" type="button" onClick={() => setExpanded((current) => !current)}>
 				<strong>› {item.name}</strong>
 				<span>
-					{item.status === "running" ? "运行中" : item.isError ? "失败" : "完成"} {expanded ? "⌃" : "⌄"}
+					{item.status === "running" ? "运行中" : failureKind ? toolFailureLabel(failureKind) : "完成"}{" "}
+					{expanded ? "⌃" : "⌄"}
 				</span>
 			</button>
 			{expanded ? (
@@ -79,9 +82,9 @@ export function ToolCallCard({ item }: { item: ToolCallCardItem }) {
 									{showAll ? "收起结果" : `显示全部（${friendlyText.length.toLocaleString()} 字符）`}
 								</button>
 							) : null}
-							{item.isError ? (
-								<div className="tool-error-guidance">
-									工具失败已返回给 Pi，Agent 会继续处理错误或说明替代方案。
+							{failureKind ? (
+								<div className={`tool-error-guidance guidance-${failureKind}`}>
+									{toolFailureGuidance(failureKind)}
 								</div>
 							) : null}
 						</>

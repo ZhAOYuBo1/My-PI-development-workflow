@@ -1285,3 +1285,36 @@ button { color: inherit; }
 }
 .activity-reconnecting { background: #edf1f6; color: #4d6077; }
 .activity-reconnecting .activity-spinner { border-top-color: #55708f; }
+.tool-recovery-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -2px 0 7px;
+  padding: 9px 10px;
+  border: 1px solid #e6c9a7;
+  border-radius: 9px;
+  background: #fff7eb;
+  color: #754f27;
+}
+.tool-recovery-offer > div { display: grid; min-width: 0; gap: 2px; }
+.tool-recovery-offer strong { font-size: 11px; }
+.tool-recovery-offer span {
+  overflow: hidden;
+  color: #896b49;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer .tool-recovery-offer > button {
+  width: auto;
+  height: auto;
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid #d7b98f;
+  border-radius: 7px;
+  background: #fff;
+  color: #6c4b27;
+}
+.composer .tool-recovery-offer > button:hover { background: #f8ead6; color: #553717; }

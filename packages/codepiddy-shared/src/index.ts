@@ -193,6 +193,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	forkAgentSession(input: ForkAgentSessionInput): Promise<ForkAgentSessionResult>;
 	resetAgent(input: ResetAgentInput): Promise<ProjectSummary>;
 	respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void>;
+	getPendingPermissionRequest(input: AgentInstanceLocator): Promise<PendingPermissionRequest | null>;
 	getSettingsStatus(): Promise<SettingsStatus>;
 	saveTavilyApiKey(apiKey: string): Promise<SettingsStatus>;
 	clearTavilyApiKey(): Promise<SettingsStatus>;
@@ -214,6 +215,17 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	getProjectWriteLeaseStatus(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	clearStaleProjectWriteLease(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	onAgentEvent(listener: (event: AgentClientEvent) => void): () => void;
+}
+
+export interface PendingPermissionRequest extends AgentInstanceLocator {
+	requestId: string;
+	method: "select" | "confirm" | "input" | "editor";
+	title: string;
+	message: string;
+	options: string[];
+	placeholder: string;
+	prefill: string;
+	createdAt: string;
 }
 
 export interface ExtensionUiResponseInput extends AgentInstanceLocator {

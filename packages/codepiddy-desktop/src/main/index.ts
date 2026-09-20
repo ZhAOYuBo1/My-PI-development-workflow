@@ -35,6 +35,7 @@ import type {
 	ForkAgentSessionInput,
 	ForkAgentSessionResult,
 	InvokeAgentBuiltinCommandInput,
+	PendingPermissionRequest,
 	ProjectSummary,
 	RenameWorkItemInput,
 	ResetAgentInput,
@@ -83,6 +84,7 @@ const channels = {
 	refreshProject: "codepiddy:project:refresh",
 	restoreWorkItem: "codepiddy:work-item:restore",
 	respondToExtensionUi: "codepiddy:agent:extension-ui-response",
+	getPendingPermissionRequest: "codepiddy:agent:permission:get-pending",
 	settingsClearTavily: "codepiddy:settings:tavily:clear",
 	settingsListSkills: "codepiddy:settings:skills:list",
 	settingsGetRoleSkills: "codepiddy:settings:role-skills:get",
@@ -269,6 +271,7 @@ class AgentManager {
 	private readonly processes = new Map<string, PiRpcProcess>();
 	private readonly processAgents = new Map<string, StoredAgentInstance>();
 	private readonly processStarts = new SingleFlightMap<string, PiRpcProcess>();
+	private readonly pendingPermissions = new Map<string, PendingPermissionRequest>();
 
 	constructor(runtimeRoot: string, repositoryRoot: string, settingsStore: AppSettingsStore) {
 		this.registry = new AgentRegistry(runtimeRoot);
@@ -397,6 +400,18 @@ class AgentManager {
 	async activate(input: AgentInstanceLocator): Promise<void> {
 		const agent = await this.resolve(input);
 		const process = await this.ensureProcess(agent);
+		const pendingPermission = this.pendingPermissions.get(agent.id);
+		if (pendingPermission) {
+			if (agent.status !== "waiting") await this.registry.setStatus(agent, "waiting");
+			this.broadcast({
+				agentInstanceId: agent.id,
+				projectId: agent.projectId,
+				workItemId: agent.workItemId,
+				role: agent.role,
+				event: { type: "agent_status", status: "waiting" },
+			});
+			return;
+		}
 		const stateResponse = await process.getState();
 		const state = isRecord(stateResponse.data) ? stateResponse.data : {};
 		const status = state.isStreaming === true || state.isCompacting === true ? "running" : "idle";
@@ -479,6 +494,7 @@ class AgentManager {
 		const process = this.processes.get(agent.id);
 		this.processes.delete(agent.id);
 		this.processAgents.delete(agent.id);
+		this.pendingPermissions.delete(agent.id);
 		if (process) await process.stop();
 		if (agent.role !== "requirement-analysis") await this.writeLeases.release(agent.projectId, agent.id);
 		await this.registry.reset(input);
@@ -488,16 +504,29 @@ class AgentManager {
 	async respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void> {
 		const process = this.processes.get(input.agentInstanceId);
 		if (!process) throw new Error("Agent process is not active");
+		const pending = this.pendingPermissions.get(input.agentInstanceId);
+		if (!pending || pending.requestId !== input.requestId) throw new Error("Permission request is no longer active");
 		await process.respondToExtensionUi({
 			id: input.requestId,
 			...(input.value === undefined ? {} : { value: input.value }),
 			...(input.confirmed === undefined ? {} : { confirmed: input.confirmed }),
 			...(input.cancelled === undefined ? {} : { cancelled: input.cancelled }),
 		});
+		this.pendingPermissions.delete(input.agentInstanceId);
+	}
+
+	async getPendingPermissionRequest(input: AgentInstanceLocator): Promise<PendingPermissionRequest | null> {
+		await this.resolve(input);
+		return this.pendingPermissions.get(input.agentInstanceId) ?? null;
 	}
 
 	async abort(input: AgentInstanceLocator): Promise<void> {
 		const process = this.processes.get(input.agentInstanceId);
+		const pending = this.pendingPermissions.get(input.agentInstanceId);
+		if (process && pending) {
+			await process.respondToExtensionUi({ id: pending.requestId, cancelled: true });
+			this.pendingPermissions.delete(input.agentInstanceId);
+		}
 		if (process) await process.abort();
 	}
 
@@ -511,6 +540,9 @@ class AgentManager {
 			event: { type: "process_recovery_start", attempt: 1, manual: true },
 		});
 		const current = this.processes.get(agent.id);
+		const pending = this.pendingPermissions.get(agent.id);
+		if (current && pending) await current.respondToExtensionUi({ id: pending.requestId, cancelled: true });
+		this.pendingPermissions.delete(agent.id);
 		this.processes.delete(agent.id);
 		this.processAgents.delete(agent.id);
 		if (current) await current.stop();
@@ -676,6 +708,31 @@ class AgentManager {
 			],
 		});
 		rpc.onEvent((event) => {
+			if (
+				event.type === "extension_ui_request" &&
+				typeof event.id === "string" &&
+				(event.method === "select" ||
+					event.method === "confirm" ||
+					event.method === "input" ||
+					event.method === "editor")
+			) {
+				this.pendingPermissions.set(agent.id, {
+					agentInstanceId: agent.id,
+					projectId: agent.projectId,
+					workItemId: agent.workItemId,
+					role: agent.role,
+					requestId: event.id,
+					method: event.method,
+					title: typeof event.title === "string" ? event.title : "需要确认",
+					message: typeof event.message === "string" ? event.message : "",
+					options: Array.isArray(event.options)
+						? event.options.filter((option): option is string => typeof option === "string")
+						: [],
+					placeholder: typeof event.placeholder === "string" ? event.placeholder : "",
+					prefill: typeof event.prefill === "string" ? event.prefill : "",
+					createdAt: new Date().toISOString(),
+				});
+			}
 			this.broadcast({
 				agentInstanceId: agent.id,
 				projectId: agent.projectId,
@@ -687,6 +744,7 @@ class AgentManager {
 				if (agent.role !== "requirement-analysis") void this.writeLeases.heartbeat(agent.projectId, agent.id);
 			}
 			if (event.type === "agent_settled") {
+				this.pendingPermissions.delete(agent.id);
 				void this.registry.setStatus(agent, "idle");
 				if (agent.role !== "requirement-analysis") void this.writeLeases.release(agent.projectId, agent.id);
 			} else if (
@@ -698,6 +756,7 @@ class AgentManager {
 			) {
 				void this.registry.setStatus(agent, "waiting");
 			} else if (event.type === "process_error" || event.type === "process_exit") {
+				this.pendingPermissions.delete(agent.id);
 				if (event.expected === true || this.processes.get(agent.id) !== rpc) return;
 				this.processes.delete(agent.id);
 				this.processAgents.delete(agent.id);
@@ -796,6 +855,7 @@ class AgentManager {
 				const process = this.processes.get(agentId);
 				this.processes.delete(agentId);
 				this.processAgents.delete(agentId);
+				this.pendingPermissions.delete(agentId);
 				if (process) await process.stop();
 				if (agent.role !== "requirement-analysis") await this.writeLeases.release(projectId, agentId);
 			}),
@@ -812,6 +872,7 @@ class AgentManager {
 				const process = this.processes.get(agentId);
 				this.processes.delete(agentId);
 				this.processAgents.delete(agentId);
+				this.pendingPermissions.delete(agentId);
 				if (process) await process.stop();
 				await this.writeLeases.release(projectId, agentId);
 			}),
@@ -822,6 +883,7 @@ class AgentManager {
 		const entries = [...this.processes.entries()];
 		this.processes.clear();
 		this.processAgents.clear();
+		this.pendingPermissions.clear();
 		await Promise.all(
 			entries.map(async ([agentId, process]) => {
 				await process.stop();
@@ -955,6 +1017,9 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.resetAgent, (_event, input: ResetAgentInput) => agentManager.reset(input));
 	ipcMain.handle(channels.respondToExtensionUi, (_event, input: ExtensionUiResponseInput) =>
 		agentManager.respondToExtensionUi(input),
+	);
+	ipcMain.handle(channels.getPendingPermissionRequest, (_event, input: AgentInstanceLocator) =>
+		agentManager.getPendingPermissionRequest(input),
 	);
 	ipcMain.handle(channels.searchProjectFiles, (_event, projectRoot: string, query: string) =>
 		searchProjectFiles(projectRoot, query),

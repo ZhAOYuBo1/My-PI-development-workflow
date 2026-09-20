@@ -53,6 +53,7 @@ const channels = {
 	refreshProject: "codepiddy:project:refresh",
 	restoreWorkItem: "codepiddy:work-item:restore",
 	respondToExtensionUi: "codepiddy:agent:extension-ui-response",
+	getPendingPermissionRequest: "codepiddy:agent:permission:get-pending",
 	settingsClearTavily: "codepiddy:settings:tavily:clear",
 	settingsListSkills: "codepiddy:settings:skills:list",
 	settingsGetRoleSkills: "codepiddy:settings:role-skills:get",
@@ -104,6 +105,8 @@ const api: CodePIddyClientApi = {
 	forkAgentSession: (input: ForkAgentSessionInput) => ipcRenderer.invoke(channels.forkAgentSession, input),
 	resetAgent: (input: ResetAgentInput) => ipcRenderer.invoke(channels.resetAgent, input),
 	respondToExtensionUi: (input: ExtensionUiResponseInput) => ipcRenderer.invoke(channels.respondToExtensionUi, input),
+	getPendingPermissionRequest: (input: AgentInstanceLocator) =>
+		ipcRenderer.invoke(channels.getPendingPermissionRequest, input),
 	searchProjectFiles: (projectRoot: string, query: string) =>
 		ipcRenderer.invoke(channels.searchProjectFiles, projectRoot, query),
 	getSettingsStatus: () => ipcRenderer.invoke(channels.settingsStatus),
