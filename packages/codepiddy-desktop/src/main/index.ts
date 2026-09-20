@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -27,25 +27,42 @@ import type {
 	AgentRole,
 	AgentSessionNode,
 	AgentSessionSnapshot,
-	ApproveRequirementInput,
 	ArchiveWorkItemInput,
 	CreateAgentInput,
-	CreateWorkItemInput,
 	ExtensionUiResponseInput,
 	ForkAgentSessionInput,
 	ForkAgentSessionResult,
 	InvokeAgentBuiltinCommandInput,
 	PendingPermissionRequest,
 	ProjectSummary,
-	RenameWorkItemInput,
 	ResetAgentInput,
-	RoleModelDefault,
 	SendAgentPromptInput,
 	SetAgentModelInput,
 	SetAgentThinkingInput,
-	SetRoleSkillAssignmentsInput,
 } from "@codepiddy/shared";
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
+import {
+	assertPathInside,
+	parseAgentLocator,
+	parseAgentRole,
+	parseApproveRequirementInput,
+	parseArchiveWorkItemInput,
+	parseBoundedText,
+	parseCreateAgentInput,
+	parseCreateWorkItemInput,
+	parseExtensionUiResponseInput,
+	parseForkAgentSessionInput,
+	parseInvokeAgentBuiltinCommandInput,
+	parseProjectId,
+	parseProjectRoot,
+	parseRenameWorkItemInput,
+	parseResetAgentInput,
+	parseRoleModelDefault,
+	parseRoleSkillAssignmentsInput,
+	parseSendAgentPromptInput,
+	parseSetAgentModelInput,
+	parseSetAgentThinkingInput,
+} from "./ipc-validation.ts";
 import { RecentProjectStore } from "./recent-project-store.ts";
 import { AppSettingsStore } from "./settings-store.ts";
 import { SingleFlightMap } from "./single-flight.ts";
@@ -296,6 +313,17 @@ class AgentManager {
 			?.workItems.find((item) => item.id === input.workItemId);
 		const slot = workItem?.agentSlots.find((candidate) => candidate.role === input.role);
 		if (!workItem || !slot) throw new Error("Agent slot not found");
+		if (project.id !== input.projectId) throw new Error("Project ID 与项目路径不匹配");
+		if (workItem.lane !== input.lane) throw new Error("Work Item Lane 不匹配");
+		if (path.resolve(workItem.directoryPath) !== path.resolve(input.workItemDirectory)) {
+			throw new Error("Work Item 路径不匹配");
+		}
+		assertPathInside(project.codepiddyPath, workItem.directoryPath, "Work Item 路径");
+		const [realCodepiddyPath, realWorkItemPath] = await Promise.all([
+			realpath(project.codepiddyPath),
+			realpath(workItem.directoryPath),
+		]);
+		assertPathInside(realCodepiddyPath, realWorkItemPath, "Work Item 真实路径");
 		if (slot.blockedReason) throw new Error(slot.blockedReason);
 		await this.registry.create(input);
 		return this.decorate(await openProject(input.projectRoot));
@@ -491,6 +519,11 @@ class AgentManager {
 
 	async reset(input: ResetAgentInput): Promise<ProjectSummary> {
 		const agent = await this.resolve(input);
+		if (path.resolve(agent.projectRoot) !== path.resolve(input.projectRoot)) throw new Error("项目路径不匹配");
+		if (path.resolve(agent.workItemDirectory) !== path.resolve(input.workItemDirectory)) {
+			throw new Error("Work Item 路径不匹配");
+		}
+		if (agent.lane !== input.lane) throw new Error("Work Item Lane 不匹配");
 		const process = this.processes.get(agent.id);
 		this.processes.delete(agent.id);
 		this.processAgents.delete(agent.id);
@@ -506,6 +539,17 @@ class AgentManager {
 		if (!process) throw new Error("Agent process is not active");
 		const pending = this.pendingPermissions.get(input.agentInstanceId);
 		if (!pending || pending.requestId !== input.requestId) throw new Error("Permission request is no longer active");
+		if (input.cancelled !== true) {
+			if (pending.method === "select" && (input.value === undefined || !pending.options.includes(input.value))) {
+				throw new Error("权限选择值不在允许选项中");
+			}
+			if (pending.method === "confirm" && typeof input.confirmed !== "boolean") {
+				throw new Error("确认权限请求必须提交布尔值");
+			}
+			if ((pending.method === "input" || pending.method === "editor") && input.value === undefined) {
+				throw new Error("权限输入请求缺少 value");
+			}
+		}
 		await process.respondToExtensionUi({
 			id: input.requestId,
 			...(input.value === undefined ? {} : { value: input.value }),
@@ -935,11 +979,26 @@ function registerIpcHandlers(
 	settingsStore: AppSettingsStore,
 	recentProjects: RecentProjectStore,
 ): void {
-	const decorateRoot = async (projectRoot: string) => {
+	const openedProjects = new Map<string, string>();
+	const rootKey = (projectRoot: string): string =>
+		process.platform === "win32" ? path.resolve(projectRoot).toLowerCase() : path.resolve(projectRoot);
+	const decorateRoot = async (rawProjectRoot: unknown) => {
+		const projectRoot = parseProjectRoot(rawProjectRoot);
 		const project = await agentManager.decorate(await openProject(projectRoot));
+		openedProjects.set(rootKey(project.rootPath), project.id);
 		await recentProjects.record(project);
 		return project;
 	};
+	const requireOpenProjectRoot = (rawProjectRoot: unknown): string => {
+		const projectRoot = parseProjectRoot(rawProjectRoot);
+		if (!openedProjects.has(rootKey(projectRoot))) throw new Error("项目尚未在 CodePIddy 中打开");
+		return projectRoot;
+	};
+	const validateWorkItemInput = (raw: unknown): ArchiveWorkItemInput => {
+		const input = parseArchiveWorkItemInput(raw);
+		return { ...input, projectRoot: requireOpenProjectRoot(input.projectRoot) };
+	};
+
 	ipcMain.handle(channels.listRecentProjects, () => recentProjects.list());
 	ipcMain.handle(channels.getStartupProject, async () => {
 		const projectRoot = await recentProjects.getActiveProjectRoot();
@@ -951,89 +1010,135 @@ function registerIpcHandlers(
 			return null;
 		}
 	});
-	ipcMain.handle(channels.closeProject, async (_event, projectRoot: string) => {
+	ipcMain.handle(channels.closeProject, async (_event, rawProjectRoot: unknown) => {
+		const projectRoot = requireOpenProjectRoot(rawProjectRoot);
 		const project = await openProject(projectRoot);
 		await agentManager.stopProject(project.id);
+		openedProjects.delete(rootKey(projectRoot));
 		await recentProjects.clearActiveProject(projectRoot);
 		return recentProjects.list();
 	});
-	ipcMain.handle(channels.openRecentProject, (_event, projectRoot: string) => decorateRoot(projectRoot));
-	ipcMain.handle(channels.forgetRecentProject, (_event, projectRoot: string) => recentProjects.forget(projectRoot));
+	ipcMain.handle(channels.openRecentProject, async (_event, rawProjectRoot: unknown) => {
+		const projectRoot = parseProjectRoot(rawProjectRoot);
+		const recent = await recentProjects.list();
+		if (!recent.some((item) => rootKey(item.rootPath) === rootKey(projectRoot)))
+			throw new Error("最近项目记录不存在");
+		return decorateRoot(projectRoot);
+	});
+	ipcMain.handle(channels.forgetRecentProject, (_event, rawProjectRoot: unknown) =>
+		recentProjects.forget(parseProjectRoot(rawProjectRoot)),
+	);
 	ipcMain.handle(channels.openProject, async () => {
 		const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		const selectedPath = result.filePaths[0];
 		if (result.canceled || !selectedPath) return null;
 		return decorateRoot(selectedPath);
 	});
-	ipcMain.handle(channels.refreshProject, (_event, projectRoot: string) => decorateRoot(projectRoot));
-	ipcMain.handle(channels.createWorkItem, async (_event, input: CreateWorkItemInput) =>
-		agentManager.decorate(await createWorkItem(input)),
+	ipcMain.handle(channels.refreshProject, (_event, rawProjectRoot: unknown) =>
+		decorateRoot(requireOpenProjectRoot(rawProjectRoot)),
 	);
-	ipcMain.handle(channels.approveRequirement, async (_event, input: ApproveRequirementInput) =>
-		agentManager.decorate(await approveRequirement(input)),
+	ipcMain.handle(channels.createWorkItem, async (_event, raw: unknown) => {
+		const input = parseCreateWorkItemInput(raw);
+		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
+		return agentManager.decorate(await createWorkItem(input));
+	});
+	ipcMain.handle(channels.approveRequirement, async (_event, raw: unknown) => {
+		const input = parseApproveRequirementInput(raw);
+		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
+		return agentManager.decorate(await approveRequirement(input));
+	});
+	ipcMain.handle(channels.archiveWorkItem, async (_event, raw: unknown) =>
+		agentManager.decorate(await archiveWorkItem(validateWorkItemInput(raw))),
 	);
-	ipcMain.handle(channels.archiveWorkItem, async (_event, input: ArchiveWorkItemInput) =>
-		agentManager.decorate(await archiveWorkItem(input)),
+	ipcMain.handle(channels.restoreWorkItem, async (_event, raw: unknown) =>
+		agentManager.decorate(await restoreWorkItem(validateWorkItemInput(raw))),
 	);
-	ipcMain.handle(channels.restoreWorkItem, async (_event, input: ArchiveWorkItemInput) =>
-		agentManager.decorate(await restoreWorkItem(input)),
-	);
-	ipcMain.handle(channels.renameWorkItem, async (_event, input: RenameWorkItemInput) =>
-		agentManager.decorate(await renameWorkItem(input)),
-	);
-	ipcMain.handle(channels.deleteWorkItem, async (_event, input: ArchiveWorkItemInput) => {
+	ipcMain.handle(channels.renameWorkItem, async (_event, raw: unknown) => {
+		const input = parseRenameWorkItemInput(raw);
+		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
+		return agentManager.decorate(await renameWorkItem(input));
+	});
+	ipcMain.handle(channels.deleteWorkItem, async (_event, raw: unknown) => {
+		const input = validateWorkItemInput(raw);
 		const project = await openProject(input.projectRoot);
 		await agentManager.removeWorkItem(project.id, input.workItemId);
 		return agentManager.decorate(await deleteWorkItem(input));
 	});
-	ipcMain.handle(channels.getAgentModelSelection, (_event, input: AgentInstanceLocator) =>
-		agentManager.getModelSelection(input),
+	ipcMain.handle(channels.getAgentModelSelection, (_event, raw: unknown) =>
+		agentManager.getModelSelection(parseAgentLocator(raw)),
 	);
-	ipcMain.handle(channels.getAgentCommands, (_event, input: AgentInstanceLocator) => agentManager.getCommands(input));
-	ipcMain.handle(channels.getProjectWriteLeaseStatus, (_event, projectId: string) =>
-		agentManager.getWriteLeaseStatus(projectId),
+	ipcMain.handle(channels.getAgentCommands, (_event, raw: unknown) =>
+		agentManager.getCommands(parseAgentLocator(raw)),
 	);
-	ipcMain.handle(channels.clearStaleProjectWriteLease, (_event, projectId: string) =>
-		agentManager.clearStaleWriteLease(projectId),
+	ipcMain.handle(channels.getProjectWriteLeaseStatus, (_event, rawProjectId: unknown) =>
+		agentManager.getWriteLeaseStatus(parseProjectId(rawProjectId)),
 	);
-	ipcMain.handle(channels.setAgentModel, (_event, input: SetAgentModelInput) => agentManager.setModel(input));
-	ipcMain.handle(channels.setAgentThinking, (_event, input: SetAgentThinkingInput) => agentManager.setThinking(input));
-	ipcMain.handle(channels.createAgent, (_event, input: CreateAgentInput) => agentManager.create(input));
-	ipcMain.handle(channels.activateAgent, (_event, input: AgentInstanceLocator) => agentManager.activate(input));
-	ipcMain.handle(channels.sendAgentPrompt, (_event, input: SendAgentPromptInput) => agentManager.prompt(input));
-	ipcMain.handle(channels.abortAgent, (_event, input: AgentInstanceLocator) => agentManager.abort(input));
-	ipcMain.handle(channels.reconnectAgent, (_event, input: AgentInstanceLocator) => agentManager.reconnect(input));
-	ipcMain.handle(channels.compactAgent, (_event, input: AgentInstanceLocator) => agentManager.compact(input));
-	ipcMain.handle(channels.invokeAgentBuiltinCommand, (_event, input: InvokeAgentBuiltinCommandInput) =>
-		agentManager.invokeBuiltinCommand(input),
+	ipcMain.handle(channels.clearStaleProjectWriteLease, (_event, rawProjectId: unknown) =>
+		agentManager.clearStaleWriteLease(parseProjectId(rawProjectId)),
 	);
-	ipcMain.handle(channels.cloneAgentSession, (_event, input: AgentInstanceLocator) =>
-		agentManager.cloneSession(input),
+	ipcMain.handle(channels.setAgentModel, (_event, raw: unknown) =>
+		agentManager.setModel(parseSetAgentModelInput(raw)),
 	);
-	ipcMain.handle(channels.getAgentSessionSnapshot, (_event, input: AgentInstanceLocator) =>
-		agentManager.getSessionSnapshot(input),
+	ipcMain.handle(channels.setAgentThinking, (_event, raw: unknown) =>
+		agentManager.setThinking(parseSetAgentThinkingInput(raw)),
 	);
-	ipcMain.handle(channels.forkAgentSession, (_event, input: ForkAgentSessionInput) => agentManager.forkSession(input));
-	ipcMain.handle(channels.resetAgent, (_event, input: ResetAgentInput) => agentManager.reset(input));
-	ipcMain.handle(channels.respondToExtensionUi, (_event, input: ExtensionUiResponseInput) =>
-		agentManager.respondToExtensionUi(input),
+	ipcMain.handle(channels.createAgent, async (_event, raw: unknown) => {
+		const input = parseCreateAgentInput(raw);
+		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
+		return agentManager.create(input);
+	});
+	ipcMain.handle(channels.activateAgent, (_event, raw: unknown) => agentManager.activate(parseAgentLocator(raw)));
+	ipcMain.handle(channels.sendAgentPrompt, (_event, raw: unknown) =>
+		agentManager.prompt(parseSendAgentPromptInput(raw)),
 	);
-	ipcMain.handle(channels.getPendingPermissionRequest, (_event, input: AgentInstanceLocator) =>
-		agentManager.getPendingPermissionRequest(input),
+	ipcMain.handle(channels.abortAgent, (_event, raw: unknown) => agentManager.abort(parseAgentLocator(raw)));
+	ipcMain.handle(channels.reconnectAgent, (_event, raw: unknown) => agentManager.reconnect(parseAgentLocator(raw)));
+	ipcMain.handle(channels.compactAgent, (_event, raw: unknown) => agentManager.compact(parseAgentLocator(raw)));
+	ipcMain.handle(channels.invokeAgentBuiltinCommand, (_event, raw: unknown) =>
+		agentManager.invokeBuiltinCommand(parseInvokeAgentBuiltinCommandInput(raw)),
 	);
-	ipcMain.handle(channels.searchProjectFiles, (_event, projectRoot: string, query: string) =>
-		searchProjectFiles(projectRoot, query),
+	ipcMain.handle(channels.cloneAgentSession, (_event, raw: unknown) =>
+		agentManager.cloneSession(parseAgentLocator(raw)),
+	);
+	ipcMain.handle(channels.getAgentSessionSnapshot, (_event, raw: unknown) =>
+		agentManager.getSessionSnapshot(parseAgentLocator(raw)),
+	);
+	ipcMain.handle(channels.forkAgentSession, (_event, raw: unknown) =>
+		agentManager.forkSession(parseForkAgentSessionInput(raw)),
+	);
+	ipcMain.handle(channels.resetAgent, async (_event, raw: unknown) => {
+		const input = parseResetAgentInput(raw);
+		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
+		return agentManager.reset(input);
+	});
+	ipcMain.handle(channels.respondToExtensionUi, (_event, raw: unknown) =>
+		agentManager.respondToExtensionUi(parseExtensionUiResponseInput(raw)),
+	);
+	ipcMain.handle(channels.getPendingPermissionRequest, (_event, raw: unknown) =>
+		agentManager.getPendingPermissionRequest(parseAgentLocator(raw)),
+	);
+	ipcMain.handle(channels.searchProjectFiles, (_event, rawProjectRoot: unknown, rawQuery: unknown) =>
+		searchProjectFiles(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawQuery, "搜索内容", 500, true)),
 	);
 	ipcMain.handle(channels.settingsStatus, () => settingsStore.status());
-	ipcMain.handle(channels.settingsSaveTavily, (_event, apiKey: string) => settingsStore.saveTavilyApiKey(apiKey));
+	ipcMain.handle(channels.settingsSaveTavily, (_event, rawApiKey: unknown) =>
+		settingsStore.saveTavilyApiKey(parseBoundedText(rawApiKey, "Tavily API Key", 500)),
+	);
 	ipcMain.handle(channels.settingsClearTavily, () => settingsStore.clearTavilyApiKey());
-	ipcMain.handle(channels.settingsListSkills, (_event, projectRoot?: string) =>
-		discoverAgentSkills(agentManager.repositoryPath, projectRoot),
-	);
+	ipcMain.handle(channels.settingsListSkills, (_event, rawProjectRoot?: unknown) => {
+		const projectRoot = rawProjectRoot === undefined ? undefined : requireOpenProjectRoot(rawProjectRoot);
+		return discoverAgentSkills(agentManager.repositoryPath, projectRoot);
+	});
 	ipcMain.handle(channels.settingsGetRoleSkills, () => settingsStore.getRoleSkillAssignments());
-	ipcMain.handle(channels.settingsSetRoleSkills, (_event, input: SetRoleSkillAssignmentsInput) =>
-		settingsStore.setRoleSkillAssignments(input),
-	);
+	ipcMain.handle(channels.settingsSetRoleSkills, async (_event, raw: unknown) => {
+		const input = parseRoleSkillAssignmentsInput(raw);
+		const projectRoot = input.projectRoot ? requireOpenProjectRoot(input.projectRoot) : undefined;
+		const catalog = await discoverAgentSkills(agentManager.repositoryPath, projectRoot);
+		const allowedIds = new Set(catalog.map((skill) => skill.id));
+		if (input.skillIds.some((skillId) => !allowedIds.has(skillId)))
+			throw new Error("Skill ID 不存在或不在允许目录中");
+		return settingsStore.setRoleSkillAssignments(input);
+	});
 	ipcMain.handle(channels.settingsOpenPiConfig, async () => {
 		const directory = path.join(app.getPath("home"), ".pi", "agent");
 		await mkdir(directory, { recursive: true });
@@ -1041,42 +1146,76 @@ function registerIpcHandlers(
 		if (error) throw new Error(error);
 	});
 	ipcMain.handle(channels.settingsGetRoleDefaults, () => settingsStore.getRoleModelDefaults());
-	ipcMain.handle(channels.settingsSetRoleDefault, (_event, input: RoleModelDefault) =>
-		settingsStore.setRoleModelDefault(input),
+	ipcMain.handle(channels.settingsSetRoleDefault, (_event, raw: unknown) =>
+		settingsStore.setRoleModelDefault(parseRoleModelDefault(raw)),
 	);
-	ipcMain.handle(channels.settingsClearRoleDefault, (_event, role: AgentRole) =>
-		settingsStore.clearRoleModelDefault(role),
+	ipcMain.handle(channels.settingsClearRoleDefault, (_event, rawRole: unknown) =>
+		settingsStore.clearRoleModelDefault(parseAgentRole(rawRole)),
 	);
-	ipcMain.handle(channels.openWorkItemFolder, async (_event, directoryPath: string) => {
-		const error = await shell.openPath(directoryPath);
+	ipcMain.handle(channels.openWorkItemFolder, async (_event, raw: unknown) => {
+		const input = validateWorkItemInput(raw);
+		const project = await openProject(input.projectRoot);
+		const item = project.lanes
+			.find((candidate) => candidate.kind === input.lane)
+			?.workItems.find((candidate) => candidate.id === input.workItemId);
+		if (!item) throw new Error("Work Item 不存在");
+		assertPathInside(project.codepiddyPath, item.directoryPath, "Work Item 路径");
+		const [realCodepiddyPath, realWorkItemPath] = await Promise.all([
+			realpath(project.codepiddyPath),
+			realpath(item.directoryPath),
+		]);
+		assertPathInside(realCodepiddyPath, realWorkItemPath, "Work Item 真实路径");
+		const error = await shell.openPath(realWorkItemPath);
 		if (error) throw new Error(error);
 	});
 }
 
-app.whenReady().then(() => {
-	Menu.setApplicationMenu(null);
-	const repositoryRoot =
-		process.env.CODEPIDDY_REPO_ROOT ??
-		(app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(app.getAppPath(), "..", ".."));
-	const settingsStore = new AppSettingsStore(app.getPath("userData"));
-	const recentProjects = new RecentProjectStore(app.getPath("userData"));
-	const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore);
-	registerIpcHandlers(agentManager, settingsStore, recentProjects);
-	createWindow();
-	let shutdownStarted = false;
-	app.on("before-quit", (event) => {
-		if (shutdownStarted) return;
-		event.preventDefault();
-		shutdownStarted = true;
-		void agentManager.stopAll().finally(() => {
-			recentProjects.close();
-			app.quit();
+let mainWindow: BrowserWindow | null = null;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+	app.quit();
+} else {
+	app.on("second-instance", () => {
+		if (!mainWindow || mainWindow.isDestroyed()) return;
+		if (mainWindow.isMinimized()) mainWindow.restore();
+		mainWindow.show();
+		mainWindow.focus();
+	});
+
+	app.whenReady().then(() => {
+		Menu.setApplicationMenu(null);
+		const repositoryRoot =
+			process.env.CODEPIDDY_REPO_ROOT ??
+			(app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(app.getAppPath(), "..", ".."));
+		const settingsStore = new AppSettingsStore(app.getPath("userData"));
+		const recentProjects = new RecentProjectStore(app.getPath("userData"));
+		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore);
+		registerIpcHandlers(agentManager, settingsStore, recentProjects);
+		mainWindow = createWindow();
+		mainWindow.on("closed", () => {
+			mainWindow = null;
+		});
+		let shutdownStarted = false;
+		app.on("before-quit", (event) => {
+			if (shutdownStarted) return;
+			event.preventDefault();
+			shutdownStarted = true;
+			void agentManager.stopAll().finally(() => {
+				recentProjects.close();
+				app.quit();
+			});
+		});
+		app.on("activate", () => {
+			if (BrowserWindow.getAllWindows().length === 0) {
+				mainWindow = createWindow();
+				mainWindow.on("closed", () => {
+					mainWindow = null;
+				});
+			}
 		});
 	});
-	app.on("activate", () => {
-		if (BrowserWindow.getAllWindows().length === 0) createWindow();
-	});
-});
+}
 
 app.on("window-all-closed", () => {
 	if (process.platform !== "darwin") app.quit();

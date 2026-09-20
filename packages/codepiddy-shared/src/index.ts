@@ -79,7 +79,7 @@ export interface ProjectClientApi {
 	restoreWorkItem(input: ArchiveWorkItemInput): Promise<ProjectSummary>;
 	renameWorkItem(input: RenameWorkItemInput): Promise<ProjectSummary>;
 	deleteWorkItem(input: ArchiveWorkItemInput): Promise<ProjectSummary>;
-	openWorkItemFolder(directoryPath: string): Promise<void>;
+	openWorkItemFolder(input: ArchiveWorkItemInput): Promise<void>;
 }
 
 export interface AgentInstanceSummary {
@@ -255,6 +255,7 @@ export type RoleSkillAssignments = Record<AgentRole, string[]>;
 export interface SetRoleSkillAssignmentsInput {
 	role: AgentRole;
 	skillIds: string[];
+	projectRoot?: string;
 }
 
 export const CUSTOM_PROVIDER_APIS = [

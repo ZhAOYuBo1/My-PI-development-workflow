@@ -2532,7 +2532,13 @@ export function App() {
 		setRoleSkillSaving(role);
 		setError(null);
 		try {
-			setRoleSkillAssignments(await window.codepiddy.setRoleSkillAssignments({ role, skillIds }));
+			setRoleSkillAssignments(
+				await window.codepiddy.setRoleSkillAssignments({
+					role,
+					skillIds,
+					...(project ? { projectRoot: project.rootPath } : {}),
+				}),
+			);
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : "保存 Agent Skill 配置失败");
 		} finally {
@@ -3059,7 +3065,13 @@ export function App() {
 							<button
 								className="secondary-button"
 								type="button"
-								onClick={() => void window.codepiddy.openWorkItemFolder(selectedWorkItem.directoryPath)}
+								onClick={() =>
+									void window.codepiddy.openWorkItemFolder({
+										projectRoot: project.rootPath,
+										lane: selectedWorkItem.lane,
+										workItemId: selectedWorkItem.id,
+									})
+								}
 							>
 								打开文件夹
 							</button>
