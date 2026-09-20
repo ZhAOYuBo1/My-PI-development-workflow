@@ -130,11 +130,12 @@ npm run build:codepiddy
 npm start --workspace=@codepiddy/desktop
 ```
 
-Run the CodePIddy checks:
+Run the CodePIddy checks. Electron E2E uses an isolated temporary project and a Fake Pi RPC runtime, so it does not require a model API key:
 
 ```powershell
 npm test --workspace=@codepiddy/core
 npm test --workspace=@codepiddy/desktop
+npm run test:e2e --workspace=@codepiddy/desktop
 npm run check
 ```
 

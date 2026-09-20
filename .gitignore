@@ -62,3 +62,7 @@ packages/agent/docs/extensions/pi-server-artifact/index.md
 # Windows packaging and diagnostics
 *.dmp
 *.blockmap
+
+# Playwright Electron E2E artifacts
+**/test-results/
+**/playwright-report/

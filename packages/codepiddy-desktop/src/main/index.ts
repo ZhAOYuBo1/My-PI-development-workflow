@@ -1029,6 +1029,8 @@ function registerIpcHandlers(
 		recentProjects.forget(parseProjectRoot(rawProjectRoot)),
 	);
 	ipcMain.handle(channels.openProject, async () => {
+		const testProjectRoot = !app.isPackaged ? process.env.CODEPIDDY_TEST_PROJECT_ROOT?.trim() : undefined;
+		if (testProjectRoot) return decorateRoot(testProjectRoot);
 		const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		const selectedPath = result.filePaths[0];
 		if (result.canceled || !selectedPath) return null;
@@ -1170,8 +1172,12 @@ function registerIpcHandlers(
 	});
 }
 
+const userDataOverride = process.env.CODEPIDDY_USER_DATA?.trim();
+if (userDataOverride) app.setPath("userData", path.resolve(userDataOverride));
+
 let mainWindow: BrowserWindow | null = null;
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const singleInstanceDisabled = !app.isPackaged && process.env.CODEPIDDY_DISABLE_SINGLE_INSTANCE === "1";
+const hasSingleInstanceLock = singleInstanceDisabled || app.requestSingleInstanceLock();
 
 if (!hasSingleInstanceLock) {
 	app.quit();

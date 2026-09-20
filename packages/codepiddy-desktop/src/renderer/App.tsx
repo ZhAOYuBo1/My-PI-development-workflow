@@ -18,7 +18,7 @@ import type {
 	SettingsStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
@@ -879,6 +879,7 @@ export function App() {
 	const [pendingPermissionRequests, setPendingPermissionRequests] = useState<Record<string, PendingPermissionRequest>>(
 		{},
 	);
+	const [deferredPermissionAgentId, setDeferredPermissionAgentId] = useState<string | null>(null);
 	const [toolRecoveryOffers, setToolRecoveryOffers] = useState<Record<string, ToolRecoveryOffer>>({});
 	const [agentSessionSnapshots, setAgentSessionSnapshots] = useState<Record<string, AgentSessionSnapshot>>(
 		demoMode ? { "CODE-001": demoSessionSnapshot } : {},
@@ -916,6 +917,7 @@ export function App() {
 	const projectRef = useRef<ProjectSummary | null>(project);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
 	const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
+	const modelPickerSelectedIndexRef = useRef(0);
 	const scrollPositions = useRef<Record<string, number>>(readStoredScrollPositions());
 	const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
@@ -1076,6 +1078,7 @@ export function App() {
 						createdAt: new Date().toISOString(),
 					};
 					setPendingPermissionRequests((current) => ({ ...current, [agentInstanceId]: request }));
+					setDeferredPermissionAgentId((current) => (current === agentInstanceId ? null : current));
 					if (activeAgentId === agentInstanceId) setExtensionDialog(extensionDialogFromPermission(request));
 					updateAgentStatus(clientEvent, "waiting");
 					updateAgentActivity(agentInstanceId, { label: "等待权限确认", kind: "waiting", queued: 0 });
@@ -1529,6 +1532,11 @@ export function App() {
 	useEffect(() => {
 		if (!activeAgentId) {
 			setExtensionDialog(null);
+			setDeferredPermissionAgentId(null);
+			return;
+		}
+		if (deferredPermissionAgentId === activeAgentId) {
+			setExtensionDialog(null);
 			return;
 		}
 		const pending = pendingPermissionRequests[activeAgentId];
@@ -1536,7 +1544,7 @@ export function App() {
 			if (current?.agentInstanceId === activeAgentId) return current;
 			return pending ? extensionDialogFromPermission(pending) : null;
 		});
-	}, [activeAgentId, pendingPermissionRequests]);
+	}, [activeAgentId, deferredPermissionAgentId, pendingPermissionRequests]);
 
 	useEffect(() => {
 		if (
@@ -2415,6 +2423,7 @@ export function App() {
 				delete next[current.agentInstanceId];
 				return next;
 			});
+			setDeferredPermissionAgentId((agentId) => (agentId === current.agentInstanceId ? null : agentId));
 			updateAgentStatus(
 				{
 					agentInstanceId: current.agentInstanceId,
@@ -2431,7 +2440,7 @@ export function App() {
 		}
 	}
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!modelPickerAgentId) return;
 		const currentSelection = modelSelections[modelPickerAgentId];
 		const currentIndex = currentSelection
@@ -2439,9 +2448,10 @@ export function App() {
 					(model) => model.provider === currentSelection.model.provider && model.id === currentSelection.model.id,
 				)
 			: -1;
-		setModelPickerSelectedIndex(currentIndex >= 0 && !modelSearch ? currentIndex : 0);
-		const frame = window.requestAnimationFrame(() => modelSearchInputRef.current?.focus());
-		return () => window.cancelAnimationFrame(frame);
+		const nextIndex = currentIndex >= 0 && !modelSearch ? currentIndex : 0;
+		modelPickerSelectedIndexRef.current = nextIndex;
+		setModelPickerSelectedIndex(nextIndex);
+		modelSearchInputRef.current?.focus();
 	}, [modelPickerAgentId, modelPickerOptions, modelSearch, modelSelections]);
 
 	useEffect(() => {
@@ -3493,6 +3503,16 @@ export function App() {
 							{extensionDialog.title}
 							{extensionDialog.message ? `\n\n${extensionDialog.message}` : ""}
 						</pre>
+						<button
+							className="permission-defer"
+							type="button"
+							onClick={() => {
+								setDeferredPermissionAgentId(extensionDialog.agentInstanceId);
+								setExtensionDialog(null);
+							}}
+						>
+							稍后处理
+						</button>
 						{extensionDialog.method === "select" ? (
 							<div className="permission-options">
 								{extensionDialog.options.map((option) => (
@@ -3580,18 +3600,24 @@ export function App() {
 									onKeyDown={(event) => {
 										if (event.key === "ArrowDown" && filtered.length > 0) {
 											event.preventDefault();
-											setModelPickerSelectedIndex((current) => (current + 1) % filtered.length);
+											setModelPickerSelectedIndex((current) => {
+												const next = (current + 1) % filtered.length;
+												modelPickerSelectedIndexRef.current = next;
+												return next;
+											});
 										} else if (event.key === "ArrowUp" && filtered.length > 0) {
 											event.preventDefault();
-											setModelPickerSelectedIndex(
-												(current) => (current - 1 + filtered.length) % filtered.length,
-											);
+											setModelPickerSelectedIndex((current) => {
+												const next = (current - 1 + filtered.length) % filtered.length;
+												modelPickerSelectedIndexRef.current = next;
+												return next;
+											});
 										} else if (
 											event.key === "Enter" &&
 											event.target === modelSearchInputRef.current &&
 											!modelPickerBusy
 										) {
-											const model = filtered[modelPickerSelectedIndex];
+											const model = filtered[modelPickerSelectedIndexRef.current];
 											if (!model) return;
 											event.preventDefault();
 											void chooseModel(slot, model.provider, model.id);
@@ -3638,7 +3664,10 @@ export function App() {
 																.filter(Boolean)
 																.join(" ")}
 															data-model-index={index}
-															onMouseEnter={() => setModelPickerSelectedIndex(index)}
+															onMouseEnter={() => {
+																modelPickerSelectedIndexRef.current = index;
+																setModelPickerSelectedIndex(index);
+															}}
 															key={provider + model.id}
 															disabled={modelPickerBusy}
 															onClick={() => void chooseModel(slot, model.provider, model.id)}

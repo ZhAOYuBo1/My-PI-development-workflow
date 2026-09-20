@@ -1318,3 +1318,15 @@ button { color: inherit; }
   color: #6c4b27;
 }
 .composer .tool-recovery-offer > button:hover { background: #f8ead6; color: #553717; }
+.permission-defer {
+  display: block;
+  margin: -6px 0 12px auto;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #777773;
+  font-size: 11px;
+  cursor: pointer;
+}
+.permission-defer:hover { background: #efefeb; color: #3f3f3c; }
