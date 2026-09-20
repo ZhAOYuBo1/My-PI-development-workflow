@@ -6,6 +6,8 @@ import {
 	parseCreateWorkItemInput,
 	parseExtensionUiResponseInput,
 	parseRoleSkillAssignmentsInput,
+	parseSendAgentPromptInput,
+	parseSetAgentScopedModelsInput,
 } from "../src/main/ipc-validation.ts";
 
 describe("IPC runtime validation", () => {
@@ -48,5 +50,43 @@ describe("IPC runtime validation", () => {
 		const parent = path.resolve("C:/workspace/project/.codepiddy");
 		expect(() => assertPathInside(parent, path.resolve(parent, "requirements/FEAT-001"), "Work Item")).not.toThrow();
 		expect(() => assertPathInside(parent, path.resolve(parent, "../outside"), "Work Item")).toThrow(/超出允许目录/);
+	});
+
+	test("accepts image-only prompts and rejects unsafe image payloads", () => {
+		const locator = {
+			agentInstanceId: "agent-1",
+			projectId: "project-1",
+			workItemId: "FEAT-001",
+			role: "coding",
+		};
+		expect(
+			parseSendAgentPromptInput({
+				...locator,
+				message: "",
+				images: [{ id: "image-1", name: "example.png", mimeType: "image/png", data: "aA==" }],
+			}),
+		).toMatchObject({ message: "", images: [{ mimeType: "image/png", data: "aA==" }] });
+		expect(() => parseSendAgentPromptInput({ ...locator, message: "", images: [] })).toThrow(/至少需要/);
+		expect(() =>
+			parseSendAgentPromptInput({
+				...locator,
+				message: "image",
+				images: [{ id: "image-1", name: "bad.svg", mimeType: "image/svg+xml", data: "aA==" }],
+			}),
+		).toThrow(/不支持的图片格式/);
+	});
+
+	test("validates and de-duplicates scoped model configuration", () => {
+		const input = {
+			agentInstanceId: "agent-1",
+			projectId: "project-1",
+			workItemId: "FEAT-001",
+			role: "coding",
+			models: [{ provider: "openai", modelId: "gpt-5", thinkingLevel: "high" }],
+		};
+		expect(parseSetAgentScopedModelsInput(input).models).toEqual(input.models);
+		expect(() => parseSetAgentScopedModelsInput({ ...input, models: [...input.models, ...input.models] })).toThrow(
+			/重复/,
+		);
 	});
 });

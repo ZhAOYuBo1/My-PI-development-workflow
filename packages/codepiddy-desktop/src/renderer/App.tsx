@@ -1,9 +1,11 @@
 import type {
 	AgentClientEvent,
 	AgentCommandOption,
+	AgentImageAttachment,
 	AgentInstanceLocator,
 	AgentModelSelection,
 	AgentRole,
+	AgentScopedModel,
 	AgentSessionSnapshot,
 	AgentSkillSummary,
 	AgentSlotSummary,
@@ -110,7 +112,14 @@ interface ExtensionDialogState {
 type AssistantMessageStatus = "streaming" | "complete" | "aborted" | "error";
 
 type TranscriptItem =
-	| { id: string; type: "user"; text: string; delivery?: "steer" | "followUp"; createdAt?: string }
+	| {
+			id: string;
+			type: "user";
+			text: string;
+			images?: AgentImageAttachment[];
+			delivery?: "steer" | "followUp";
+			createdAt?: string;
+	  }
 	| {
 			id: string;
 			type: "assistant";
@@ -180,6 +189,10 @@ const roleGlyphs: Record<AgentSlotSummary["role"], string> = {
 	review: "✓",
 };
 
+const PROMPT_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const MAX_PROMPT_IMAGES = 8;
+const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -199,6 +212,45 @@ function extractThinkingText(value: unknown): string {
 	if (value.type === "thinking" && typeof value.thinking === "string") return value.thinking;
 	if ("content" in value) return extractThinkingText(value.content);
 	return "";
+}
+
+function extractMessageImages(value: unknown, messageIndex: number): AgentImageAttachment[] {
+	if (Array.isArray(value)) return value.flatMap((item) => extractMessageImages(item, messageIndex));
+	if (!isRecord(value)) return [];
+	if (
+		value.type === "image" &&
+		typeof value.data === "string" &&
+		typeof value.mimeType === "string" &&
+		PROMPT_IMAGE_MIME_TYPES.has(value.mimeType)
+	) {
+		return [
+			{
+				id: `history-image-${messageIndex}-${value.data.slice(0, 12)}`,
+				name: `图片 ${messageIndex + 1}`,
+				mimeType: value.mimeType as AgentImageAttachment["mimeType"],
+				data: value.data,
+			},
+		];
+	}
+	if ("content" in value) return extractMessageImages(value.content, messageIndex);
+	return [];
+}
+
+async function imageAttachmentFromFile(file: File): Promise<AgentImageAttachment> {
+	if (!PROMPT_IMAGE_MIME_TYPES.has(file.type)) throw new Error(`不支持的图片格式：${file.type || file.name}`);
+	if (file.size > MAX_PROMPT_IMAGE_BYTES) throw new Error("单张图片不能超过 10MB");
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	let binary = "";
+	const chunkSize = 32_768;
+	for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+		binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+	}
+	return {
+		id: crypto.randomUUID(),
+		name: file.name || "clipboard-image",
+		mimeType: file.type as AgentImageAttachment["mimeType"],
+		data: btoa(binary),
+	};
 }
 
 function assistantMessageStatus(value: unknown): Exclude<AssistantMessageStatus, "streaming"> {
@@ -244,8 +296,9 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 	for (const [index, message] of messages.entries()) {
 		if (!isRecord(message)) continue;
 		const text = extractMessageText(message.content);
-		if (!text) continue;
+		const images = extractMessageImages(message.content, index);
 		const role = message.role;
+		if (!text && !(role === "user" && images.length > 0)) continue;
 		if (role === "toolResult") {
 			items.push({
 				id: typeof message.toolCallId === "string" ? message.toolCallId : `history-tool-${index}`,
@@ -271,6 +324,7 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 				id: `history-${index}`,
 				type: role === "user" ? "user" : "system",
 				text,
+				...(role === "user" && images.length > 0 ? { images } : {}),
 				...(typeof message.timestamp === "string" ? { createdAt: message.timestamp } : {}),
 			});
 		}
@@ -288,6 +342,7 @@ type AppIconName =
 	| "edit"
 	| "folder"
 	| "more"
+	| "paperclip"
 	| "plus"
 	| "restore"
 	| "search"
@@ -344,6 +399,12 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 				<circle cx="6" cy="12" r="1" fill="currentColor" stroke="none" />
 				<circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
 				<circle cx="18" cy="12" r="1" fill="currentColor" stroke="none" />
+			</>
+		),
+		paperclip: (
+			<>
+				<path d="m9.5 12.5 5.7-5.7a3 3 0 0 1 4.2 4.2l-7.8 7.8a5 5 0 0 1-7.1-7.1l7.5-7.5" />
+				<path d="m7.3 14.7 7.1-7.1a1.5 1.5 0 0 1 2.1 2.1l-7.1 7.1a2 2 0 0 1-2.8-2.8l6.4-6.4" />
 			</>
 		),
 		plus: (
@@ -614,6 +675,18 @@ const TranscriptMessage = memo(function TranscriptMessage({
 						<p>{item.thinking}</p>
 					</details>
 				) : null}
+				{item.type === "user" && item.images?.length ? (
+					<div className="message-image-grid">
+						{item.images.map((image) => (
+							<img
+								key={image.id}
+								src={`data:${image.mimeType};base64,${image.data}`}
+								alt={image.name}
+								title={image.name}
+							/>
+						))}
+					</div>
+				) : null}
 				{item.type === "assistant" && item.status === "streaming" && !item.text ? (
 					<output className="message-streaming-placeholder" aria-live="polite">
 						<span className="sr-only">Pi 正在生成回复</span>
@@ -823,6 +896,12 @@ const demoSessionSnapshot: AgentSessionSnapshot = {
 const demoAgentCommands: AgentCommandOption[] = [
 	{ name: "settings", command: "/settings", description: "Open settings menu", source: "builtin" },
 	{
+		name: "scoped-models",
+		command: "/scoped-models",
+		description: "Enable or disable models for cycling",
+		source: "builtin",
+	},
+	{
 		name: "model",
 		command: "/model",
 		description: "Select model (opens selector UI)",
@@ -967,16 +1046,22 @@ export function App() {
 				}
 			: {},
 	);
+	const [imageAttachments, setImageAttachments] = useState<Record<string, AgentImageAttachment[]>>({});
 	const [modelPickerAgentId, setModelPickerAgentId] = useState<string | null>(null);
 	const [modelPickerBusy, setModelPickerBusy] = useState(false);
 	const [modelSearch, setModelSearch] = useState("");
 	const [modelPickerSelectedIndex, setModelPickerSelectedIndex] = useState(0);
+	const [scopedModelPickerAgentId, setScopedModelPickerAgentId] = useState<string | null>(null);
+	const [scopedModelDraft, setScopedModelDraft] = useState<AgentScopedModel[]>([]);
+	const [scopedModelSearch, setScopedModelSearch] = useState("");
+	const [scopedModelPickerBusy, setScopedModelPickerBusy] = useState(false);
 	const [fileMatches, setFileMatches] = useState<string[]>([]);
 	const activeAssistantIds = useRef(new Map<string, string>());
 	const pendingToolFailures = useRef(new Map<string, ToolRecoveryOffer>());
 	const agentCommandLoads = useRef(new Map<string, Promise<AgentCommandOption[]>>());
 	const projectRef = useRef<ProjectSummary | null>(project);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
+	const imageInputRef = useRef<HTMLInputElement | null>(null);
 	const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
 	const modelPickerSelectedIndexRef = useRef(0);
 	const scrollPositions = useRef<Record<string, number>>(readStoredScrollPositions());
@@ -1134,6 +1219,16 @@ export function App() {
 			`${model.provider} ${model.name} ${model.id}`.toLowerCase().includes(normalizedSearch),
 		);
 	}, [modelPickerAgentId, modelSearch, modelSelections]);
+
+	const scopedModelPickerOptions = useMemo(() => {
+		if (!scopedModelPickerAgentId) return [];
+		const selection = modelSelections[scopedModelPickerAgentId];
+		if (!selection) return [];
+		const normalizedSearch = scopedModelSearch.trim().toLowerCase();
+		return selection.availableModels.filter((model) =>
+			`${model.provider} ${model.name} ${model.id}`.toLowerCase().includes(normalizedSearch),
+		);
+	}, [modelSelections, scopedModelPickerAgentId, scopedModelSearch]);
 
 	const updateAgentStatus = useCallback((clientEvent: AgentClientEvent, status: AgentStatus): void => {
 		setProject((current) =>
@@ -2224,11 +2319,42 @@ export function App() {
 		}
 	}
 
+	async function addImageFiles(agentId: string, files: File[]): Promise<void> {
+		const imageFiles = files.filter((file) => PROMPT_IMAGE_MIME_TYPES.has(file.type));
+		if (imageFiles.length === 0) {
+			setError("请选择 PNG、JPEG、WebP 或 GIF 图片");
+			return;
+		}
+		const remaining = Math.max(0, MAX_PROMPT_IMAGES - (imageAttachments[agentId]?.length ?? 0));
+		if (remaining === 0) {
+			setError(`每条消息最多附加 ${MAX_PROMPT_IMAGES} 张图片`);
+			return;
+		}
+		if (imageFiles.length > remaining) setError(`每条消息最多附加 ${MAX_PROMPT_IMAGES} 张图片`);
+		try {
+			const attachments = await Promise.all(imageFiles.slice(0, remaining).map(imageAttachmentFromFile));
+			setImageAttachments((current) => ({
+				...current,
+				[agentId]: [...(current[agentId] ?? []), ...attachments].slice(0, MAX_PROMPT_IMAGES),
+			}));
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "读取图片失败");
+		}
+	}
+
+	function removeImageAttachment(agentId: string, attachmentId: string): void {
+		setImageAttachments((current) => ({
+			...current,
+			[agentId]: (current[agentId] ?? []).filter((image) => image.id !== attachmentId),
+		}));
+	}
+
 	async function sendPrompt(slot: AgentSlotSummary, explicitMessage?: string): Promise<void> {
 		if (!project || !selectedWorkItem || !slot.currentInstanceId || (!demoMode && !("codepiddy" in window))) return;
 		const agentId = slot.currentInstanceId;
-		const message = explicitMessage?.trim() || drafts[agentId]?.trim();
-		if (!message) return;
+		const message = explicitMessage?.trim() || drafts[agentId]?.trim() || "";
+		const images = imageAttachments[agentId] ?? [];
+		if (!message && images.length === 0) return;
 		const locator = {
 			agentInstanceId: agentId,
 			projectId: project.id,
@@ -2276,6 +2402,11 @@ export function App() {
 					if (await chooseModel(slot, model.provider, model.id)) {
 						setDrafts((current) => ({ ...current, [agentId]: "" }));
 					}
+					return;
+				}
+				if (name === "scoped-models") {
+					setDrafts((current) => ({ ...current, [agentId]: "" }));
+					await openScopedModelPicker(slot);
 					return;
 				}
 				if (name === "thinking") {
@@ -2338,9 +2469,11 @@ export function App() {
 			await window.codepiddy.sendAgentPrompt({
 				...locator,
 				message,
+				...(images.length > 0 ? { images } : {}),
 				streamingBehavior: "steer",
 			});
 			setDrafts((current) => ({ ...current, [agentId]: "" }));
+			setImageAttachments((current) => ({ ...current, [agentId]: [] }));
 			pendingToolFailures.current.delete(agentId);
 			setToolRecoveryOffers((current) => {
 				if (!(agentId in current)) return current;
@@ -2355,6 +2488,7 @@ export function App() {
 					id: crypto.randomUUID(),
 					type: "user",
 					text: message,
+					...(images.length > 0 ? { images } : {}),
 					...(delivery ? { delivery } : {}),
 					createdAt: new Date().toISOString(),
 				},
@@ -2673,6 +2807,9 @@ export function App() {
 			if (modelPickerAgentId) {
 				setModelPickerAgentId(null);
 				setModelSearch("");
+			} else if (scopedModelPickerAgentId) {
+				setScopedModelPickerAgentId(null);
+				setScopedModelSearch("");
 			} else if (sessionPanel) setSessionPanel(null);
 			else if (deleteDialog) setDeleteDialog(null);
 			else if (resetAgentDialog) setResetAgentDialog(null);
@@ -2702,6 +2839,7 @@ export function App() {
 		modelPickerAgentId,
 		renameDialog,
 		resetAgentDialog,
+		scopedModelPickerAgentId,
 		selectedWorkItem,
 		selection,
 		sessionPanel,
@@ -2795,6 +2933,95 @@ export function App() {
 			setRoleModelDefaults(await window.codepiddy.clearRoleModelDefault(role));
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : "清除角色默认模型失败");
+		}
+	}
+
+	async function openScopedModelPicker(slot: AgentSlotSummary): Promise<void> {
+		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
+		setModelPickerAgentId(null);
+		setScopedModelPickerAgentId(slot.currentInstanceId);
+		setScopedModelSearch("");
+		if (demoMode || !("codepiddy" in window)) {
+			setScopedModelDraft([]);
+			return;
+		}
+		setScopedModelPickerBusy(true);
+		setError(null);
+		try {
+			const locator: AgentInstanceLocator = {
+				agentInstanceId: slot.currentInstanceId,
+				projectId: project.id,
+				workItemId: selectedWorkItem.id,
+				role: slot.role,
+			};
+			const [selection, scopedModels] = await Promise.all([
+				window.codepiddy.getAgentModelSelection(locator),
+				window.codepiddy.getAgentScopedModels(locator),
+			]);
+			setModelSelections((current) => ({ ...current, [slot.currentInstanceId!]: selection }));
+			setScopedModelDraft(scopedModels);
+		} catch (caught) {
+			setError(clientErrorMessage(caught, "读取 Pi 模型范围失败"));
+		} finally {
+			setScopedModelPickerBusy(false);
+		}
+	}
+
+	function toggleScopedModel(model: AgentModelSelection["availableModels"][number]): void {
+		if (!scopedModelPickerAgentId) return;
+		const allModels = modelSelections[scopedModelPickerAgentId]?.availableModels ?? [];
+		const explicit =
+			scopedModelDraft.length === 0
+				? allModels.map((available) => ({ provider: available.provider, modelId: available.id }))
+				: scopedModelDraft;
+		const index = explicit.findIndex((item) => item.provider === model.provider && item.modelId === model.id);
+		const next =
+			index >= 0
+				? [...explicit.slice(0, index), ...explicit.slice(index + 1)]
+				: [...explicit, { provider: model.provider, modelId: model.id }];
+		if (next.length === 0) {
+			setError("循环模型范围至少保留一个模型；使用“全部模型”可取消范围限制");
+			return;
+		}
+		const allSelected =
+			next.length === allModels.length &&
+			allModels.every((available) =>
+				next.some((item) => item.provider === available.provider && item.modelId === available.id),
+			);
+		setScopedModelDraft(allSelected ? [] : next);
+	}
+
+	function moveScopedModel(index: number, direction: -1 | 1): void {
+		if (scopedModelDraft.length === 0) return;
+		const destination = index + direction;
+		if (destination < 0 || destination >= scopedModelDraft.length) return;
+		const next = [...scopedModelDraft];
+		[next[index], next[destination]] = [next[destination]!, next[index]!];
+		setScopedModelDraft(next);
+	}
+
+	async function saveScopedModels(slot: AgentSlotSummary): Promise<void> {
+		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
+		if (demoMode || !("codepiddy" in window)) {
+			setScopedModelPickerAgentId(null);
+			return;
+		}
+		setScopedModelPickerBusy(true);
+		setError(null);
+		try {
+			await window.codepiddy.setAgentScopedModels({
+				agentInstanceId: slot.currentInstanceId,
+				projectId: project.id,
+				workItemId: selectedWorkItem.id,
+				role: slot.role,
+				models: scopedModelDraft,
+			});
+			setScopedModelPickerAgentId(null);
+			setScopedModelSearch("");
+		} catch (caught) {
+			setError(clientErrorMessage(caught, "保存 Pi 模型范围失败"));
+		} finally {
+			setScopedModelPickerBusy(false);
 		}
 	}
 
@@ -3045,6 +3272,7 @@ export function App() {
 			const agentId = slot.currentInstanceId;
 			const items = agentId ? (transcripts[agentId] ?? []) : [];
 			const draft = agentId ? (drafts[agentId] ?? "") : "";
+			const attachments = agentId ? (imageAttachments[agentId] ?? []) : [];
 			const activity = agentId ? agentActivities[agentId] : undefined;
 			const toolRecoveryOffer = agentId ? toolRecoveryOffers[agentId] : undefined;
 			const sessionSnapshot = agentId ? agentSessionSnapshots[agentId] : undefined;
@@ -3168,6 +3396,15 @@ export function App() {
 							) : null}
 							<form
 								className="composer composer-stacked"
+								onDragOver={(event) => {
+									if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+								}}
+								onDrop={(event) => {
+									const files = Array.from(event.dataTransfer.files);
+									if (files.length === 0) return;
+									event.preventDefault();
+									void addImageFiles(agentId, files);
+								}}
 								onSubmit={(event) => {
 									event.preventDefault();
 									void sendPrompt(slot);
@@ -3214,9 +3451,32 @@ export function App() {
 										{activity.queued > 0 ? <small>{activity.queued} queued</small> : null}
 									</div>
 								) : null}
+								{attachments.length > 0 ? (
+									<div className="composer-image-strip">
+										{attachments.map((image) => (
+											<figure key={image.id}>
+												<img src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
+												<figcaption title={image.name}>{image.name}</figcaption>
+												<button
+													type="button"
+													aria-label={`移除 ${image.name}`}
+													onClick={() => removeImageAttachment(agentId, image.id)}
+												>
+													<AppIcon name="close" size={12} />
+												</button>
+											</figure>
+										))}
+									</div>
+								) : null}
 								<textarea
 									value={draft}
 									onChange={(event) => setDrafts((current) => ({ ...current, [agentId]: event.target.value }))}
+									onPaste={(event) => {
+										const files = Array.from(event.clipboardData.files);
+										if (files.length === 0) return;
+										event.preventDefault();
+										void addImageFiles(agentId, files);
+									}}
 									onKeyDown={(event) => {
 										if (event.defaultPrevented || event.nativeEvent.isComposing) return;
 										if (event.key === "Enter" && !event.shiftKey) {
@@ -3228,11 +3488,37 @@ export function App() {
 									rows={1}
 								/>
 								<div className="composer-toolbar">
-									<button className="model-seat" type="button" onClick={() => void openModelPicker(slot)}>
-										{modelSelections[agentId]?.model.name ?? "选择模型"} ·{" "}
-										{modelSelections[agentId]?.thinkingLevel ?? "—"} ▾
-									</button>
-									<button className="send-button" type="submit" disabled={!draft.trim()}>
+									<div className="composer-tools">
+										<input
+											ref={imageInputRef}
+											type="file"
+											accept="image/png,image/jpeg,image/webp,image/gif"
+											multiple
+											hidden
+											onChange={(event) => {
+												void addImageFiles(agentId, Array.from(event.target.files ?? []));
+												event.target.value = "";
+											}}
+										/>
+										<button
+											className="attach-button"
+											type="button"
+											aria-label="添加图片"
+											title="添加图片，也可粘贴或拖入"
+											onClick={() => imageInputRef.current?.click()}
+										>
+											<AppIcon name="paperclip" size={15} />
+										</button>
+										<button className="model-seat" type="button" onClick={() => void openModelPicker(slot)}>
+											{modelSelections[agentId]?.model.name ?? "选择模型"} ·{" "}
+											{modelSelections[agentId]?.thinkingLevel ?? "—"} ▾
+										</button>
+									</div>
+									<button
+										className="send-button"
+										type="submit"
+										disabled={!draft.trim() && attachments.length === 0}
+									>
 										<AppIcon name="arrow-up" />
 									</button>
 								</div>
@@ -3895,6 +4181,14 @@ export function App() {
 											className="secondary-button"
 											disabled={modelPickerBusy}
 											type="button"
+											onClick={() => void openScopedModelPicker(slot)}
+										>
+											循环模型范围
+										</button>
+										<button
+											className="secondary-button"
+											disabled={modelPickerBusy}
+											type="button"
 											onClick={() => void saveRoleModelDefault(slot)}
 										>
 											设为 {slot.displayName} 默认
@@ -3905,6 +4199,127 @@ export function App() {
 											onClick={() => setModelPickerAgentId(null)}
 										>
 											关闭
+										</button>
+									</div>
+								</div>
+							</div>
+						);
+					})()
+				: null}
+			{scopedModelPickerAgentId && selectedWorkItem && selection.type === "agent"
+				? (() => {
+						const slot = selectedWorkItem.agentSlots.find((candidate) => candidate.role === selection.role);
+						const modelSelection = modelSelections[scopedModelPickerAgentId];
+						if (!slot || !modelSelection) return null;
+						const useAllModels = scopedModelDraft.length === 0;
+						const selectedModels = scopedModelDraft.flatMap((scoped) => {
+							const model = modelSelection.availableModels.find(
+								(candidate) => candidate.provider === scoped.provider && candidate.id === scoped.modelId,
+							);
+							return model ? [{ scoped, model }] : [];
+						});
+						const providers = [...new Set(scopedModelPickerOptions.map((model) => model.provider))];
+						return (
+							<div className="modal-backdrop" role="presentation">
+								<button
+									className="modal-backdrop-dismiss"
+									type="button"
+									aria-label="关闭循环模型范围"
+									onClick={() => setScopedModelPickerAgentId(null)}
+								/>
+								<div className="modal model-picker scoped-model-picker" role="dialog" aria-modal="true">
+									<div className="scoped-model-heading">
+										<div>
+											<h2>循环模型范围</h2>
+											<p>限定 Pi 切换模型时使用的集合和顺序。使用全部模型表示不限制。</p>
+										</div>
+										<span>{useAllModels ? "全部模型" : `${scopedModelDraft.length} 个模型`}</span>
+									</div>
+									<input
+										value={scopedModelSearch}
+										onChange={(event) => setScopedModelSearch(event.target.value)}
+										placeholder="搜索可用模型"
+									/>
+									{!useAllModels ? (
+										<div className="scoped-model-order">
+											<strong>循环顺序</strong>
+											<div>
+												{selectedModels.map(({ model }, index) => (
+													<div key={`${model.provider}/${model.id}`}>
+														<span>{index + 1}</span>
+														<strong>{model.name}</strong>
+														<small>{model.provider}</small>
+														<button
+															type="button"
+															disabled={index === 0 || scopedModelPickerBusy}
+															onClick={() => moveScopedModel(index, -1)}
+														>
+															上移
+														</button>
+														<button
+															type="button"
+															disabled={index === selectedModels.length - 1 || scopedModelPickerBusy}
+															onClick={() => moveScopedModel(index, 1)}
+														>
+															下移
+														</button>
+													</div>
+												))}
+											</div>
+										</div>
+									) : null}
+									<div className="model-list scoped-model-list">
+										{providers.map((provider) => (
+											<section key={provider}>
+												<h3>{provider}</h3>
+												{scopedModelPickerOptions
+													.filter((model) => model.provider === provider)
+													.map((model) => {
+														const checked =
+															useAllModels ||
+															scopedModelDraft.some(
+																(item) => item.provider === model.provider && item.modelId === model.id,
+															);
+														return (
+															<button
+																type="button"
+																className={checked ? "selected" : ""}
+																key={`${model.provider}/${model.id}`}
+																disabled={scopedModelPickerBusy}
+																onClick={() => toggleScopedModel(model)}
+															>
+																<span className="scope-check" aria-hidden="true" />
+																<span>{model.name}</span>
+																<small>{model.id}</small>
+															</button>
+														);
+													})}
+											</section>
+										))}
+									</div>
+									<div className="model-picker-footer">
+										<button
+											className="secondary-button"
+											type="button"
+											disabled={scopedModelPickerBusy}
+											onClick={() => setScopedModelDraft([])}
+										>
+											使用全部模型
+										</button>
+										<button
+											className="primary-button"
+											type="button"
+											disabled={scopedModelPickerBusy}
+											onClick={() => void saveScopedModels(slot)}
+										>
+											{scopedModelPickerBusy ? "应用中" : "应用范围"}
+										</button>
+										<button
+											className="permission-cancel"
+											type="button"
+											onClick={() => setScopedModelPickerAgentId(null)}
+										>
+											取消
 										</button>
 									</div>
 								</div>

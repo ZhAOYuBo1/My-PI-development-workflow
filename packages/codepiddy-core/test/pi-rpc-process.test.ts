@@ -19,6 +19,45 @@ describe("PiRpcProcess prompting", () => {
 			streamingBehavior: "steer",
 		});
 	});
+	test("forwards image attachments without desktop-only metadata", async () => {
+		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
+		const send = vi.fn(async () => ({ type: "response", command: "prompt", success: true }));
+		(rpc as unknown as PiRpcPrivate).send = send;
+
+		await rpc.prompt("inspect", undefined, [
+			{ id: "image-1", name: "example.png", mimeType: "image/png", data: "aA==" },
+		]);
+
+		expect(send).toHaveBeenCalledWith({
+			type: "prompt",
+			message: "inspect",
+			images: [{ type: "image", mimeType: "image/png", data: "aA==" }],
+		});
+	});
+	test("gets and replaces the Pi scoped model list", async () => {
+		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
+		const models = [{ provider: "openai", modelId: "gpt-5", thinkingLevel: "high" }];
+		const send = vi
+			.fn()
+			.mockResolvedValueOnce({
+				type: "response",
+				command: "get_scoped_models",
+				success: true,
+				data: { models },
+			})
+			.mockResolvedValueOnce({
+				type: "response",
+				command: "set_scoped_models",
+				success: true,
+				data: { models },
+			});
+		(rpc as unknown as PiRpcPrivate).send = send;
+
+		expect(await rpc.getScopedModels()).toEqual(models);
+		expect(await rpc.setScopedModels(models)).toEqual(models);
+		expect(send).toHaveBeenNthCalledWith(1, { type: "get_scoped_models" });
+		expect(send).toHaveBeenNthCalledWith(2, { type: "set_scoped_models", models });
+	});
 	test("requests Pi session statistics for context usage", async () => {
 		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
 		const send = vi.fn(async () => ({

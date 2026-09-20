@@ -493,6 +493,41 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "get_available_models", { models });
 			}
 
+			case "get_scoped_models": {
+				const models = session.scopedModels.map((scoped) => ({
+					provider: scoped.model.provider,
+					modelId: scoped.model.id,
+					...(scoped.thinkingLevel ? { thinkingLevel: scoped.thinkingLevel } : {}),
+				}));
+				return success(id, "get_scoped_models", { models });
+			}
+
+			case "set_scoped_models": {
+				const availableModels = session.modelRuntime.getAvailableSnapshot();
+				const availableById = new Map<string, (typeof availableModels)[number]>(
+					availableModels.map((model) => [`${model.provider}\0${model.id}`, model] as const),
+				);
+				const seen = new Set<string>();
+				const scopedModels = command.models.map((requested) => {
+					const key = `${requested.provider}\0${requested.modelId}`;
+					if (seen.has(key)) throw new Error(`Duplicate scoped model: ${requested.provider}/${requested.modelId}`);
+					seen.add(key);
+					const model = availableById.get(key);
+					if (!model) throw new Error(`Model not found: ${requested.provider}/${requested.modelId}`);
+					return { model, ...(requested.thinkingLevel ? { thinkingLevel: requested.thinkingLevel } : {}) };
+				});
+				const allModelsSelected =
+					scopedModels.length === availableModels.length &&
+					availableModels.every((model) => seen.has(`${model.provider}\0${model.id}`));
+				session.setScopedModels(allModelsSelected ? [] : scopedModels);
+				const models = session.scopedModels.map((scoped) => ({
+					provider: scoped.model.provider,
+					modelId: scoped.model.id,
+					...(scoped.thinkingLevel ? { thinkingLevel: scoped.thinkingLevel } : {}),
+				}));
+				return success(id, "set_scoped_models", { models });
+			}
+
 			// =================================================================
 			// Thinking
 			// =================================================================
@@ -748,6 +783,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			case "get_commands": {
 				const desktopSupportedBuiltins = new Set([
 					"settings",
+					"scoped-models",
 					"model",
 					"tree",
 					"thinking",

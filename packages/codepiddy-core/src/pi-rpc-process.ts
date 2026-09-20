@@ -1,5 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
+import type { AgentImageAttachment, AgentScopedModel } from "@codepiddy/shared";
 
 interface PendingRequest {
 	resolve(value: Record<string, unknown>): void;
@@ -21,7 +22,12 @@ export function rpcRequestTimeoutMs(commandType: string): number {
 	) {
 		return 2 * 60_000;
 	}
-	if (commandType.startsWith("get_") || commandType === "set_model" || commandType === "set_thinking_level") {
+	if (
+		commandType.startsWith("get_") ||
+		commandType === "set_model" ||
+		commandType === "set_scoped_models" ||
+		commandType === "set_thinking_level"
+	) {
 		return 30_000;
 	}
 	return 60_000;
@@ -247,6 +253,42 @@ export class PiRpcProcess {
 		return Array.isArray(data?.models) ? data.models : [];
 	}
 
+	async getScopedModels(): Promise<AgentScopedModel[]> {
+		const response = await this.send({ type: "get_scoped_models" });
+		const data = response.data as Record<string, unknown> | undefined;
+		if (!Array.isArray(data?.models)) return [];
+		return data.models.flatMap((value) => {
+			if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+			const model = value as Record<string, unknown>;
+			if (typeof model.provider !== "string" || typeof model.modelId !== "string") return [];
+			return [
+				{
+					provider: model.provider,
+					modelId: model.modelId,
+					...(typeof model.thinkingLevel === "string" ? { thinkingLevel: model.thinkingLevel } : {}),
+				},
+			];
+		});
+	}
+
+	async setScopedModels(models: AgentScopedModel[]): Promise<AgentScopedModel[]> {
+		const response = await this.send({ type: "set_scoped_models", models });
+		const data = response.data as Record<string, unknown> | undefined;
+		if (!Array.isArray(data?.models)) return [];
+		return data.models.flatMap((value) => {
+			if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+			const model = value as Record<string, unknown>;
+			if (typeof model.provider !== "string" || typeof model.modelId !== "string") return [];
+			return [
+				{
+					provider: model.provider,
+					modelId: model.modelId,
+					...(typeof model.thinkingLevel === "string" ? { thinkingLevel: model.thinkingLevel } : {}),
+				},
+			];
+		});
+	}
+
 	async getAvailableThinkingLevels(): Promise<string[]> {
 		const response = await this.send({ type: "get_available_thinking_levels" });
 		const data = response.data as Record<string, unknown> | undefined;
@@ -281,8 +323,19 @@ export class PiRpcProcess {
 		return this.send({ type: "bash", command });
 	}
 
-	async prompt(message: string, streamingBehavior?: "steer" | "followUp"): Promise<void> {
-		await this.send({ type: "prompt", message, ...(streamingBehavior ? { streamingBehavior } : {}) });
+	async prompt(
+		message: string,
+		streamingBehavior?: "steer" | "followUp",
+		images?: AgentImageAttachment[],
+	): Promise<void> {
+		await this.send({
+			type: "prompt",
+			message,
+			...(images?.length
+				? { images: images.map((image) => ({ type: "image", data: image.data, mimeType: image.mimeType })) }
+				: {}),
+			...(streamingBehavior ? { streamingBehavior } : {}),
+		});
 	}
 
 	async respondToExtensionUi(response: {

@@ -25,6 +25,7 @@ import type {
 	AgentModelOption,
 	AgentModelSelection,
 	AgentRole,
+	AgentScopedModel,
 	AgentSessionNode,
 	AgentSessionSnapshot,
 	ArchiveWorkItemInput,
@@ -38,6 +39,7 @@ import type {
 	ResetAgentInput,
 	SendAgentPromptInput,
 	SetAgentModelInput,
+	SetAgentScopedModelsInput,
 	SetAgentThinkingInput,
 } from "@codepiddy/shared";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
@@ -63,6 +65,7 @@ import {
 	parseRoleSkillAssignmentsInput,
 	parseSendAgentPromptInput,
 	parseSetAgentModelInput,
+	parseSetAgentScopedModelsInput,
 	parseSetAgentThinkingInput,
 } from "./ipc-validation.ts";
 import { RecentProjectStore } from "./recent-project-store.ts";
@@ -88,10 +91,12 @@ const channels = {
 	renameWorkItem: "codepiddy:work-item:rename",
 	deleteWorkItem: "codepiddy:work-item:delete",
 	getAgentModelSelection: "codepiddy:agent:model:get",
+	getAgentScopedModels: "codepiddy:agent:scoped-models:get",
 	getAgentCommands: "codepiddy:agent:commands:get",
 	getProjectWriteLeaseStatus: "codepiddy:write-lease:get",
 	clearStaleProjectWriteLease: "codepiddy:write-lease:clear-stale",
 	setAgentModel: "codepiddy:agent:model:set",
+	setAgentScopedModels: "codepiddy:agent:scoped-models:set",
 	setAgentThinking: "codepiddy:agent:thinking:set",
 	listRecentProjects: "codepiddy:project:recent:list",
 	getStartupProject: "codepiddy:project:startup",
@@ -356,7 +361,7 @@ class AgentManager {
 				role: agent.role,
 				event: { type: "agent_status", status: "running" },
 			});
-			await process.prompt(input.message, input.streamingBehavior);
+			await process.prompt(input.message, input.streamingBehavior, input.images);
 		} catch (error) {
 			if (needsWriteLease) await this.writeLeases.release(agent.projectId, agent.id);
 			throw error;
@@ -423,6 +428,16 @@ class AgentManager {
 		const process = await this.ensureProcess(await this.resolve(input));
 		await process.setModel(input.provider, input.modelId);
 		return this.getModelSelection(input);
+	}
+
+	async getScopedModels(input: AgentInstanceLocator): Promise<AgentScopedModel[]> {
+		const process = await this.ensureProcess(await this.resolve(input));
+		return process.getScopedModels();
+	}
+
+	async setScopedModels(input: SetAgentScopedModelsInput): Promise<AgentScopedModel[]> {
+		const process = await this.ensureProcess(await this.resolve(input));
+		return process.setScopedModels(input.models);
 	}
 
 	async setThinking(input: SetAgentThinkingInput): Promise<AgentModelSelection> {
@@ -1220,6 +1235,9 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.getAgentModelSelection, (_event, raw: unknown) =>
 		agentManager.getModelSelection(parseAgentLocator(raw)),
 	);
+	ipcMain.handle(channels.getAgentScopedModels, (_event, raw: unknown) =>
+		agentManager.getScopedModels(parseAgentLocator(raw)),
+	);
 	ipcMain.handle(channels.getAgentCommands, (_event, raw: unknown) =>
 		agentManager.getCommands(parseAgentLocator(raw)),
 	);
@@ -1231,6 +1249,9 @@ function registerIpcHandlers(
 	);
 	ipcMain.handle(channels.setAgentModel, (_event, raw: unknown) =>
 		agentManager.setModel(parseSetAgentModelInput(raw)),
+	);
+	ipcMain.handle(channels.setAgentScopedModels, (_event, raw: unknown) =>
+		agentManager.setScopedModels(parseSetAgentScopedModelsInput(raw)),
 	);
 	ipcMain.handle(channels.setAgentThinking, (_event, raw: unknown) =>
 		agentManager.setThinking(parseSetAgentThinkingInput(raw)),

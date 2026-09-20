@@ -33,6 +33,8 @@ export type RpcCommand =
 	| { id?: string; type: "set_model"; provider: string; modelId: string }
 	| { id?: string; type: "cycle_model" }
 	| { id?: string; type: "get_available_models" }
+	| { id?: string; type: "get_scoped_models" }
+	| { id?: string; type: "set_scoped_models"; models: RpcScopedModel[] }
 
 	// Thinking
 	| { id?: string; type: "set_thinking_level"; level: ThinkingLevel }
@@ -95,6 +97,12 @@ export interface RpcSlashCommand {
 	source: "builtin" | "extension" | "prompt" | "skill";
 	/** Source metadata for the owning resource. Built-in commands have no source file. */
 	sourceInfo?: SourceInfo;
+}
+
+export interface RpcScopedModel {
+	provider: string;
+	modelId: string;
+	thinkingLevel?: ThinkingLevel;
 }
 
 // ============================================================================
@@ -160,6 +168,20 @@ export type RpcResponse =
 			command: "get_available_models";
 			success: true;
 			data: { models: Model<any>[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_scoped_models";
+			success: true;
+			data: { models: RpcScopedModel[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_scoped_models";
+			success: true;
+			data: { models: RpcScopedModel[] };
 	  }
 
 	// Thinking

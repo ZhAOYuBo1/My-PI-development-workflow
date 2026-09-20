@@ -13,7 +13,7 @@ import type { CompactionResult } from "../../core/compaction/index.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { JsonAgentSessionEvent } from "../json-event.ts";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
-import type { RpcCommand, RpcResponse, RpcSessionState, RpcSlashCommand } from "./rpc-types.ts";
+import type { RpcCommand, RpcResponse, RpcScopedModel, RpcSessionState, RpcSlashCommand } from "./rpc-types.ts";
 
 // ============================================================================
 // Types
@@ -272,6 +272,18 @@ export class RpcClient {
 	async getAvailableModels(): Promise<ModelInfo[]> {
 		const response = await this.send({ type: "get_available_models" });
 		return this.getData<{ models: ModelInfo[] }>(response).models;
+	}
+
+	/** Get the ordered model scope used by model cycling. Empty means all available models. */
+	async getScopedModels(): Promise<RpcScopedModel[]> {
+		const response = await this.send({ type: "get_scoped_models" });
+		return this.getData<{ models: RpcScopedModel[] }>(response).models;
+	}
+
+	/** Replace the ordered model scope used by model cycling. Empty restores all available models. */
+	async setScopedModels(models: RpcScopedModel[]): Promise<RpcScopedModel[]> {
+		const response = await this.send({ type: "set_scoped_models", models });
+		return this.getData<{ models: RpcScopedModel[] }>(response).models;
 	}
 
 	/**

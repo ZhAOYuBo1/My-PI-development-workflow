@@ -143,8 +143,19 @@ export interface AgentBuiltinCommandResult {
 	commandsChanged?: boolean;
 }
 
+export const AGENT_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+export type AgentImageMimeType = (typeof AGENT_IMAGE_MIME_TYPES)[number];
+
+export interface AgentImageAttachment {
+	id: string;
+	name: string;
+	mimeType: AgentImageMimeType;
+	data: string;
+}
+
 export interface SendAgentPromptInput extends AgentInstanceLocator {
 	message: string;
+	images?: AgentImageAttachment[];
 	streamingBehavior?: "steer" | "followUp";
 }
 
@@ -227,8 +238,10 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	setRoleModelDefault(input: RoleModelDefault): Promise<RoleModelDefaults>;
 	clearRoleModelDefault(role: AgentRole): Promise<RoleModelDefaults>;
 	getAgentModelSelection(input: AgentInstanceLocator): Promise<AgentModelSelection>;
+	getAgentScopedModels(input: AgentInstanceLocator): Promise<AgentScopedModel[]>;
 	getAgentCommands(input: AgentInstanceLocator): Promise<AgentCommandOption[]>;
 	setAgentModel(input: SetAgentModelInput): Promise<AgentModelSelection>;
+	setAgentScopedModels(input: SetAgentScopedModelsInput): Promise<AgentScopedModel[]>;
 	setAgentThinking(input: SetAgentThinkingInput): Promise<AgentModelSelection>;
 	listRecentProjects(): Promise<RecentProject[]>;
 	openRecentProject(projectRoot: string): Promise<ProjectSummary>;
@@ -369,6 +382,16 @@ export interface AgentModelSelection {
 export interface SetAgentModelInput extends AgentInstanceLocator {
 	provider: string;
 	modelId: string;
+}
+
+export interface AgentScopedModel {
+	provider: string;
+	modelId: string;
+	thinkingLevel?: string;
+}
+
+export interface SetAgentScopedModelsInput extends AgentInstanceLocator {
+	models: AgentScopedModel[];
 }
 
 export interface SetAgentThinkingInput extends AgentInstanceLocator {

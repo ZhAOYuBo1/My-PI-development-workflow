@@ -1,7 +1,9 @@
 import path from "node:path";
 import type {
+	AgentImageAttachment,
 	AgentInstanceLocator,
 	AgentRole,
+	AgentScopedModel,
 	AgentUiState,
 	ApproveRequirementInput,
 	ArchiveWorkItemInput,
@@ -17,9 +19,14 @@ import type {
 	RoleModelDefault,
 	SendAgentPromptInput,
 	SetAgentModelInput,
+	SetAgentScopedModelsInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
 } from "@codepiddy/shared";
+
+const AGENT_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+const MAX_PROMPT_IMAGES = 8;
+const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024;
 
 function record(value: unknown, label: string): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${label} 格式无效`);
@@ -143,11 +150,38 @@ export function parseSendAgentPromptInput(value: unknown): SendAgentPromptInput 
 	if (streamingBehavior !== undefined && streamingBehavior !== "steer" && streamingBehavior !== "followUp") {
 		throw new Error("Streaming Behavior 无效");
 	}
+	const images = parsePromptImages(input.images);
+	const message = text(input.message, "消息", 200_000, true);
+	if (!message && images.length === 0) throw new Error("消息或图片至少需要提供一项");
 	return {
 		...parseAgentLocator(input),
-		message: text(input.message, "消息", 200_000),
+		message,
+		...(images.length > 0 ? { images } : {}),
 		...(streamingBehavior ? { streamingBehavior } : {}),
 	};
+}
+
+function parsePromptImages(value: unknown): AgentImageAttachment[] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value)) throw new Error("图片附件必须是数组");
+	if (value.length > MAX_PROMPT_IMAGES) throw new Error(`图片附件最多 ${MAX_PROMPT_IMAGES} 张`);
+	return value.map((item, index) => {
+		const image = record(item, `图片附件 ${index + 1}`);
+		const mimeType = text(image.mimeType, "图片 MIME Type", 64);
+		if (!AGENT_IMAGE_MIME_TYPES.some((allowed) => allowed === mimeType))
+			throw new Error(`不支持的图片格式：${mimeType}`);
+		const data = text(image.data, "图片数据", 14_000_000);
+		if (data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(data)) throw new Error("图片数据不是有效 Base64");
+		if (Buffer.byteLength(data, "base64") > MAX_PROMPT_IMAGE_BYTES) {
+			throw new Error(`单张图片不能超过 ${MAX_PROMPT_IMAGE_BYTES / 1024 / 1024}MB`);
+		}
+		return {
+			id: text(image.id, "图片 ID", 128),
+			name: text(image.name, "图片名称", 300),
+			mimeType: mimeType as AgentImageAttachment["mimeType"],
+			data,
+		};
+	});
 }
 
 export function parseSetAgentModelInput(value: unknown): SetAgentModelInput {
@@ -157,6 +191,29 @@ export function parseSetAgentModelInput(value: unknown): SetAgentModelInput {
 		provider: text(input.provider, "Provider", 200),
 		modelId: text(input.modelId, "Model ID", 300),
 	};
+}
+
+export function parseSetAgentScopedModelsInput(value: unknown): SetAgentScopedModelsInput {
+	const input = record(value, "Set Agent Scoped Models");
+	if (!Array.isArray(input.models)) throw new Error("Scoped Models 必须是数组");
+	if (input.models.length > 256) throw new Error("Scoped Models 数量过多");
+	const seen = new Set<string>();
+	const models = input.models.map((item): AgentScopedModel => {
+		const model = record(item, "Scoped Model");
+		const provider = text(model.provider, "Provider", 200);
+		const modelId = text(model.modelId, "Model ID", 300);
+		const key = `${provider}\0${modelId}`;
+		if (seen.has(key)) throw new Error(`Scoped Model 重复：${provider}/${modelId}`);
+		seen.add(key);
+		return {
+			provider,
+			modelId,
+			...(model.thinkingLevel === undefined
+				? {}
+				: { thinkingLevel: text(model.thinkingLevel, "Thinking Level", 32) }),
+		};
+	});
+	return { ...parseAgentLocator(input), models };
 }
 
 export function parseSetAgentThinkingInput(value: unknown): SetAgentThinkingInput {
