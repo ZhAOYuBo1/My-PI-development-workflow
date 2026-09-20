@@ -912,7 +912,7 @@ const demoSessionSnapshot: AgentSessionSnapshot = {
 			parentId: "user-3",
 			type: "message",
 			role: "assistant",
-			text: "边界问题已修复，implementation.md 已更新。",
+			text: "边界问题已修复，OpenSpec 任务状态和验证结果已更新。",
 			timestamp: "2026-09-17T02:38:00.000Z",
 			depth: 5,
 			isLeaf: true,
@@ -1036,7 +1036,7 @@ export function App() {
 						{
 							id: "demo-assistant",
 							type: "assistant",
-							text: "已完成核心实现：\n\n```ts\nexport async function login(input: LoginInput) {\n  return authService.authenticate(input);\n}\n```\n\n基础测试已经通过，implementation.md 也已更新。",
+							text: "已完成核心实现：\n\n```ts\nexport async function login(input: LoginInput) {\n  return authService.authenticate(input);\n}\n```\n\n基础测试已经通过，对应 OpenSpec tasks 和验证结果已更新。",
 							status: "complete",
 						},
 					],
@@ -2961,6 +2961,15 @@ export function App() {
 		}
 	}
 
+	async function openProjectSkillsFolder(): Promise<void> {
+		if (!project || !("codepiddy" in window)) return;
+		try {
+			await window.codepiddy.openProjectSkillsFolder(project.rootPath);
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "打开项目 Skill 文件夹失败");
+		}
+	}
+
 	async function saveRoleModelDefault(slot: AgentSlotSummary): Promise<void> {
 		if (!slot.currentInstanceId) return;
 		const selection = modelSelections[slot.currentInstanceId];
@@ -3253,7 +3262,17 @@ export function App() {
 								<h2>Agent Skills</h2>
 								<p>每种 Agent 独立选择 Skill。修改会应用到新启动或重置后的 Agent。</p>
 							</div>
-							<div className="settings-status">{availableSkills.length} 个可用</div>
+							<div className="skill-settings-actions">
+								<div className="settings-status">{availableSkills.length} 个可用</div>
+								<button
+									className="secondary-button"
+									type="button"
+									disabled={!project}
+									onClick={() => void openProjectSkillsFolder()}
+								>
+									打开项目 Skill 文件夹
+								</button>
+							</div>
 						</div>
 						<div className="role-skill-grid">
 							{(["requirement-analysis", "coding", "bug-fix", "review"] as const).map((role) => (

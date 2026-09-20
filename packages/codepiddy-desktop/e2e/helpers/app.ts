@@ -34,6 +34,7 @@ export async function launchCodePIddy(): Promise<CodePIddyE2EApp> {
 			CODEPIDDY_USER_DATA: userDataRoot,
 			CODEPIDDY_TEST_PROJECT_ROOT: projectRoot,
 			CODEPIDDY_DISABLE_SINGLE_INSTANCE: "1",
+			CODEPIDDY_DISABLE_PROJECT_DISCOVERY: "1",
 		},
 	});
 	const page = await application.firstWindow();

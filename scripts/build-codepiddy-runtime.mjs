@@ -46,8 +46,8 @@ await Promise.all([
 
 await Promise.all([
 	cp(
-		path.join(repositoryRoot, "packages", "codepiddy-agent-skills", "grill-with-docs"),
-		path.join(outputRoot, "skills", "grill-with-docs"),
+		path.join(repositoryRoot, "packages", "codepiddy-agent-skills"),
+		path.join(outputRoot, "skills"),
 		{ recursive: true },
 	),
 	cp(

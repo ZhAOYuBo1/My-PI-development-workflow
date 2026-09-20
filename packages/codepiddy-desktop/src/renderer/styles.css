@@ -1336,6 +1336,8 @@ button { color: inherit; }
 }
 /* Per-role skill management */
 .skill-settings-card { gap: 18px; }
+.skill-settings-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+.skill-settings-actions .secondary-button { min-height: 32px; padding: 0 10px; font-size: 11px; }
 .role-skill-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1409,6 +1411,8 @@ button { color: inherit; }
   .role-skill-grid { grid-template-columns: 1fr; }
   .pi-config-paths { grid-template-columns: 1fr; }
   .pi-config-paths span { margin-bottom: 5px; }
+  .settings-card-heading { align-items: stretch; flex-direction: column; }
+  .skill-settings-actions { justify-content: space-between; }
 }
 .activity-reconnecting { background: #edf1f6; color: #4d6077; }
 .activity-reconnecting .activity-spinner { border-top-color: #55708f; }

@@ -4,12 +4,29 @@ import path from "node:path";
 import type { AgentRole, AgentSkillSource, AgentSkillSummary, RoleSkillAssignments } from "@codepiddy/shared";
 
 export const BUILTIN_GRILL_WITH_DOCS_ID = "builtin:grill-with-docs";
+export const BUILTIN_OPEN_CODE_REVIEW_ID = "builtin:open-code-review";
+export const BUILTIN_OPENSPEC_APPLY_ID = "builtin:openspec-apply-change";
+export const BUILTIN_OPENSPEC_ARCHIVE_ID = "builtin:openspec-archive-change";
+export const BUILTIN_OPENSPEC_EXPLORE_ID = "builtin:openspec-explore";
+export const BUILTIN_OPENSPEC_PROPOSE_ID = "builtin:openspec-propose";
+export const BUILTIN_OPENSPEC_SYNC_ID = "builtin:openspec-sync-specs";
+export const BUILTIN_OPENSPEC_UPDATE_ID = "builtin:openspec-update-change";
 
 export const DEFAULT_ROLE_SKILL_ASSIGNMENTS: RoleSkillAssignments = {
-	"requirement-analysis": [BUILTIN_GRILL_WITH_DOCS_ID],
-	coding: [],
-	"bug-fix": [],
-	review: [],
+	"requirement-analysis": [
+		BUILTIN_GRILL_WITH_DOCS_ID,
+		BUILTIN_OPENSPEC_EXPLORE_ID,
+		BUILTIN_OPENSPEC_PROPOSE_ID,
+		BUILTIN_OPENSPEC_UPDATE_ID,
+	],
+	coding: [BUILTIN_OPENSPEC_APPLY_ID, BUILTIN_OPENSPEC_SYNC_ID],
+	"bug-fix": [
+		BUILTIN_OPENSPEC_EXPLORE_ID,
+		BUILTIN_OPENSPEC_PROPOSE_ID,
+		BUILTIN_OPENSPEC_APPLY_ID,
+		BUILTIN_OPENSPEC_SYNC_ID,
+	],
+	review: [BUILTIN_OPEN_CODE_REVIEW_ID],
 };
 
 function frontmatterValue(content: string, key: string): string | null {
@@ -34,14 +51,22 @@ async function readSkill(filePath: string, source: AgentSkillSource, id?: string
 	}
 }
 
-async function discoverSkillDirectory(directory: string, source: AgentSkillSource): Promise<AgentSkillSummary[]> {
+async function discoverSkillDirectory(
+	directory: string,
+	source: AgentSkillSource,
+	idPrefix?: string,
+): Promise<AgentSkillSummary[]> {
 	const direct = await readSkill(path.join(directory, "SKILL.md"), source);
 	const result = direct ? [direct] : [];
 	try {
 		const entries = await readdir(directory, { withFileTypes: true });
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue;
-			const skill = await readSkill(path.join(directory, entry.name, "SKILL.md"), source);
+			const skill = await readSkill(
+				path.join(directory, entry.name, "SKILL.md"),
+				source,
+				idPrefix ? `${idPrefix}:${entry.name}` : undefined,
+			);
 			if (skill) result.push(skill);
 		}
 	} catch {}
@@ -49,32 +74,23 @@ async function discoverSkillDirectory(directory: string, source: AgentSkillSourc
 }
 
 export async function discoverAgentSkills(repositoryRoot: string, projectRoot?: string): Promise<AgentSkillSummary[]> {
-	const builtin =
-		(await readSkill(
-			path.join(repositoryRoot, "packages", "codepiddy-agent-skills", "grill-with-docs", "SKILL.md"),
-			"builtin",
-			BUILTIN_GRILL_WITH_DOCS_ID,
-		)) ??
-		(await readSkill(
-			path.join(repositoryRoot, "skills", "grill-with-docs", "SKILL.md"),
-			"builtin",
-			BUILTIN_GRILL_WITH_DOCS_ID,
-		));
 	const home = os.homedir();
 	const groups: Array<Promise<AgentSkillSummary[]>> = [
+		discoverSkillDirectory(path.join(repositoryRoot, "packages", "codepiddy-agent-skills"), "builtin", "builtin"),
+		discoverSkillDirectory(path.join(repositoryRoot, "skills"), "builtin", "builtin"),
 		discoverSkillDirectory(path.join(home, ".codex", "skills"), "codex"),
 		discoverSkillDirectory(path.join(home, ".agents", "skills"), "agents"),
 		discoverSkillDirectory(path.join(home, ".pi", "agent", "skills"), "pi"),
 	];
 	if (projectRoot) {
 		groups.push(
+			discoverSkillDirectory(path.join(projectRoot, ".codepiddy", ".pi", "skills"), "project"),
 			discoverSkillDirectory(path.join(projectRoot, ".pi", "skills"), "project"),
 			discoverSkillDirectory(path.join(projectRoot, ".agents", "skills"), "project"),
 		);
 	}
 	const discovered = (await Promise.all(groups)).flat();
 	const byName = new Map<string, AgentSkillSummary>();
-	if (builtin) byName.set(builtin.name, builtin);
 	for (const skill of discovered) {
 		if (!byName.has(skill.name)) byName.set(skill.name, skill);
 	}

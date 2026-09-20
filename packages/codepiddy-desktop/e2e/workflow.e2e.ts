@@ -49,11 +49,20 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 
 test("defaults file reads and writes to allow and persists permission changes", async () => {
 	const { page, userDataRoot } = client;
+	await page.getByRole("button", { name: "打开项目", exact: true }).click();
 	await page.getByRole("button", { name: "设置", exact: true }).click();
 	const readPermission = page.getByLabel("读取文件");
 	const writePermission = page.getByLabel("修改文件");
 	await expect(readPermission).toHaveValue("allow");
 	await expect(writePermission).toHaveValue("allow");
+	const requirementSkillCard = page.locator(".role-skill-card").filter({ hasText: "需求分析 Agent" });
+	const reviewSkillCard = page.locator(".role-skill-card").filter({ hasText: "Review Agent" });
+	await expect(requirementSkillCard.getByText("grill-with-docs", { exact: true })).toBeVisible();
+	await expect(requirementSkillCard.getByText("openspec-propose", { exact: true })).toBeVisible();
+	await expect(requirementSkillCard.locator("label").filter({ hasText: "grill-with-docs" }).getByRole("checkbox")).toBeChecked();
+	await expect(reviewSkillCard.getByText("open-code-review", { exact: true })).toBeVisible();
+	await expect(reviewSkillCard.locator("label").filter({ hasText: "open-code-review" }).getByRole("checkbox")).toBeChecked();
+	await expect(page.getByRole("button", { name: "打开项目 Skill 文件夹" })).toBeEnabled();
 
 	await writePermission.selectOption("ask");
 	await page.getByRole("button", { name: "保存权限" }).click();

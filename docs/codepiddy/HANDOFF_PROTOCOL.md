@@ -1,94 +1,80 @@
-# Agent 文档交接协议
+# CodePIddy 交接协议
 
-- 状态：草案，核心原则已确认
-- 日期：2026-09-16
+更新日期：2026-09-20
 
 ## 核心原则
 
-1. 人决定现在与哪个 Agent 工作；
-2. Agent 只处理当前工作职责；
-3. 前一步结果写入项目文档；
-4. 后一步 Agent 读取项目文档；
-5. 不自动转发完整聊天历史；
-6. Agent 完成后停止，等待用户手动选择下一步；
-7. 新需求必须经过用户批准门才能创建 Coding Agent；
-8. Review Agent 只有在 implementation.md 或 fix.md 就绪后才能创建。
+CodePIddy 不再规定 `requirement.md`、`implementation.md`、`fix.md`、`review.md` 等私有固定文件。
 
-## 新需求
+交接信息来自：
+
+1. 当前 Work Item 的标题、描述和 `work-item.md`；
+2. Grill With Docs 澄清出的稳定结论；
+3. 当前 Work Item 对应的 OpenSpec Change；
+4. OpenSpec 生成或维护的 proposal、spec、design、tasks 及扩展产物；
+5. 实际 Git diff、测试和 Review Findings。
+
+这些真实产物共同构成交接，不再由 Host 校验固定文件名和固定 Markdown 标题。
+
+## 新需求工作方式
 
 ```text
-Requirement Analysis Agent
-  -> requirement.md
-  -> design.md
-  -> tasks.md
-
-User Approval Gate
+用户原始需求
+  -> Requirement Analysis Agent
+       -> grill-with-docs：逐项澄清与领域建模
+       -> openspec-explore / propose / update-change
+       -> OpenSpec Change artifacts
   -> 用户在客户端批准需求
-  -> Host 校验三个交接文档存在、内容充足并包含规定章节
-
-Coding Agent
-  <- requirement.md + design.md + tasks.md
-  -> implementation.md
-
-Review Agent
-  <- 上述文档 + implementation.md + Git diff
-  -> review.md
+  -> Coding Agent
+       -> openspec-apply-change / sync-specs
+       -> 代码、测试、任务状态与 Git diff
+  -> Review Agent
+       -> open-code-review
+       -> 测试、Findings、Verdict
+  -> 用户决定继续修正或归档
 ```
 
-## 修漏洞
+Coding Agent 仍受“用户批准需求”门控制，但批准动作由用户判断，不再检查固定文档结构。
+
+## 修漏洞工作方式
 
 ```text
-Bug Fix Agent
-  <- 用户原始标题与描述（第一次处理）
-  <- 上一次 review.md（修正轮次，可选）
-  -> fix.md
-
-Review Agent
-  <- fix.md + Git diff
-  -> review.md
+用户 Bug 描述
+  -> Bug Fix Agent
+       -> openspec-explore / propose / update-change / apply-change
+       -> 根因、决策、任务、代码、测试与 Git diff
+  -> Review Agent
+       -> open-code-review
+       -> 测试、Findings、Verdict
+  -> 用户决定继续修正或归档
 ```
 
-## 文档责任
+Bug Fix 和 Review Agent 可以由用户按需要创建，不依赖固定 `fix.md` 或 `review.md` 解锁。
 
-| 文档 | 主要写入 Agent | 其他 Agent |
-|---|---|---|
-| `requirement.md` | Requirement Analysis | 只读 |
-| `design.md` | Requirement Analysis | 只读 |
-| `tasks.md` | Requirement Analysis | 只读 |
-| `implementation.md` | Coding | Review 只读 |
-| `fix.md` | Bug Fix | Review 只读 |
-| `review.md` | Review | Coding/Bug Fix 只读 |
+## OpenSpec Change 选择
 
-用户可以编辑所有文档。Agent 在覆盖用户修改前必须先读取最新版本。
+Agent 必须通过 Work Item 标题、描述、用户明确给出的 Change 名称和 OpenSpec 命令定位对应 Change。
 
-## 结构化解锁规则
+- 只有一个明确匹配项：继续工作；
+- 有多个候选项：让用户确认；
+- 没有 OpenSpec 根：遵守 OpenSpec Skill 的项目检查与确认规则；
+- 不得读取其他 Work Item 来猜测当前工作的交接内容。
 
-### Requirement Approval
+## Skill 默认分配
 
-- `requirement.md`：`## 目标`、`## 功能需求`、`## 验收条件`；
-- `design.md`：`## 设计方案`、`## 影响范围`、`## 验证策略`；
-- `tasks.md`：`## 任务拆解`，且至少包含一个 `- [ ]` 任务项。
+| Agent | 默认内置 Skill |
+| --- | --- |
+| Requirement Analysis | grill-with-docs、openspec-explore、openspec-propose、openspec-update-change |
+| Coding | openspec-apply-change、openspec-sync-specs |
+| Bug Fix | openspec-explore、openspec-propose、openspec-apply-change、openspec-sync-specs |
+| Review | open-code-review |
 
-### Feature Review
+所有默认 Skill 都随 CodePIddy 分发，并可以在设置中按 Agent 类型关闭或重新启用。
 
-- `implementation.md`：`## 实现摘要`、`## 修改文件`、`## 测试结果`、`## 审查重点`。
+## 人工控制
 
-### Bug Review
-
-- `fix.md`：`## 根因`、`## 修改文件`、`## 验证结果`、`## 审查重点`。
-
-仅有文件或标题但内容明显过短，仍视为未完成。Host 会在客户端阻止下游 Agent，并列出缺失文件、章节或内容长度问题。
-
-## 最小文档规则
-
-- Markdown 优先；
-- 保持人类可读；
-- 引用文件路径和必要代码位置；
-- 不粘贴大量完整日志；
-- 不记录密钥；
-- 不把聊天记录当文档；
-- 每次更新保留明确的当前结论和待处理问题。
-
-## Work Item 边界
-
-交接文档必须位于当前 Work Item 文件夹。Agent 不通过全局文件名猜测输入，而由 UI/Host 明确传入当前 Work Item 目录。跨 Work Item 引用必须由用户显式添加。
+- Agent 不自动串联；
+- 用户决定何时批准需求；
+- 用户决定何时进入 Coding、Bug Fix 或 Review；
+- 用户决定 Review 不通过后回到哪一个 Agent；
+- 用户决定何时归档或删除 Work Item。

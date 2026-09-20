@@ -14,7 +14,6 @@ import type {
 	WorkItemStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
-import { handoffValidationMessage, validateHandoff } from "./handoff-validation.ts";
 import { DEFAULT_KICKOFF_PROMPTS, ensureDefaultRoleProfiles } from "./role-profiles.ts";
 
 const CODEPIDDY_DIRECTORY_NAME = ".codepiddy";
@@ -53,48 +52,11 @@ function rolesForLane(lane: LaneKind): AgentRole[] {
 	return lane === "requirements" ? ["requirement-analysis", "coding", "review"] : ["bug-fix", "review"];
 }
 
-const workflowDocuments: Record<LaneKind, readonly string[]> = {
-	requirements: ["requirement.md", "design.md", "tasks.md", "implementation.md", "review.md"],
-	bugs: ["fix.md", "review.md"],
-};
-
-async function removeLegacySeedDocument(directory: string, manifest: WorkItemManifest): Promise<void> {
-	const documentName = manifest.lane === "requirements" ? "requirement.md" : "bug.md";
-	const legacyContent = `# ${manifest.title}\n\n${manifest.description || "请在这里补充初始描述。"}\n`;
-	const filePath = path.join(directory, documentName);
-	try {
-		if ((await readFile(filePath, "utf8")) === legacyContent) await rm(filePath, { force: true });
-	} catch (error) {
-		if (!isObject(error) || error.code !== "ENOENT") throw error;
-	}
-}
-
-async function removeEmptyWorkflowDocuments(directory: string, lane: LaneKind): Promise<void> {
-	await Promise.all(
-		workflowDocuments[lane].map(async (documentName) => {
-			const filePath = path.join(directory, documentName);
-			try {
-				if ((await readFile(filePath, "utf8")).trim().length === 0) await rm(filePath, { force: true });
-			} catch (error) {
-				if (!isObject(error) || error.code !== "ENOENT") throw error;
-			}
-		}),
-	);
-}
-
-async function createAgentSlots(
-	lane: LaneKind,
-	directory: string,
-	manifest: WorkItemManifest,
-): Promise<AgentSlotSummary[]> {
-	const reviewHandoff = await validateHandoff(directory, lane === "requirements" ? "feature-review" : "bug-review");
+function createAgentSlots(lane: LaneKind, manifest: WorkItemManifest): AgentSlotSummary[] {
 	return rolesForLane(lane).map((role) => {
 		let blockedReason: string | undefined;
 		if (role === "coding" && !manifest.requirementApprovedAt) {
-			blockedReason = "需求文档尚未由用户批准";
-		} else if (role === "review" && !reviewHandoff.ready) {
-			const producer = lane === "requirements" ? "Coding Agent" : "Bug Fix Agent";
-			blockedReason = `等待 ${producer} 完成交接：${handoffValidationMessage(reviewHandoff)}`;
+			blockedReason = "需求尚未由用户批准";
 		}
 		return {
 			role,
@@ -198,6 +160,7 @@ async function ensureProjectManifest(projectRoot: string): Promise<ProjectManife
 	await mkdir(path.join(dataPath, "requirements"), { recursive: true });
 	await mkdir(path.join(dataPath, "bugs"), { recursive: true });
 	await mkdir(path.join(dataPath, "agents"), { recursive: true });
+	await mkdir(path.join(dataPath, ".pi", "skills"), { recursive: true });
 	await ensureDefaultPermissions(dataPath);
 	await ensureDefaultRoleProfiles(dataPath);
 	try {
@@ -231,8 +194,6 @@ async function listWorkItems(projectRoot: string, lane: LaneKind): Promise<WorkI
 		try {
 			const manifest = parseWorkItemManifest(await readJson(path.join(itemDirectory, WORK_ITEM_MANIFEST_NAME)));
 			if (manifest.lane !== lane) continue;
-			await removeLegacySeedDocument(itemDirectory, manifest);
-			await removeEmptyWorkflowDocuments(itemDirectory, lane);
 			items.push({
 				id: manifest.id,
 				lane,
@@ -245,7 +206,7 @@ async function listWorkItems(projectRoot: string, lane: LaneKind): Promise<WorkI
 					? {}
 					: { requirementApprovedAt: manifest.requirementApprovedAt }),
 				directoryPath: itemDirectory,
-				agentSlots: await createAgentSlots(lane, itemDirectory, manifest),
+				agentSlots: createAgentSlots(lane, manifest),
 			});
 		} catch {
 			// Ignore directories that are not valid CodePIddy work items.
@@ -324,8 +285,6 @@ export async function approveRequirement(input: ApproveRequirementInput): Promis
 	if (manifest.id !== input.workItemId || manifest.lane !== "requirements") {
 		throw new Error("Work item identity mismatch");
 	}
-	const handoff = await validateHandoff(directory, "requirement-approval");
-	if (!handoff.ready) throw new Error(`批准需求前必须完成结构化交接：${handoffValidationMessage(handoff)}`);
 	const next: WorkItemManifest = {
 		...manifest,
 		requirementApprovedAt: new Date().toISOString(),

@@ -208,3 +208,11 @@
 - 决策：CodePIddy 客户端参考 Codex 与成熟 TUI 的实现原则：Pi Agent Runtime 通过 RPC/Event Stream 与 UI 解耦；UI 使用单向状态更新，渲染侧边栏项目树、中央 Agent Transcript 和底部 Composer。
 - UI 范围：不引入项目 Dashboard，重点优化长对话流、流式输出、Tool Call、权限请求、滚动和 Agent 切换。
 - 详见：`adr/0024-event-driven-client-architecture.md` 与 `research/UI_TUI_IMPLEMENTATION_PATTERNS.md`。
+
+## D-017：Grill 与 OpenSpec 产物构成动态交接
+
+- 日期：2026-09-20
+- 状态：已确认，替代 D-016 中的固定文件约定
+- 决策：Requirement Analysis Agent 默认同时使用 Grill With Docs 和 OpenSpec Skills。Grill 负责澄清需求，OpenSpec 负责 proposal、spec、design、tasks 等正式产物。Coding、Bug Fix 和 Review Agent 读取对应 OpenSpec Change、真实 Git diff 和测试，不再依赖固定的 requirement.md、implementation.md、fix.md 或 review.md。
+- 推进：新需求仍由用户显式批准；Review 和归档仍由用户手动触发。
+- 详见：`adr/0025-openspec-skill-handoff.md`

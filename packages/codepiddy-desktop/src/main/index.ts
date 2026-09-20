@@ -119,6 +119,7 @@ const channels = {
 	settingsGetRoleSkills: "codepiddy:settings:role-skills:get",
 	settingsSetRoleSkills: "codepiddy:settings:role-skills:set",
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
+	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
 	settingsGetRoleDefaults: "codepiddy:settings:role-models:get",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
 	settingsSetRoleDefault: "codepiddy:settings:role-models:set",
@@ -214,53 +215,42 @@ async function readWorkItemPromptContext(agent: StoredAgentInstance): Promise<{ 
 }
 
 function roleDocumentContract(agent: StoredAgentInstance): string {
-	const document = (name: string): string => path.join(agent.workItemDirectory, name);
 	const sharedRules = [
-		"Use only the exact workflow document paths listed below. Do not guess alternate .codepiddy paths.",
-		"An empty workflow file means that handoff has not been written yet. Do not search sibling Work Items for a substitute.",
 		"Never read or write another Work Item directory unless the user explicitly names it.",
-		"Project source files may be inspected when required by your role, but workflow state must stay inside this Work Item.",
+		`The system-owned Work Item context is ${path.join(agent.workItemDirectory, "work-item.md")}.`,
+		"OpenSpec artifacts may live in the project's OpenSpec root rather than the Work Item directory.",
+		"Use OpenSpec commands and the user-provided title, description, or explicit change name to identify the relevant Change. If multiple Changes match, ask the user instead of guessing.",
+		"The actual proposal, specs, design, tasks, review notes, Git diff, and tests are the handoff. CodePIddy does not require private fixed filenames for them.",
 	];
 	if (agent.role === "requirement-analysis") {
 		return [
 			...sharedRules,
-			"There are no prerequisite handoff documents for this role. Start from the user-provided title and description in the runtime context.",
-			`Create and maintain: ${document("requirement.md")}`,
-			`Maintain: ${document("design.md")}`,
-			`Maintain: ${document("tasks.md")}`,
-			"Use the grill-with-docs skill for requirement clarification and domain modeling.",
-			"Host-required headings: requirement.md = 目标 / 功能需求 / 验收条件; design.md = 设计方案 / 影响范围 / 验证策略; tasks.md = 任务拆解 plus Markdown task checkboxes.",
+			"Start from the user-provided title and description. There are no prerequisite handoff artifacts.",
+			"Use grill-with-docs to clarify the requirement, then OpenSpec explore/propose/update-change to create or refine the Change artifacts.",
+			"Stop when the OpenSpec artifacts are coherent and tell the user they are ready for manual approval. Do not implement code.",
 		].join("\n");
 	}
 	if (agent.role === "coding") {
 		return [
 			...sharedRules,
-			`Read: ${document("work-item.md")}`,
-			`Read: ${document("requirement.md")}`,
-			`Read: ${document("design.md")}`,
-			`Read: ${document("tasks.md")}`,
-			`Optional review input: ${document("review.md")}`,
-			`Required output: ${document("implementation.md")}`,
-			"Host-required headings in implementation.md: 实现摘要 / 修改文件 / 测试结果 / 审查重点. It must list every changed project-relative file, key symbols or code regions, behavior changes, commands, tests, and known issues.",
+			"Read the selected OpenSpec Change artifacts before editing code.",
+			"Use openspec-apply-change to implement and keep task status synchronized. Use openspec-sync-specs when the workflow requires it.",
+			"The implementation handoff is the updated OpenSpec Change plus the real Git diff and tests; do not create a fixed implementation.md unless the user asks for one.",
 		].join("\n");
 	}
 	if (agent.role === "bug-fix") {
 		return [
 			...sharedRules,
-			"There are no prerequisite handoff documents for this role. Start from the user-provided title and description in the runtime context, then inspect the project to reproduce the bug.",
-			`Optional review input for a later correction pass: ${document("review.md")}`,
-			`Required output: ${document("fix.md")}`,
-			"Host-required headings in fix.md: 根因 / 修改文件 / 验证结果 / 审查重点. It must list the reproduction, root cause, every changed project-relative file, key symbols or code regions, behavior changes, commands, tests, and remaining risks.",
+			"Start from the Bug title and description, reproduce the issue, and inspect existing OpenSpec Changes.",
+			"Use OpenSpec explore/propose/update/apply as needed to keep the problem, decision, tasks, fix, and validation coherent.",
+			"The fix handoff is the relevant OpenSpec Change plus the real Git diff and tests; do not create a fixed fix.md unless the user asks for one.",
 		].join("\n");
 	}
 	return [
 		...sharedRules,
-		`Read: ${document("work-item.md")}`,
-		agent.lane === "requirements"
-			? `Read feature handoff: ${document("requirement.md")}, ${document("design.md")}, ${document("tasks.md")}, ${document("implementation.md")}`
-			: `Read bug handoff: ${document("fix.md")}`,
-		`Required output: ${document("review.md")}`,
-		"Use the implementation/fix handoff to locate changes, then verify against the real project diff and tests.",
+		"Read the selected OpenSpec Change and independently inspect the real Git diff and tests.",
+		"Use open-code-review for structured findings. Add or modify tests when useful, but do not modify production code.",
+		"Record findings in the relevant OpenSpec Change or a user-selected project document; no fixed review.md is required.",
 	].join("\n");
 }
 
@@ -277,7 +267,7 @@ async function rolePrompt(agent: StoredAgentInstance, webSearchAvailable: boolea
 		`Work item directory: ${agent.workItemDirectory}`,
 		`User-provided title: ${workItem.title}`,
 		`User-provided description: ${workItem.description || "No description provided."}`,
-		"The listed handoff documents are the workflow source of truth once their producing Agent writes them.",
+		"OpenSpec artifacts and other documents produced by the enabled Skills are the workflow handoff source of truth.",
 		"",
 		"# Web Search Contract",
 		webSearchAvailable
@@ -285,7 +275,7 @@ async function rolePrompt(agent: StoredAgentInstance, webSearchAvailable: boolea
 			: "web_search is unavailable because Tavily is not configured. Do not attempt to call it; tell the user that web search requires configuration in CodePIddy Settings.",
 		"",
 		profile,
-		"# Work Item File Contract",
+		"# Work Item and OpenSpec Contract",
 		roleDocumentContract(agent),
 		"",
 		"# Tool Failure Recovery",
@@ -1333,6 +1323,13 @@ function registerIpcHandlers(
 		const error = await shell.openPath(directory);
 		if (error) throw new Error(error);
 	});
+	ipcMain.handle(channels.settingsOpenProjectSkills, async (_event, rawProjectRoot: unknown) => {
+		const projectRoot = requireOpenProjectRoot(rawProjectRoot);
+		const directory = path.join(projectRoot, ".codepiddy", ".pi", "skills");
+		await mkdir(directory, { recursive: true });
+		const error = await shell.openPath(directory);
+		if (error) throw new Error(error);
+	});
 	ipcMain.handle(channels.settingsGetRoleDefaults, () => settingsStore.getRoleModelDefaults());
 	ipcMain.handle(channels.settingsSetRoleDefault, (_event, raw: unknown) =>
 		settingsStore.setRoleModelDefault(parseRoleModelDefault(raw)),
@@ -1396,7 +1393,9 @@ if (!hasSingleInstanceLock) {
 			(app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(app.getAppPath(), "..", ".."));
 		const settingsStore = new AppSettingsStore(app.getPath("userData"));
 		await settingsStore.ensurePermissionPolicy();
-		const recentProjects = new RecentProjectStore(app.getPath("userData"));
+		const recentProjects = new RecentProjectStore(app.getPath("userData"), {
+			discoverKnownRoots: process.env.CODEPIDDY_DISABLE_PROJECT_DISCOVERY !== "1",
+		});
 		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore);
 		registerIpcHandlers(agentManager, settingsStore, recentProjects);
 		mainWindow = createWindow(recentProjects);

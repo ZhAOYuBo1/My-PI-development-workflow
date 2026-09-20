@@ -1,184 +1,258 @@
 <p align="center">
-  <img src="packages/codepiddy-desktop/public/codepiddy-icon.png" alt="CodePIddy" width="112" />
+  <img src="packages/codepiddy-desktop/public/codepiddy-icon.png" alt="CodePIddy" width="104" />
 </p>
 
 <h1 align="center">CodePIddy</h1>
 
-<p align="center">A workflow-oriented Windows coding agent desktop client powered by Pi.</p>
+<p align="center"><strong>把程序员真实的“做需求”和“修 Bug”工作方式，变成可管理、可交接、可长期使用的 Pi Coding Agent 桌面客户端。</strong></p>
 
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-2563eb?style=flat-square" />
-  <img alt="Electron" src="https://img.shields.io/badge/client-Electron-334155?style=flat-square" />
-  <img alt="Pi runtime" src="https://img.shields.io/badge/runtime-Pi-111827?style=flat-square" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square" />
-  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-f59e0b?style=flat-square" />
+  <img alt="Windows" src="https://img.shields.io/badge/平台-Windows-2563eb?style=flat-square" />
+  <img alt="Electron" src="https://img.shields.io/badge/客户端-Electron-334155?style=flat-square" />
+  <img alt="Pi" src="https://img.shields.io/badge/Agent_Runtime-Pi-111827?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/badge/开源协议-MIT-16a34a?style=flat-square" />
+  <img alt="Status" src="https://img.shields.io/badge/状态-公开测试-f59e0b?style=flat-square" />
 </p>
 
 <p align="center">
-  <img src="docs/images/codepiddy-overview.png" alt="CodePIddy project workflow" width="920" />
+  <a href="https://github.com/ZhAOYuBo1/My-PI-development-workflow/releases/latest"><strong>下载 Windows 版本</strong></a>
+  ·
+  <a href="docs/codepiddy/MVP_SPEC.md">查看 MVP 规格</a>
+  ·
+  <a href="docs/codepiddy/HANDOFF_PROTOCOL.md">查看交接协议</a>
 </p>
+
+<p align="center">
+  <img src="docs/images/codepiddy-overview.png" alt="CodePIddy 项目工作流" width="940" />
+</p>
+
+## 为什么要做 CodePIddy
+
+很多 Coding Agent 擅长“完成一次对话”，但程序员的真实工作并不是一条全自动流水线。
+
+日常开发通常只有两类工作：
+
+```text
+做一个新需求
+修一个已经存在的问题
+```
+
+这两类工作都需要需求理解、实现、测试、审核和返工，但每一步未必连续发生，也不应该由系统擅自推进。开发者需要随时停下来确认需求、切换模型、补充背景、检查代码，或者回到前一步继续修改。
+
+因此 CodePIddy 的核心不是“更多 Agent”，而是：
+
+1. **两种固定工作方式**：每个项目默认包含“新需求”和“修漏洞”；
+2. **职责明确的长期 Agent**：需求分析、Coding、Bug Fix、Review 各自负责不同工作；
+3. **文档与代码交接**：Agent 之间不共享短期记忆，而是通过 OpenSpec、Git diff、测试和项目文档协作；
+4. **用户掌握推进权**：是否批准需求、何时编码、何时审核、是否返工和归档，都由人决定；
+5. **Pi 仍是底层事实源**：模型、Session、Tool、Skill、Slash Command 和 Provider 都来自 Pi，CodePIddy 负责工作流和客户端体验。
+
+> CodePIddy 不是 Pi 的 UI 换皮，也不是自动运行的 Agent 流水线。它是面向程序员日常开发过程的桌面工作台。
+
+## 两条工作流
+
+### 新需求
+
+```text
+用户想法
+  -> Requirement Analysis Agent
+       -> Grill With Docs：逐项澄清需求
+       -> OpenSpec：proposal / specs / design / tasks
+  -> 用户批准需求
+  -> Coding Agent
+       -> openspec-apply-change
+       -> 代码、测试、任务状态与 Git diff
+  -> Review Agent
+       -> open-code-review
+       -> 测试、Findings 与 Verdict
+  -> 用户决定继续修正或归档
+```
+
+### 修漏洞
+
+```text
+Bug 描述
+  -> Bug Fix Agent
+       -> OpenSpec：问题、根因、决策与任务
+       -> 修复代码并补充测试
+  -> Review Agent
+       -> OpenSpec + Git diff + open-code-review
+  -> 用户决定继续修正或归档
+```
+
+CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md` 或 `review.md`。**Grill 和 OpenSpec 产生的真实产物就是交接文档**。
+
+## 客户端界面
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/codepiddy-agent.png" alt="CodePIddy agent conversation" /></td>
-    <td width="50%"><img src="docs/images/codepiddy-settings.png" alt="CodePIddy per-role skill settings" /></td>
+    <td width="50%"><img src="docs/images/codepiddy-agent.png" alt="Agent 对话、上下文与模型控制" /></td>
+    <td width="50%"><img src="docs/images/codepiddy-settings.png" alt="按 Agent 类型配置内置 Skill" /></td>
   </tr>
   <tr>
-    <td align="center"><strong>Pi conversation, tools and context</strong></td>
-    <td align="center"><strong>Per-role Skill management</strong></td>
+    <td align="center"><strong>长期 Agent 会话、上下文、模型与工具状态</strong></td>
+    <td align="center"><strong>按 Agent 类型启用或停用内置 Skill</strong></td>
   </tr>
 </table>
 
-> [!WARNING]
-> CodePIddy is under active development. The current repository is suitable for development and testing, not unattended production use.
+界面使用原有中性色调，并通过半透明、背景模糊、内高光和多层阴影增加层次。目标是保持长时间编程时的低干扰，同时让项目、工作项、Agent、权限和运行状态清晰可见。
 
-## What it is
+## 内置 Skill
 
-CodePIddy adds a desktop workflow layer on top of the Pi agent runtime. It is not a TUI skin and it does not automatically chain agents. The user creates and controls long-lived agents inside isolated Work Items.
+以下 Skill 随 CodePIddy 一起分发，不要求用户单独下载 Skill 文件：
 
-Each opened project has two work lanes:
+| Agent | 默认启用 |
+| --- | --- |
+| Requirement Analysis | `grill-with-docs`、`openspec-explore`、`openspec-propose`、`openspec-update-change` |
+| Coding | `openspec-apply-change`、`openspec-sync-specs` |
+| Bug Fix | `openspec-explore`、`openspec-propose`、`openspec-apply-change`、`openspec-sync-specs` |
+| Review | `open-code-review` |
 
-```text
-New requirement: Requirement Analysis -> Coding -> Review
-Bug fix:        Bug Fix -> Review
-```
+另外还内置但默认不主动分配：
 
-Agents hand work to the next role through files inside the current Work Item. The user decides when to create, switch, retry, reset, review, archive, or delete an item.
+- `openspec-archive-change`
 
-## Current capabilities
-
-- Electron desktop client for Windows
-- Recent-project persistence with SQLite
-- Isolated requirement and bug-fix Work Items
-- One long-lived Pi session per Agent Slot
-- Pi RPC streaming, tool cards, thinking blocks, interruption, retry and context usage
-- Dynamic Pi slash commands and model selection
-- Session tree, fork, clone, reset and compaction
-- Configurable permission approval UI
-- Project-level single-writer lease
-- Tavily search-only MCP integration
-- Per-role Skill assignment
-- Requirement approval and document handoff gates
-
-## Workflow boundaries
-
-### Requirement Analysis Agent
-
-Starts from the title and description supplied by the user. It has no prerequisite handoff documents and creates:
+所有 Skill 都可以在设置中按 Agent 类型启用或停用。项目自己的 Skill 可以放在：
 
 ```text
-requirement.md
-design.md
-tasks.md
+<project>/.codepiddy/.pi/skills
 ```
 
-### Coding Agent
+设置页面提供“打开项目 Skill 文件夹”入口。
 
-Reads the approved requirement handoff, implements the change, and creates:
+> OpenSpec Skill 调用 `openspec` CLI，Open Code Review Skill 调用 `ocr` CLI。Skill 指令随应用分发；使用对应能力时仍需要相应 CLI 和模型 Provider 可用。
+
+## 已实现能力
+
+- Windows Electron 桌面客户端；
+- 项目、最近项目和窗口状态持久化；
+- 新需求 / 修漏洞两条隔离工作流；
+- 多 Work Item、归档、恢复、重命名和删除；
+- 单 Slot 单长期 Agent Session；
+- 用户控制的需求批准门；
+- Grill + OpenSpec 动态交接；
+- Pi RPC 流式消息、Thinking、Tool Card 和错误恢复；
+- 中断、Retry、Compaction、Steering；
+- Session Tree、Fork、Clone、Reset、Resume、Import；
+- 模型、Thinking Level 和 Scoped Models；
+- 图片附件、拖放和剪贴板粘贴；
+- 动态 Slash Commands 和 Skill Commands；
+- OAuth Provider 登录与退出；
+- 默认允许项目内文件读写，并可以在设置中调整；
+- 项目级单写入 Lease；
+- Tavily Search-only Web Search；
+- Pi 进程崩溃检测和自动重连；
+- SQLite UI 状态持久化；
+- Electron IPC 校验、CSP、Context Isolation 和 Renderer Sandbox；
+- Core、Desktop 与 Electron E2E 测试。
+
+## 下载与运行
+
+前往 [GitHub Releases](https://github.com/ZhAOYuBo1/My-PI-development-workflow/releases/latest) 下载 Windows `.exe`。
+
+当前发布目标：
 
 ```text
-implementation.md
+Windows 10 / Windows 11
+x64
 ```
 
-### Bug Fix Agent
-
-Starts from the user-provided bug description, reproduces and fixes the problem, and creates:
-
-```text
-fix.md
-```
-
-### Review Agent
-
-Reads the implementation or fix handoff, independently inspects the real code changes, adds or updates tests, and creates:
-
-```text
-review.md
-```
-
-## Development status
-
-As of September 17, 2026:
-
-- Workflow MVP: approximately 85%
-- Desktop interaction completeness: approximately 75%
-- Production-release readiness: approximately 60%
-
-Major remaining work includes RPC soak testing and recovery, structured handoff validation, Electron E2E tests, runtime IPC validation, transcript virtualization, draft persistence, code signing, auto-update and crash diagnostics.
-
-See [`docs/codepiddy/MVP_SPEC.md`](docs/codepiddy/MVP_SPEC.md) and [`docs/codepiddy/DECISIONS.md`](docs/codepiddy/DECISIONS.md) for product decisions and implementation boundaries.
-
-## Requirements
-
-- Windows 10 or Windows 11
-- Node.js 22.19 or newer
-- npm
-- At least one Pi-supported model/provider configuration
-
-Pi provider and model configuration is read from its native files:
+首次运行后，需要在 Pi 原生配置中准备至少一个可用模型或 Provider：
 
 ```text
 ~/.pi/agent/models.json
 ~/.pi/agent/settings.json
 ```
 
-## Run locally
+也可以在 Agent 中使用 `/login` 完成受支持 Provider 的 OAuth 登录。
+
+> 当前 Release 未进行商业代码签名，Windows 可能显示未知发布者提示。请仅从本仓库 Release 下载。
+
+## 本地开发
+
+### 环境
+
+- Windows 10 或 Windows 11
+- Node.js 22.19 或更高版本
+- npm
+
+### 启动
 
 ```powershell
-npm ci
+npm ci --ignore-scripts
 npm run build:codepiddy
 npm start --workspace=@codepiddy/desktop
 ```
 
-Run the CodePIddy checks. Electron E2E uses an isolated temporary project and a Fake Pi RPC runtime, so it does not require a model API key:
+### 验证
 
 ```powershell
+npm run check
 npm test --workspace=@codepiddy/core
 npm test --workspace=@codepiddy/desktop
 npm run test:e2e --workspace=@codepiddy/desktop
-npm run check
 ```
 
-Prepare a local Windows installer only when a release build is required:
+### 构建 Windows Release
 
 ```powershell
 npm run prepare:codepiddy-package
 npm run package:win --workspace=@codepiddy/desktop
 ```
 
-Build output is written under `.artifacts/` and is not committed.
-
-## Repository layout
+构建产物位于：
 
 ```text
-packages/codepiddy-desktop/              Electron Main, Preload and React Renderer
-packages/codepiddy-core/                 Work Items, Agent registry, Pi RPC process and write lease
-packages/codepiddy-shared/               Shared IPC and workflow types
-packages/codepiddy-agent-skills/         Bundled per-role Skills
-packages/codepiddy-permission-extension/ Permission-system integration
-packages/codepiddy-tavily-search-mcp/    Tavily MCP server
-packages/codepiddy-tavily-tool-extension Pi tool wrapper for search-only web access
-docs/codepiddy/                          Product decisions, architecture and workflow documentation
+.artifacts/release
 ```
 
-## Security notes
+## 目录结构
 
-- Electron uses context isolation, a sandboxed renderer and disabled Node integration.
-- Secrets saved by CodePIddy use Electron `safeStorage` when available.
-- The current Windows MVP does not provide a strong execution sandbox.
-- Agent processes run with the operating-system permissions of the current user.
-- Review permission policy before allowing commands or filesystem writes.
+```text
+packages/codepiddy-desktop/              Electron Main、Preload 与 React Renderer
+packages/codepiddy-core/                 Work Item、Agent Registry、Pi RPC 与写锁
+packages/codepiddy-shared/               共享 IPC 与工作流类型
+packages/codepiddy-agent-skills/         随应用分发的固定 Skill
+packages/codepiddy-permission-extension/ 权限系统适配
+packages/codepiddy-tavily-search-mcp/    Tavily Search MCP
+packages/codepiddy-tavily-tool-extension Pi Search Tool 包装
+packages/coding-agent/                   Pi Coding Agent Runtime
+docs/codepiddy/                          产品决策、架构与工作流文档
+```
 
-See [`SECURITY.md`](SECURITY.md).
+## 安全说明
 
-## Upstream Pi
+- Renderer 开启 Sandbox 与 Context Isolation；
+- 禁用 Renderer Node Integration；
+- IPC 输入进行运行时校验；
+- Tavily Key 使用 Electron `safeStorage`；
+- 默认只直接允许项目内文件读取和修改；
+- Bash、MCP、Skill 和项目外路径仍可以配置审批策略；
+- 当前 Windows MVP 尚未提供强执行沙箱，Agent 进程仍使用当前操作系统用户权限。
 
-CodePIddy is derived from the open-source Pi Agent Harness. Pi remains the model, tool, session, Skill and slash-command runtime; CodePIddy supplies the desktop workflow and project-management layer.
+更多信息见 [SECURITY.md](SECURITY.md)。
 
-- Upstream project: `earendil-works/pi`
-- Original upstream README: [`docs/upstream/PI_README.md`](docs/upstream/PI_README.md)
-- Upstream GitHub automation is preserved in the baseline commit but removed from the active CodePIddy tree.
+## 开源与贡献
+
+CodePIddy 是一个开源项目，目前仍在持续完善。
+
+欢迎大家：
+
+- 提交 Issue，反馈真实开发过程中的问题；
+- 补充新的 Agent 工作方式和 Skill；
+- 改进 OpenSpec、Review、权限和交接体验；
+- 修复 Bug、补充测试和文档；
+- 提交 Pull Request；
+- 分享不同模型、Provider 和项目类型下的使用经验。
+
+如果你认可“**Agent 各司其职、通过真实产物交接、流程由人控制**”这个方向，欢迎一起完善 CodePIddy。
+
+## 上游 Pi
+
+CodePIddy 基于开源 Pi Agent Harness 开发。Pi 继续负责模型、Provider、Session、Tool、Skill 与 Slash Command；CodePIddy 提供桌面客户端、项目管理和工作流层。
+
+- 上游说明：[docs/upstream/PI_README.md](docs/upstream/PI_README.md)
 
 ## License
 
-This repository retains the upstream MIT license. See [`LICENSE`](LICENSE).
+本仓库保留上游 MIT License，详见 [LICENSE](LICENSE)。Bundled Skills 保留各自文件中声明的许可证和作者信息。

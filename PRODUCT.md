@@ -29,7 +29,7 @@ Keep feature work and bug-fix work organized inside each project, let the progra
 - New requirements use Requirement Analysis, Coding, and Review agents.
 - Bug fixes use Bug Fix and Review agents.
 - The user manually creates and switches agents; CodePIddy does not automatically advance the workflow.
-- Agents collaborate through documents inside the work-item directory.
+- Agents collaborate through the OpenSpec Change artifacts and other documents produced by their enabled Skills.
 - Only one writing agent may hold the project write lease at a time.
 
 ## Product Position
@@ -38,7 +38,7 @@ CodePIddy is a Pi-powered workflow client, not a replacement agent runtime. Pi r
 
 ## Durable Constraints
 
-- Project documents are shared, but work-item workflow files remain isolated.
+- Work Item context remains isolated, while the selected OpenSpec Change may live in the project's shared OpenSpec root.
 - Requirement approval is controlled by the user.
 - Read operations are normally allowed; modifying operations follow the configured permission extension.
 - Tavily integration is search-only and must not become a general webpage reader.
