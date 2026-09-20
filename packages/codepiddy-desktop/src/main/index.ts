@@ -559,10 +559,13 @@ class AgentManager {
 	}
 
 	async respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void> {
-		const process = this.processes.get(input.agentInstanceId);
-		if (!process) throw new Error("Agent process is not active");
 		const pending = this.pendingPermissions.get(input.agentInstanceId);
-		if (!pending || pending.requestId !== input.requestId) throw new Error("Permission request is no longer active");
+		if (!pending || pending.requestId !== input.requestId) return;
+		const process = this.processes.get(input.agentInstanceId);
+		if (!process) {
+			this.pendingPermissions.delete(input.agentInstanceId);
+			return;
+		}
 		if (input.cancelled !== true) {
 			if (pending.method === "select" && (input.value === undefined || !pending.options.includes(input.value))) {
 				throw new Error("权限选择值不在允许选项中");
@@ -580,7 +583,9 @@ class AgentManager {
 			...(input.confirmed === undefined ? {} : { confirmed: input.confirmed }),
 			...(input.cancelled === undefined ? {} : { cancelled: input.cancelled }),
 		});
-		this.pendingPermissions.delete(input.agentInstanceId);
+		if (this.pendingPermissions.get(input.agentInstanceId)?.requestId === input.requestId) {
+			this.pendingPermissions.delete(input.agentInstanceId);
+		}
 	}
 
 	async getPendingPermissionRequest(input: AgentInstanceLocator): Promise<PendingPermissionRequest | null> {

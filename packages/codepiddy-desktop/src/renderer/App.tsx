@@ -1088,6 +1088,7 @@ export function App() {
 	const [fileMatches, setFileMatches] = useState<string[]>([]);
 	const activeAssistantIds = useRef(new Map<string, string>());
 	const pendingToolFailures = useRef(new Map<string, ToolRecoveryOffer>());
+	const permissionResponsesInFlight = useRef(new Set<string>());
 	const agentCommandLoads = useRef(new Map<string, Promise<AgentCommandOption[]>>());
 	const projectRef = useRef<ProjectSummary | null>(project);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -2778,6 +2779,8 @@ export function App() {
 	}): Promise<void> {
 		if (!extensionDialog || !("codepiddy" in window)) return;
 		const current = extensionDialog;
+		if (permissionResponsesInFlight.current.has(current.requestId)) return;
+		permissionResponsesInFlight.current.add(current.requestId);
 		setExtensionDialog(null);
 		try {
 			await window.codepiddy.respondToExtensionUi({
@@ -2805,8 +2808,13 @@ export function App() {
 				"running",
 			);
 		} catch (caught) {
-			setExtensionDialog(current);
-			setError(clientErrorMessage(caught, "提交权限响应失败"));
+			const message = caught instanceof Error ? caught.message : String(caught);
+			if (!/Permission request is no longer active|Agent process is not active/i.test(message)) {
+				setExtensionDialog(current);
+				setError(clientErrorMessage(caught, "提交权限响应失败"));
+			}
+		} finally {
+			permissionResponsesInFlight.current.delete(current.requestId);
 		}
 	}
 
@@ -3387,30 +3395,6 @@ export function App() {
 									>
 										<AppIcon name="more" />
 									</IconButton>
-									{agentActionsOpen === agentId ? (
-										<div className="agent-actions-menu">
-											<button
-												type="button"
-												onClick={() => void openSessionPanel(slot)}
-												disabled={sessionPanelLoading}
-											>
-												会话树与 Fork
-											</button>
-											<button type="button" onClick={() => void cloneAgentSession(slot)} disabled={busy}>
-												克隆当前会话
-											</button>
-											<button type="button" onClick={() => void reconnectAgent(slot)} disabled={busy}>
-												重新连接 Pi
-											</button>
-											<button
-												type="button"
-												className="danger-menu-item"
-												onClick={() => setResetAgentDialog({ workItem: selectedWorkItem, slot })}
-											>
-												重置 Agent
-											</button>
-										</div>
-									) : null}
 								</div>
 							</div>
 						) : (
@@ -3425,6 +3409,29 @@ export function App() {
 							</button>
 						)}
 					</header>
+					{agentId && agentActionsOpen === agentId ? (
+						<div className="agent-actions-panel" role="toolbar" aria-label="Agent 操作">
+							<button type="button" onClick={() => void openSessionPanel(slot)} disabled={sessionPanelLoading}>
+								会话树与 Fork
+							</button>
+							<button type="button" onClick={() => void cloneAgentSession(slot)} disabled={busy}>
+								克隆当前会话
+							</button>
+							<button type="button" onClick={() => void reconnectAgent(slot)} disabled={busy}>
+								重新连接 Pi
+							</button>
+							<button
+								type="button"
+								className="danger-menu-item"
+								onClick={() => {
+									setAgentActionsOpen(null);
+									setResetAgentDialog({ workItem: selectedWorkItem, slot });
+								}}
+							>
+								重置 Agent
+							</button>
+						</div>
+					) : null}
 					{agentId ? (
 						<>
 							<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>

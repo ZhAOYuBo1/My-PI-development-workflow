@@ -17,6 +17,15 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 	const { page } = client;
 	await createFeatureWorkItem(page);
 	await openRequirementAgent(page);
+	await page.getByRole("button", { name: "Agent 操作" }).click();
+	const actionsPanel = page.getByRole("toolbar", { name: "Agent 操作" });
+	await expect(actionsPanel).toBeVisible();
+	const panelBox = await actionsPanel.boundingBox();
+	const transcriptBox = await page.locator(".transcript").boundingBox();
+	expect(panelBox).not.toBeNull();
+	expect(transcriptBox).not.toBeNull();
+	expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(transcriptBox!.y + 1);
+	await page.getByRole("button", { name: "Agent 操作" }).click();
 
 	const composer = page.locator(".composer textarea");
 	await composer.fill("hello from e2e");
@@ -77,7 +86,12 @@ test("restores a pending permission request after switching away from the agent"
 	}
 	await requirementAgent.click();
 	await expect(page.getByRole("dialog", { name: "权限请求" })).toBeVisible();
-	await page.getByRole("button", { name: "允许", exact: true }).click();
+	await page.getByRole("button", { name: "允许", exact: true }).evaluate((button) => {
+		button.click();
+		button.click();
+		button.click();
+	});
+	await expect(page.getByText(/Permission request is no longer active/i)).toHaveCount(0);
 	await expect(page.getByText("权限已允许，Fake Pi 继续完成请求。")).toBeVisible();
 });
 
