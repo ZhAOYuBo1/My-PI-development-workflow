@@ -733,6 +733,24 @@ class AgentManager {
 		if (input.name === "trust") {
 			return { message: "CodePIddy 以 --approve 模式启动当前 Pi 项目；项目资源已在本次运行中允许加载。" };
 		}
+		if (input.name === "changelog") {
+			const [desktopManifestText, piManifestText, changelogText] = await Promise.all([
+				readFile(path.join(this.repositoryRoot, "packages", "codepiddy-desktop", "package.json"), "utf8"),
+				readFile(path.join(this.repositoryRoot, "packages", "coding-agent", "package.json"), "utf8"),
+				readFile(path.join(this.repositoryRoot, "packages", "coding-agent", "CHANGELOG.md"), "utf8"),
+			]);
+			const desktopManifest = JSON.parse(desktopManifestText) as { version?: string };
+			const piManifest = JSON.parse(piManifestText) as { version?: string };
+			const latestSection = changelogText
+				.split(/\n## (?=\[?\d|Unreleased)/)
+				.slice(0, 2)
+				.join("\n## ")
+				.trim()
+				.slice(0, 3500);
+			return {
+				message: `CodePIddy ${desktopManifest.version ?? "unknown"}\nPi Coding Agent ${piManifest.version ?? "unknown"}\n\n${latestSection}`,
+			};
+		}
 		if (input.name === "hotkeys") {
 			return {
 				message:

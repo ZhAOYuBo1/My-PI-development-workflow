@@ -756,6 +756,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 					"copy",
 					"name",
 					"session",
+					"changelog",
 					"hotkeys",
 					"fork",
 					"clone",
