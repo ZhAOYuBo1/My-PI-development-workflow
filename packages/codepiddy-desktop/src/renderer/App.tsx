@@ -183,10 +183,10 @@ const roleLabels: Record<AgentRole, string> = {
 };
 
 const roleGlyphs: Record<AgentSlotSummary["role"], string> = {
-	"requirement-analysis": "RA",
-	coding: "CO",
-	"bug-fix": "BF",
-	review: "RV",
+	"requirement-analysis": "◇",
+	coding: "⌘",
+	"bug-fix": "⌁",
+	review: "✓",
 };
 
 const PROMPT_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -3280,15 +3280,12 @@ export function App() {
 			return (
 				<div className="agent-pane">
 					<header className="content-header">
-						<div className="agent-header-identity">
-							<span className="agent-header-avatar">{roleGlyphs[selection.role]}</span>
-							<div>
-								<strong>{slot.displayName}</strong>
-								<span>
-									{selectedWorkItem.id} · {selectedWorkItem.title} ·{" "}
-									{slot.blockedReason ?? statusLabels[slot.status]}
-								</span>
-							</div>
+						<div>
+							<strong>{slot.displayName}</strong>
+							<span>
+								{selectedWorkItem.id} · {selectedWorkItem.title} ·{" "}
+								{slot.blockedReason ?? statusLabels[slot.status]}
+							</span>
 						</div>
 						{agentId ? (
 							<div className="agent-header-actions">
@@ -3627,15 +3624,7 @@ export function App() {
 		<div className="app-shell">
 			<aside className="sidebar">
 				<div className="brand-row">
-					<div className="brand-title">
-						<span className="brand-icon">
-							<img src="./codepiddy-icon.png" alt="" />
-						</span>
-						<span className="brand-copy">
-							<strong>CodePIddy</strong>
-							<small>Pi workflow studio</small>
-						</span>
-					</div>
+					<div className="brand-title">CodePIddy</div>
 					<IconButton
 						label={searchOpen ? "关闭搜索" : "搜索"}
 						onClick={() => {

@@ -4,22 +4,22 @@
   "title": "Design System: CodePIddy",
   "extensions": {
     "colorMeta": {
-      "accent": { "role": "primary", "displayName": "Workshop Evergreen", "canonical": "#397b5a", "tonalRamp": ["#10261a", "#183a27", "#235039", "#2f684b", "#397b5a", "#73a489", "#b8d6c3", "#e7f1ea"] },
-      "sidebar": { "role": "neutral", "displayName": "Graphite Shell", "canonical": "#171b19", "tonalRamp": ["#0c0f0d", "#171b19", "#252b27", "#3d4640", "#626d66", "#929b95", "#c8cfca", "#f2f5f3"] },
-      "canvas": { "role": "neutral", "displayName": "Work Canvas", "canonical": "#f4f6f3", "tonalRamp": ["#202522", "#3f4741", "#68716b", "#939b95", "#bdc4be", "#d9ded9", "#ecefec", "#f4f6f3"] }
+      "surface-glass": { "role": "neutral", "displayName": "Neutral Glass", "canonical": "rgba(255,255,255,0.70)", "tonalRamp": ["#252825", "#444844", "#696e69", "#919691", "#b8bcb8", "#d8dbd7", "#eceeeb", "#ffffff"] },
+      "canvas": { "role": "neutral", "displayName": "Warm Atmospheric Canvas", "canonical": "#eceeea", "tonalRamp": ["#252824", "#454943", "#6c716a", "#979c95", "#bec3bc", "#d9ddd7", "#e8ebe6", "#f5f6f3"] },
+      "accent": { "role": "primary", "displayName": "Muted Workflow Green", "canonical": "#506b57", "tonalRamp": ["#18251b", "#24392a", "#354e3b", "#506b57", "#728b78", "#9fb0a3", "#cbd5cd", "#eef3ef"] }
     },
     "typographyMeta": {
-      "body": { "displayName": "Windows Workhorse", "purpose": "Native-feeling interface copy and long-form conversation." },
-      "heading": { "displayName": "Compact Hierarchy", "purpose": "Project, work-item, and modal headings." },
-      "code": { "displayName": "Technical Data", "purpose": "Code, commands, paths, tool output, and measurements only." }
+      "body": { "displayName": "Native Interface", "purpose": "Windows UI copy and long-form agent conversations." },
+      "heading": { "displayName": "Quiet Hierarchy", "purpose": "Project, work-item, and settings headings." },
+      "code": { "displayName": "Technical Content", "purpose": "Code, paths, commands, tool output, and metrics only." }
     },
     "shadows": [
-      { "name": "surface-low", "value": "0 1px 2px rgba(20,28,23,.05), 0 8px 24px rgba(20,28,23,.05)", "purpose": "Composer, workflow hover, and lightweight popovers." },
-      { "name": "overlay-high", "value": "0 24px 70px rgba(7,12,9,.22), 0 4px 14px rgba(7,12,9,.10)", "purpose": "Modals and command/model menus." }
+      { "name": "glass-surface", "value": "inset 0 1px 0 rgba(255,255,255,.82), inset 0 -1px 0 rgba(83,92,84,.07), 0 2px 8px rgba(33,39,34,.05), 0 18px 44px rgba(33,39,34,.08)", "purpose": "Sidebar, main pane, and durable glass containers." },
+      { "name": "glass-float", "value": "inset 0 1px 0 rgba(255,255,255,.88), 0 8px 22px rgba(28,34,29,.09), 0 30px 72px rgba(28,34,29,.12)", "purpose": "Composer, menus, and modals." }
     ],
     "motion": [
-      { "name": "state-ease", "value": "150ms ease-out", "purpose": "Hover, focus, and selected-state transitions." },
-      { "name": "overlay-enter", "value": "170ms cubic-bezier(.2,.8,.2,1)", "purpose": "Single authored entrance for modal surfaces." }
+      { "name": "glass-state", "value": "140ms ease-out", "purpose": "Hover, focus, and selected-state light response." },
+      { "name": "overlay-enter", "value": "170ms cubic-bezier(.2,.8,.2,1)", "purpose": "Modal entrance without elastic overshoot." }
     ],
     "breakpoints": [
       { "name": "compact-desktop", "value": "980px" }
@@ -27,56 +27,55 @@
   },
   "components": [
     {
-      "name": "Primary Button",
-      "kind": "button",
-      "refersTo": "button-primary",
-      "description": "Compact evergreen action for primary workflow decisions.",
-      "html": "<button class=\"ds-primary\">Create agent</button>",
-      "css": ".ds-primary{min-height:36px;padding:0 14px;border:1px solid #2f684b;border-radius:10px;background:#2f684b;color:#fff;font:600 13px 'Segoe UI',sans-serif;box-shadow:0 5px 14px rgba(47,104,75,.14);transition:background 150ms ease-out,transform 150ms ease-out}.ds-primary:hover{background:#285d42;transform:translateY(-1px)}.ds-primary:focus-visible{outline:2px solid #4d906b;outline-offset:2px}"
+      "name": "Glass Panel",
+      "kind": "card",
+      "refersTo": "glass-panel",
+      "description": "Neutral translucent surface for durable application regions.",
+      "html": "<section class=\"ds-glass-panel\">Project workspace</section>",
+      "css": ".ds-glass-panel{padding:16px;border:1px solid rgba(255,255,255,.76);border-radius:16px;background:rgba(255,255,255,.70);color:#292928;font:13px 'Segoe UI',sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.82),inset 0 -1px 0 rgba(83,92,84,.07),0 18px 44px rgba(33,39,34,.08);backdrop-filter:blur(26px) saturate(1.18)}"
     },
     {
-      "name": "Project Navigation Row",
-      "kind": "nav",
-      "refersTo": "sidebar-navigation",
-      "description": "Raised graphite selection used for projects, work items, and agents.",
-      "html": "<button class=\"ds-nav\"><span class=\"ds-role\">CO</span><span>Coding Agent</span></button>",
-      "css": ".ds-nav{display:flex;width:240px;min-height:36px;align-items:center;gap:8px;padding:6px 10px;border:0;border-radius:10px;background:#303934;color:#fff;font:500 12px 'Segoe UI',sans-serif;text-align:left}.ds-role{display:grid;width:22px;height:22px;place-items:center;border:1px solid rgba(129,188,151,.3);border-radius:6px;background:rgba(78,132,98,.22);color:#dff0e5;font-size:8px;font-weight:800}.ds-nav:hover{background:#37413b}.ds-nav:focus-visible{outline:2px solid #70a985;outline-offset:2px}"
-    },
-    {
-      "name": "Agent Composer",
+      "name": "Glass Composer",
       "kind": "input",
       "refersTo": "composer",
-      "description": "Elevated message composer with a compact tool row.",
-      "html": "<div class=\"ds-composer\"><textarea placeholder=\"Message Pi…\"></textarea><div class=\"ds-tools\"><button>Attach</button><button class=\"ds-send\">Send</button></div></div>",
-      "css": ".ds-composer{width:520px;padding:11px 12px;border:1px solid #cfd8d1;border-radius:14px;background:#fff;box-shadow:0 18px 45px rgba(25,39,30,.10);font:13px 'Segoe UI',sans-serif}.ds-composer:focus-within{border-color:#7da18a;box-shadow:0 18px 45px rgba(25,39,30,.12),0 0 0 3px rgba(63,123,87,.10)}.ds-composer textarea{width:100%;min-height:54px;border:0;outline:0;resize:none}.ds-tools{display:flex;justify-content:space-between}.ds-tools button{border:0;border-radius:8px;padding:7px 10px}.ds-send{background:#397b5a;color:#fff}.ds-tools button:focus-visible{outline:2px solid #4d906b;outline-offset:2px}"
+      "description": "The strongest recurring glass surface in the application.",
+      "html": "<div class=\"ds-composer\"><textarea placeholder=\"Message Pi…\"></textarea><button>Send</button></div>",
+      "css": ".ds-composer{display:grid;gap:8px;width:520px;padding:11px 13px;border:1px solid rgba(255,255,255,.88);border-radius:17px;background:rgba(255,255,255,.62);box-shadow:inset 0 1px 0 rgba(255,255,255,.94),inset 0 -1px 0 rgba(76,86,78,.08),0 8px 20px rgba(34,42,35,.08),0 28px 64px rgba(34,42,35,.10);backdrop-filter:blur(28px) saturate(1.22)}.ds-composer textarea{min-height:54px;border:0;background:transparent;outline:0;resize:none}.ds-composer button{justify-self:end;padding:8px 12px;border:0;border-radius:9px;background:#30332f;color:#fff}.ds-composer:focus-within{outline:3px solid rgba(81,111,89,.09)}"
+    },
+    {
+      "name": "Raised Navigation Row",
+      "kind": "nav",
+      "description": "Selected workflow row using light response instead of a new color block.",
+      "html": "<button class=\"ds-nav-row\">Coding Agent</button>",
+      "css": ".ds-nav-row{width:220px;padding:8px 10px;border:1px solid rgba(255,255,255,.78);border-radius:8px;background:rgba(255,255,255,.68);color:#292928;font:12px 'Segoe UI',sans-serif;text-align:left;box-shadow:inset 0 1px 0 rgba(255,255,255,.82),0 6px 18px rgba(35,43,36,.07)}.ds-nav-row:hover{background:rgba(255,255,255,.82)}.ds-nav-row:focus-visible{outline:2px solid #718f78;outline-offset:2px}"
     }
   ],
   "narrative": {
-    "northStar": "The Graphite Workshop.",
-    "overview": "CodePIddy should feel like a serious developer tool that stays out of the way while still making workflow state immediately legible. A graphite application shell contains a quiet, paper-like working canvas. The interface is dense enough for daily engineering work but uses spacing, hierarchy, and restrained depth to avoid looking like an admin dashboard.",
+    "northStar": "Quiet Liquid Layers.",
+    "overview": "Preserve CodePIddy's original warm neutral palette and compact developer-tool character. Create hierarchy through translucency, backdrop blur, white edge highlights, inset shading, and soft offset shadows. The result should feel dimensional and tactile without looking like a glossy demo or changing the product's established identity.",
     "keyCharacteristics": [
-      "Dark graphite project navigation paired with a warm, low-glare work canvas.",
-      "Muted evergreen accents reserved for active, successful, and actionable states.",
-      "Compact controls, clear state boundaries, and generous reading width for long sessions.",
-      "Native Windows typography and predictable keyboard focus."
+      "Original off-white, gray, charcoal, and muted green palette.",
+      "Three perceptible depth levels: background atmosphere, working surfaces, and floating overlays.",
+      "Glass effects concentrated on major surfaces rather than every row.",
+      "Crisp text and restrained motion remain more important than visual effects."
     ],
     "rules": [
-      { "name": "The One Accent Rule", "body": "Do not introduce another decorative brand color. New interactive states should derive from the evergreen accent or remain neutral.", "section": "colors" },
-      { "name": "The Technical Type Rule", "body": "Monospace communicates code or measurable data, never generic product personality.", "section": "typography" },
-      { "name": "The Three-Layer Rule", "body": "Use only shell, working surface, and overlay depth. Avoid stacking cards inside cards.", "section": "elevation" }
+      { "name": "The Tint Not Rebrand Rule", "body": "Glass layers may alter opacity and light response, but they must not replace the established CodePIddy palette.", "section": "colors" },
+      { "name": "The Three-Level Glass Rule", "body": "Use glass for major panes, floating controls, and overlays only. Ordinary list rows stay flat until selected or hovered.", "section": "elevation" },
+      { "name": "The Readability Before Refraction Rule", "body": "Avoid SVG displacement or heavy refraction behind text-heavy areas. Blur and light response must never soften copy.", "section": "elevation" }
     ],
     "dos": [
-      "Keep the conversation canvas quiet and readable during long sessions.",
-      "Use evergreen to communicate action, active selection, progress, and success.",
-      "Preserve clear separation between project navigation and agent work.",
-      "Show keyboard focus and meaningful loading, empty, error, and disabled states."
+      "Preserve the original neutral colors.",
+      "Use background blur only where a surface actually floats above content.",
+      "Keep white highlights thin and shadows soft with visible vertical offset.",
+      "Disable decorative motion when reduced motion is requested."
     ],
     "donts": [
-      "Do not turn every section into a floating card.",
-      "Do not use bright gradients, neon glows, or decorative glass effects.",
-      "Do not use monospaced text for ordinary labels.",
-      "Do not add another accent color for visual variety alone.",
-      "Do not hide workflow state behind hover-only interactions."
+      "Do not introduce a dark sidebar or a new brand palette.",
+      "Do not apply distortion filters to conversation text or code.",
+      "Do not make every row transparent and glossy.",
+      "Do not use zero-offset glow as a substitute for depth.",
+      "Do not sacrifice contrast for translucency."
     ]
   }
 }

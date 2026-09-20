@@ -1,19 +1,16 @@
 ---
 name: CodePIddy
-description: A calm graphite developer cockpit for Pi-powered feature and bug workflows.
+description: A calm Pi workflow client with layered neutral glass surfaces.
 colors:
-  accent: "#397b5a"
-  accent-strong: "#2f684b"
-  accent-soft: "#e7f1ea"
-  sidebar: "#171b19"
-  sidebar-raised: "#202522"
-  canvas: "#f4f6f3"
-  surface: "#ffffff"
-  surface-subtle: "#f8f9f7"
-  border: "#dfe4df"
-  text: "#202522"
-  muted: "#717a74"
-  danger: "#a64b42"
+  text: "#292928"
+  muted: "#777773"
+  canvas: "#eceeea"
+  sidebar-tint: "rgba(247,247,245,0.70)"
+  surface-glass: "rgba(255,255,255,0.70)"
+  surface-strong: "rgba(255,255,255,0.84)"
+  border-glass: "rgba(255,255,255,0.76)"
+  accent: "#506b57"
+  danger: "#a53f36"
 typography:
   body:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
@@ -23,10 +20,10 @@ typography:
     letterSpacing: "normal"
   heading:
     fontFamily: "Segoe UI Variable Display, Segoe UI, system-ui, sans-serif"
-    fontSize: "26px"
+    fontSize: "23px"
     fontWeight: 680
-    lineHeight: 1.15
-    letterSpacing: "-0.025em"
+    lineHeight: 1.2
+    letterSpacing: "-0.02em"
   code:
     fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace"
     fontSize: "12px"
@@ -34,9 +31,9 @@ typography:
     lineHeight: 1.55
     letterSpacing: "normal"
 rounded:
-  sm: "6px"
-  md: "10px"
-  lg: "14px"
+  sm: "7px"
+  md: "11px"
+  lg: "16px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -44,100 +41,98 @@ spacing:
   lg: "18px"
   xl: "28px"
 components:
+  glass-panel:
+    backgroundColor: "{colors.surface-glass}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.lg}"
+    padding: "12px"
   button-primary:
-    backgroundColor: "{colors.accent-strong}"
-    textColor: "{colors.surface}"
-    rounded: "{rounded.md}"
+    backgroundColor: "{colors.text}"
+    textColor: "#ffffff"
+    rounded: "{rounded.sm}"
     padding: "0 14px"
     height: "36px"
   composer:
-    backgroundColor: "{colors.surface}"
+    backgroundColor: "{colors.surface-glass}"
     textColor: "{colors.text}"
     rounded: "{rounded.lg}"
-    padding: "11px 12px"
-  sidebar-navigation:
-    backgroundColor: "{colors.sidebar}"
-    textColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "8px 10px"
+    padding: "11px 13px"
 ---
 
 # Design System: CodePIddy
 
 ## Overview
 
-**Creative North Star: "The Graphite Workshop."** CodePIddy should feel like a serious developer tool that stays out of the way while still making workflow state immediately legible. A graphite application shell contains a quiet, paper-like working canvas. The interface is dense enough for daily engineering work but uses spacing, hierarchy, and restrained depth to avoid looking like an admin dashboard.
+**Creative North Star: "Quiet Liquid Layers."** Preserve CodePIddy's original warm neutral palette and compact developer-tool character. Create hierarchy through translucency, backdrop blur, white edge highlights, inset shading, and soft offset shadows. The result should feel dimensional and tactile without looking like a glossy demo or changing the product's established identity.
 
 **Key Characteristics:**
 
-- Dark graphite project navigation paired with a warm, low-glare work canvas.
-- Muted evergreen accents reserved for active, successful, and actionable states.
-- Compact controls, clear state boundaries, and generous reading width for long sessions.
-- Native Windows typography and predictable keyboard focus.
+- Original off-white, gray, charcoal, and muted green palette.
+- Three perceptible depth levels: background atmosphere, working surfaces, and floating overlays.
+- Glass effects concentrated on major surfaces rather than every row.
+- Crisp text and restrained motion remain more important than visual effects.
 
 ## Colors
 
-The dark shell creates a stable project-management zone. The light canvas is reserved for conversation, review, and configuration work. Evergreen is the single interaction accent; warning and failure colors remain semantic.
+Neutral tints carry the interface. Translucent white surfaces reveal a very subtle warm-gray background field. Muted green remains semantic for active, approved, and progress states.
 
-**The One Accent Rule.** Do not introduce another decorative brand color. New interactive states should derive from the evergreen accent or remain neutral.
+**The Tint Not Rebrand Rule.** Glass layers may alter opacity and light response, but they must not replace the established CodePIddy palette.
 
 ## Typography
 
-Segoe UI Variable is the primary voice because the application is a Windows desktop tool. Headings use tighter tracking and stronger weight, while code, paths, commands, and measurements use the monospace stack only when the content is genuinely technical.
-
-**The Technical Type Rule.** Monospace communicates code or measurable data, never generic product personality.
+Use Segoe UI Variable for a native Windows reading experience. Keep existing hierarchy and density. Monospace remains limited to code, paths, commands, and measurements.
 
 ## Layout
 
-The application uses a fixed project sidebar and one flexible working canvas. Conversation content is centered around an approximately 820px reading measure. Headers stay compact, and the composer remains visually anchored at the bottom without spanning the entire window.
-
-At narrower desktop widths, the shell loses its outer frame, the sidebar becomes narrower, and content padding reduces without changing information architecture.
+The sidebar and main working pane sit as separate layers on the application background. The composer floats above the transcript and remains centered at a readable width. At compact desktop widths, the outer glass frame collapses back to edge-to-edge surfaces.
 
 ## Elevation & Depth
 
-Depth is quiet and functional: the main canvas sits above the graphite shell, the composer lifts above the transcript, and menus or modals receive the strongest shadow. Ordinary rows rely on background contrast rather than floating-card shadows.
+Depth combines four ingredients: translucent tint, backdrop blur, a white inset top highlight, and a soft offset shadow. Major panes use mild depth; the composer and overlay menus use stronger depth; modals use the highest depth.
 
-**The Three-Layer Rule.** Use only shell, working surface, and overlay depth. Avoid stacking cards inside cards.
+**The Three-Level Glass Rule.** Use glass for major panes, floating controls, and overlays only. Ordinary list rows stay flat until selected or hovered.
+
+**The Readability Before Refraction Rule.** Avoid SVG displacement or heavy refraction behind text-heavy areas. Blur and light response must never soften copy.
 
 ## Shapes
 
-Most interactive controls use 6–10px corners. Large workspace surfaces and modals use 14px corners. Pills are limited to status indicators and counts.
+Major panes use 16px corners. Menus, cards, and composer controls use 9–13px corners. Status pills remain the only fully rounded elements.
 
 ## Components
 
 ### Buttons
 
-Primary buttons use evergreen fill and compact 36px height. Secondary buttons use a white surface and visible neutral border. Icon controls remain square with a 7–10px radius rather than circular unless the action is the composer send control.
+Primary actions keep the original charcoal fill. Secondary and icon buttons may use translucent white, a bright inset highlight, and a small offset shadow.
 
 ### Cards / Containers
 
-Workflow and settings containers use a near-white surface, a quiet border, and little or no shadow. Hovering a selectable workflow row may lift it by one pixel to indicate direct manipulation.
+Settings cards, work-item choices, tool results, and user messages use lightly tinted glass with quiet borders. Do not stack multiple strong glass layers inside one another.
 
 ### Inputs / Fields
 
-Inputs are white with neutral borders. Focus uses an evergreen border plus a low-opacity outer ring. Placeholder text remains readable but clearly secondary.
+Inputs use a more opaque glass tint than surrounding panels. Focus adds a muted green ring and slightly stronger elevation.
 
 ### Navigation
 
-The project sidebar uses graphite surfaces, subdued labels, and a single raised selected state. Agent abbreviations are compact role identifiers rather than decorative symbols.
+The sidebar stays light and neutral. Selected project and agent rows receive a translucent raised surface rather than a new color block.
 
 ### Composer
 
-The composer is the signature component: centered, elevated, and visually separate from the transcript. Model, attachment, and send controls share one compact toolbar and use a stronger focus state when the editor is active.
+The composer is the strongest recurring glass surface. It uses a white highlight line, deep blur, inset bottom shading, and two offset shadows to separate it from the transcript.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- Keep the conversation canvas quiet and readable during long sessions.
-- Use evergreen to communicate action, active selection, progress, and success.
-- Preserve clear separation between project navigation and agent work.
-- Show keyboard focus and meaningful loading, empty, error, and disabled states.
+- Preserve the original neutral colors.
+- Use background blur only where a surface actually floats above content.
+- Keep white highlights thin and shadows soft with visible vertical offset.
+- Disable decorative motion when reduced motion is requested.
 
 ### Don't:
 
-- Do not turn every section into a floating card.
-- Do not use bright gradients, neon glows, or decorative glass effects.
-- Do not use monospaced text for ordinary labels.
-- Do not add another accent color for visual variety alone.
-- Do not hide workflow state behind hover-only interactions.
+- Do not introduce a dark sidebar or a new brand palette.
+- Do not apply distortion filters to conversation text or code.
+- Do not make every row transparent and glossy.
+- Do not use zero-offset glow as a substitute for depth.
+- Do not sacrifice contrast for translucency.
