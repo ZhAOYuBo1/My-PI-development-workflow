@@ -3,13 +3,28 @@ import { access } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ProjectSummary, RecentProject } from "@codepiddy/shared";
+import type {
+	AgentRole,
+	AgentUiState,
+	LaneKind,
+	ProjectSummary,
+	ProjectUiState,
+	RecentProject,
+} from "@codepiddy/shared";
 
 interface StoredRecentProjectRow {
 	id: string;
 	name: string;
 	root_path: string;
 	last_opened_at: string;
+}
+
+export interface StoredWindowState {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	maximized: boolean;
 }
 
 interface LegacyRecentProject {
@@ -60,6 +75,31 @@ export class RecentProjectStore {
 			CREATE TABLE IF NOT EXISTS app_state (
 				key TEXT PRIMARY KEY,
 				value TEXT
+			);
+			CREATE TABLE IF NOT EXISTS project_ui_state (
+				root_key TEXT PRIMARY KEY,
+				root_path TEXT NOT NULL,
+				selection_type TEXT NOT NULL,
+				lane TEXT,
+				work_item_id TEXT,
+				agent_role TEXT,
+				expanded_keys TEXT NOT NULL,
+				updated_at TEXT NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS agent_ui_state (
+				agent_instance_id TEXT PRIMARY KEY,
+				draft TEXT NOT NULL,
+				scroll_top REAL NOT NULL,
+				unread_count INTEGER NOT NULL,
+				updated_at TEXT NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS window_state (
+				window_key TEXT PRIMARY KEY,
+				x INTEGER NOT NULL,
+				y INTEGER NOT NULL,
+				width INTEGER NOT NULL,
+				height INTEGER NOT NULL,
+				maximized INTEGER NOT NULL
 			);
 		`);
 		this.migrateLegacyFiles();
@@ -287,6 +327,112 @@ export class RecentProjectStore {
 		this.database.prepare("DELETE FROM recent_projects WHERE root_key = ?").run(pathKey(projectRoot));
 		await this.clearActiveProject(projectRoot);
 		return this.list();
+	}
+
+	async getProjectUiState(projectRoot: string): Promise<ProjectUiState | null> {
+		const row = this.database
+			.prepare(
+				"SELECT root_path, selection_type, lane, work_item_id, agent_role, expanded_keys FROM project_ui_state WHERE root_key = ?",
+			)
+			.get(pathKey(projectRoot)) as
+			| {
+					root_path: string;
+					selection_type: ProjectUiState["selectionType"];
+					lane: LaneKind | null;
+					work_item_id: string | null;
+					agent_role: AgentRole | null;
+					expanded_keys: string;
+			  }
+			| undefined;
+		if (!row) return null;
+		let expandedKeys: string[] = [];
+		try {
+			const parsed = JSON.parse(row.expanded_keys) as unknown;
+			if (Array.isArray(parsed)) expandedKeys = parsed.filter((item): item is string => typeof item === "string");
+		} catch {}
+		return {
+			projectRoot: row.root_path,
+			selectionType: row.selection_type,
+			...(row.lane ? { lane: row.lane } : {}),
+			...(row.work_item_id ? { workItemId: row.work_item_id } : {}),
+			...(row.agent_role ? { role: row.agent_role } : {}),
+			expandedKeys,
+		};
+	}
+
+	async saveProjectUiState(state: ProjectUiState): Promise<void> {
+		this.database
+			.prepare(`
+				INSERT INTO project_ui_state(root_key, root_path, selection_type, lane, work_item_id, agent_role, expanded_keys, updated_at)
+				VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT(root_key) DO UPDATE SET
+					root_path = excluded.root_path,
+					selection_type = excluded.selection_type,
+					lane = excluded.lane,
+					work_item_id = excluded.work_item_id,
+					agent_role = excluded.agent_role,
+					expanded_keys = excluded.expanded_keys,
+					updated_at = excluded.updated_at
+			`)
+			.run(
+				pathKey(state.projectRoot),
+				path.resolve(state.projectRoot),
+				state.selectionType,
+				state.lane ?? null,
+				state.workItemId ?? null,
+				state.role ?? null,
+				JSON.stringify([...new Set(state.expandedKeys)]),
+				new Date().toISOString(),
+			);
+	}
+
+	async getAgentUiState(agentInstanceId: string): Promise<AgentUiState | null> {
+		const row = this.database
+			.prepare("SELECT draft, scroll_top, unread_count FROM agent_ui_state WHERE agent_instance_id = ?")
+			.get(agentInstanceId) as { draft: string; scroll_top: number; unread_count: number } | undefined;
+		return row
+			? { agentInstanceId, draft: row.draft, scrollTop: row.scroll_top, unreadCount: row.unread_count }
+			: null;
+	}
+
+	async saveAgentUiState(state: AgentUiState): Promise<void> {
+		this.database
+			.prepare(`
+				INSERT INTO agent_ui_state(agent_instance_id, draft, scroll_top, unread_count, updated_at)
+				VALUES(?, ?, ?, ?, ?)
+				ON CONFLICT(agent_instance_id) DO UPDATE SET
+					draft = excluded.draft,
+					scroll_top = excluded.scroll_top,
+					unread_count = excluded.unread_count,
+					updated_at = excluded.updated_at
+			`)
+			.run(state.agentInstanceId, state.draft, state.scrollTop, state.unreadCount, new Date().toISOString());
+	}
+
+	deleteAgentUiState(agentInstanceId: string): void {
+		this.database.prepare("DELETE FROM agent_ui_state WHERE agent_instance_id = ?").run(agentInstanceId);
+	}
+
+	getWindowState(windowKey = "main"): StoredWindowState | null {
+		const row = this.database
+			.prepare("SELECT x, y, width, height, maximized FROM window_state WHERE window_key = ?")
+			.get(windowKey) as (Omit<StoredWindowState, "maximized"> & { maximized: number }) | undefined;
+		return row ? { ...row, maximized: row.maximized === 1 } : null;
+	}
+
+	saveWindowState(state: StoredWindowState, windowKey = "main"): void {
+		this.database
+			.prepare(`
+				INSERT INTO window_state(window_key, x, y, width, height, maximized)
+				VALUES(?, ?, ?, ?, ?, ?)
+				ON CONFLICT(window_key) DO UPDATE SET
+					x = excluded.x,
+					y = excluded.y,
+					width = excluded.width,
+					height = excluded.height,
+					maximized = excluded.maximized
+			`)
+			.run(windowKey, state.x, state.y, state.width, state.height, state.maximized ? 1 : 0);
 	}
 
 	close(): void {

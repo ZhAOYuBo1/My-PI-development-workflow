@@ -2,6 +2,7 @@ import path from "node:path";
 import type {
 	AgentInstanceLocator,
 	AgentRole,
+	AgentUiState,
 	ApproveRequirementInput,
 	ArchiveWorkItemInput,
 	CreateAgentInput,
@@ -10,6 +11,7 @@ import type {
 	ForkAgentSessionInput,
 	InvokeAgentBuiltinCommandInput,
 	LaneKind,
+	ProjectUiState,
 	RenameWorkItemInput,
 	ResetAgentInput,
 	RoleModelDefault,
@@ -220,6 +222,45 @@ export function parseRoleModelDefault(value: unknown): RoleModelDefault {
 		modelId: text(input.modelId, "Model ID", 300),
 		modelName: text(input.modelName, "Model Name", 300),
 		thinkingLevel: text(input.thinkingLevel, "Thinking Level", 32),
+	};
+}
+
+export function parseProjectUiState(value: unknown): ProjectUiState {
+	const input = record(value, "Project UI State");
+	const selectionType = input.selectionType;
+	if (
+		selectionType !== "project" &&
+		selectionType !== "lane" &&
+		selectionType !== "work-item" &&
+		selectionType !== "agent" &&
+		selectionType !== "settings"
+	) {
+		throw new Error("Selection Type 无效");
+	}
+	if (!Array.isArray(input.expandedKeys)) throw new Error("Expanded Keys 必须是数组");
+	return {
+		projectRoot: projectRoot(input.projectRoot),
+		selectionType,
+		...(input.lane === undefined ? {} : { lane: lane(input.lane) }),
+		...(input.workItemId === undefined ? {} : { workItemId: workItemId(input.workItemId) }),
+		...(input.role === undefined ? {} : { role: role(input.role) }),
+		expandedKeys: [...new Set(input.expandedKeys.map((item) => text(item, "Expanded Key", 256)))].slice(0, 1000),
+	};
+}
+
+export function parseAgentUiState(value: unknown): AgentUiState {
+	const input = record(value, "Agent UI State");
+	if (typeof input.scrollTop !== "number" || !Number.isFinite(input.scrollTop) || input.scrollTop < 0) {
+		throw new Error("Scroll Top 无效");
+	}
+	if (typeof input.unreadCount !== "number" || !Number.isInteger(input.unreadCount) || input.unreadCount < 0) {
+		throw new Error("Unread Count 无效");
+	}
+	return {
+		agentInstanceId: agentInstanceId(input.agentInstanceId),
+		draft: text(input.draft, "草稿", 200_000, true),
+		scrollTop: input.scrollTop,
+		unreadCount: input.unreadCount,
 	};
 }
 

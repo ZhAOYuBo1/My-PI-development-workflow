@@ -40,11 +40,12 @@ import type {
 	SetAgentModelInput,
 	SetAgentThinkingInput,
 } from "@codepiddy/shared";
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
 import {
 	assertPathInside,
 	parseAgentLocator,
 	parseAgentRole,
+	parseAgentUiState,
 	parseApproveRequirementInput,
 	parseArchiveWorkItemInput,
 	parseBoundedText,
@@ -55,6 +56,7 @@ import {
 	parseInvokeAgentBuiltinCommandInput,
 	parseProjectId,
 	parseProjectRoot,
+	parseProjectUiState,
 	parseRenameWorkItemInput,
 	parseResetAgentInput,
 	parseRoleModelDefault,
@@ -98,6 +100,10 @@ const channels = {
 	openRecentProject: "codepiddy:project:recent:open",
 	forgetRecentProject: "codepiddy:project:recent:forget",
 	openWorkItemFolder: "codepiddy:work-item:open-folder",
+	getProjectUiState: "codepiddy:ui:project:get",
+	saveProjectUiState: "codepiddy:ui:project:save",
+	getAgentUiState: "codepiddy:ui:agent:get",
+	saveAgentUiState: "codepiddy:ui:agent:save",
 	refreshProject: "codepiddy:project:refresh",
 	restoreWorkItem: "codepiddy:work-item:restore",
 	respondToExtensionUi: "codepiddy:agent:extension-ui-response",
@@ -943,10 +949,32 @@ class AgentManager {
 	}
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(stateStore: RecentProjectStore): BrowserWindow {
+	const stored = stateStore.getWindowState();
+	const storedBounds = stored
+		? { x: stored.x, y: stored.y, width: Math.max(900, stored.width), height: Math.max(620, stored.height) }
+		: null;
+	const visibleBounds =
+		storedBounds &&
+		screen.getAllDisplays().some((display) => {
+			const intersectionWidth = Math.max(
+				0,
+				Math.min(storedBounds.x + storedBounds.width, display.workArea.x + display.workArea.width) -
+					Math.max(storedBounds.x, display.workArea.x),
+			);
+			const intersectionHeight = Math.max(
+				0,
+				Math.min(storedBounds.y + storedBounds.height, display.workArea.y + display.workArea.height) -
+					Math.max(storedBounds.y, display.workArea.y),
+			);
+			return intersectionWidth >= 160 && intersectionHeight >= 120;
+		})
+			? storedBounds
+			: null;
 	const window = new BrowserWindow({
-		width: 1320,
-		height: 860,
+		width: visibleBounds?.width ?? 1320,
+		height: visibleBounds?.height ?? 860,
+		...(visibleBounds ? { x: visibleBounds.x, y: visibleBounds.y } : {}),
 		minWidth: 900,
 		minHeight: 620,
 		backgroundColor: "#f7f7f6",
@@ -971,6 +999,22 @@ function createWindow(): BrowserWindow {
 	});
 	if (rendererUrl) void window.loadURL(rendererUrl);
 	else void window.loadFile(path.join(app.getAppPath(), "dist", "renderer", "index.html"));
+	if (stored?.maximized) window.once("ready-to-show", () => window.maximize());
+	let saveTimer: NodeJS.Timeout | null = null;
+	const scheduleWindowStateSave = (): void => {
+		if (saveTimer) clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => {
+			const bounds = window.getNormalBounds();
+			stateStore.saveWindowState({ ...bounds, maximized: window.isMaximized() });
+		}, 250);
+	};
+	window.on("resize", scheduleWindowStateSave);
+	window.on("move", scheduleWindowStateSave);
+	window.on("maximize", scheduleWindowStateSave);
+	window.on("unmaximize", scheduleWindowStateSave);
+	window.on("closed", () => {
+		if (saveTimer) clearTimeout(saveTimer);
+	});
 	return window;
 }
 
@@ -1062,7 +1106,13 @@ function registerIpcHandlers(
 	});
 	ipcMain.handle(channels.deleteWorkItem, async (_event, raw: unknown) => {
 		const input = validateWorkItemInput(raw);
-		const project = await openProject(input.projectRoot);
+		const project = await agentManager.decorate(await openProject(input.projectRoot));
+		const item = project.lanes
+			.find((lane) => lane.kind === input.lane)
+			?.workItems.find((candidate) => candidate.id === input.workItemId);
+		for (const slot of item?.agentSlots ?? []) {
+			if (slot.currentInstanceId) recentProjects.deleteAgentUiState(slot.currentInstanceId);
+		}
 		await agentManager.removeWorkItem(project.id, input.workItemId);
 		return agentManager.decorate(await deleteWorkItem(input));
 	});
@@ -1111,7 +1161,9 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.resetAgent, async (_event, raw: unknown) => {
 		const input = parseResetAgentInput(raw);
 		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
-		return agentManager.reset(input);
+		const project = await agentManager.reset(input);
+		recentProjects.deleteAgentUiState(input.agentInstanceId);
+		return project;
 	});
 	ipcMain.handle(channels.respondToExtensionUi, (_event, raw: unknown) =>
 		agentManager.respondToExtensionUi(parseExtensionUiResponseInput(raw)),
@@ -1170,6 +1222,20 @@ function registerIpcHandlers(
 		const error = await shell.openPath(realWorkItemPath);
 		if (error) throw new Error(error);
 	});
+	ipcMain.handle(channels.getProjectUiState, (_event, rawProjectRoot: unknown) =>
+		recentProjects.getProjectUiState(requireOpenProjectRoot(rawProjectRoot)),
+	);
+	ipcMain.handle(channels.saveProjectUiState, (_event, raw: unknown) => {
+		const state = parseProjectUiState(raw);
+		state.projectRoot = requireOpenProjectRoot(state.projectRoot);
+		return recentProjects.saveProjectUiState(state);
+	});
+	ipcMain.handle(channels.getAgentUiState, (_event, rawAgentId: unknown) =>
+		recentProjects.getAgentUiState(parseBoundedText(rawAgentId, "Agent Instance ID", 128)),
+	);
+	ipcMain.handle(channels.saveAgentUiState, (_event, raw: unknown) =>
+		recentProjects.saveAgentUiState(parseAgentUiState(raw)),
+	);
 }
 
 const userDataOverride = process.env.CODEPIDDY_USER_DATA?.trim();
@@ -1198,7 +1264,7 @@ if (!hasSingleInstanceLock) {
 		const recentProjects = new RecentProjectStore(app.getPath("userData"));
 		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore);
 		registerIpcHandlers(agentManager, settingsStore, recentProjects);
-		mainWindow = createWindow();
+		mainWindow = createWindow(recentProjects);
 		mainWindow.on("closed", () => {
 			mainWindow = null;
 		});
@@ -1214,7 +1280,7 @@ if (!hasSingleInstanceLock) {
 		});
 		app.on("activate", () => {
 			if (BrowserWindow.getAllWindows().length === 0) {
-				mainWindow = createWindow();
+				mainWindow = createWindow(recentProjects);
 				mainWindow.on("closed", () => {
 					mainWindow = null;
 				});

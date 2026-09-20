@@ -68,6 +68,24 @@ export interface RenameWorkItemInput extends ArchiveWorkItemInput {
 	title: string;
 }
 
+export type PersistedSelectionType = "project" | "lane" | "work-item" | "agent" | "settings";
+
+export interface ProjectUiState {
+	projectRoot: string;
+	selectionType: PersistedSelectionType;
+	lane?: LaneKind;
+	workItemId?: string;
+	role?: AgentRole;
+	expandedKeys: string[];
+}
+
+export interface AgentUiState {
+	agentInstanceId: string;
+	draft: string;
+	scrollTop: number;
+	unreadCount: number;
+}
+
 export interface ProjectClientApi {
 	openProject(): Promise<ProjectSummary | null>;
 	getStartupProject(): Promise<ProjectSummary | null>;
@@ -80,6 +98,10 @@ export interface ProjectClientApi {
 	renameWorkItem(input: RenameWorkItemInput): Promise<ProjectSummary>;
 	deleteWorkItem(input: ArchiveWorkItemInput): Promise<ProjectSummary>;
 	openWorkItemFolder(input: ArchiveWorkItemInput): Promise<void>;
+	getProjectUiState(projectRoot: string): Promise<ProjectUiState | null>;
+	saveProjectUiState(state: ProjectUiState): Promise<void>;
+	getAgentUiState(agentInstanceId: string): Promise<AgentUiState | null>;
+	saveAgentUiState(state: AgentUiState): Promise<void>;
 }
 
 export interface AgentInstanceSummary {

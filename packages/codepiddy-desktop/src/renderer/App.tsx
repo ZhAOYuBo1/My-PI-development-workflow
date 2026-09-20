@@ -11,6 +11,7 @@ import type {
 	LaneKind,
 	PendingPermissionRequest,
 	ProjectSummary,
+	ProjectUiState,
 	ProjectWriteLeaseStatus,
 	RecentProject,
 	RoleModelDefaults,
@@ -31,6 +32,29 @@ type Selection =
 	| { type: "lane"; lane: LaneKind }
 	| { type: "work-item"; lane: LaneKind; workItemId: string }
 	| { type: "agent"; lane: LaneKind; workItemId: string; role: AgentSlotSummary["role"] };
+
+function restoreSelection(project: ProjectSummary, state: ProjectUiState): Selection {
+	if (state.selectionType === "settings") return { type: "settings" };
+	if (state.selectionType === "lane" && state.lane && project.lanes.some((lane) => lane.kind === state.lane)) {
+		return { type: "lane", lane: state.lane };
+	}
+	if ((state.selectionType === "work-item" || state.selectionType === "agent") && state.lane && state.workItemId) {
+		const item = project.lanes
+			.find((lane) => lane.kind === state.lane)
+			?.workItems.find((candidate) => candidate.id === state.workItemId);
+		if (item) {
+			if (
+				state.selectionType === "agent" &&
+				state.role &&
+				item.agentSlots.some((slot) => slot.role === state.role)
+			) {
+				return { type: "agent", lane: state.lane, workItemId: state.workItemId, role: state.role };
+			}
+			return { type: "work-item", lane: state.lane, workItemId: state.workItemId };
+		}
+	}
+	return { type: "project" };
+}
 
 interface WorkItemDialogState {
 	lane: LaneKind;
@@ -919,6 +943,11 @@ export function App() {
 	const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
 	const modelPickerSelectedIndexRef = useRef(0);
 	const scrollPositions = useRef<Record<string, number>>(readStoredScrollPositions());
+	const restoredProjectUiRoots = useRef(new Set<string>());
+	const restoringProjectUiRoots = useRef(new Set<string>());
+	const restoredAgentUiIds = useRef(new Set<string>());
+	const restoringAgentUiIds = useRef(new Set<string>());
+	const agentUiSaveTimers = useRef(new Map<string, number>());
 	const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
 	const loadAgentCommands = useCallback(async (locator: AgentInstanceLocator): Promise<AgentCommandOption[]> => {
@@ -943,6 +972,47 @@ export function App() {
 		projectRef.current = project;
 	}, [project]);
 
+	useEffect(() => {
+		if (
+			demoMode ||
+			!project ||
+			!("codepiddy" in window) ||
+			restoredProjectUiRoots.current.has(project.rootPath) ||
+			restoringProjectUiRoots.current.has(project.rootPath)
+		)
+			return;
+		restoringProjectUiRoots.current.add(project.rootPath);
+		void window.codepiddy
+			.getProjectUiState(project.rootPath)
+			.then((state) => {
+				if (!state) return;
+				setExpanded(new Set(state.expandedKeys));
+				setSelection(restoreSelection(project, state));
+			})
+			.catch(() => undefined)
+			.finally(() => {
+				restoringProjectUiRoots.current.delete(project.rootPath);
+				restoredProjectUiRoots.current.add(project.rootPath);
+			});
+	}, [project]);
+
+	useEffect(() => {
+		if (demoMode || !project || !("codepiddy" in window) || !restoredProjectUiRoots.current.has(project.rootPath))
+			return;
+		const timer = window.setTimeout(() => {
+			const state: ProjectUiState = {
+				projectRoot: project.rootPath,
+				selectionType: selection.type === "welcome" ? "project" : selection.type,
+				expandedKeys: [...expanded],
+				...("lane" in selection ? { lane: selection.lane } : {}),
+				...("workItemId" in selection ? { workItemId: selection.workItemId } : {}),
+				...(selection.type === "agent" ? { role: selection.role } : {}),
+			};
+			void window.codepiddy.saveProjectUiState(state);
+		}, 200);
+		return () => window.clearTimeout(timer);
+	}, [expanded, project, selection]);
+
 	const selectedWorkItem = useMemo(() => {
 		if (
 			!project ||
@@ -963,6 +1033,48 @@ export function App() {
 		if (!selectedWorkItem || selection.type !== "agent") return null;
 		return selectedWorkItem.agentSlots.find((slot) => slot.role === selection.role)?.currentInstanceId ?? null;
 	}, [selectedWorkItem, selection]);
+
+	useEffect(() => {
+		if (
+			demoMode ||
+			!activeAgentId ||
+			!("codepiddy" in window) ||
+			restoredAgentUiIds.current.has(activeAgentId) ||
+			restoringAgentUiIds.current.has(activeAgentId)
+		)
+			return;
+		restoringAgentUiIds.current.add(activeAgentId);
+		void window.codepiddy
+			.getAgentUiState(activeAgentId)
+			.then((state) => {
+				if (!state) return;
+				setDrafts((current) => ({ ...current, [activeAgentId]: state.draft }));
+				scrollPositions.current[activeAgentId] = state.scrollTop;
+			})
+			.catch(() => undefined)
+			.finally(() => {
+				restoringAgentUiIds.current.delete(activeAgentId);
+				restoredAgentUiIds.current.add(activeAgentId);
+			});
+	}, [activeAgentId]);
+
+	useEffect(() => {
+		if (demoMode || !activeAgentId || !("codepiddy" in window) || !restoredAgentUiIds.current.has(activeAgentId))
+			return;
+		const existing = agentUiSaveTimers.current.get(activeAgentId);
+		if (existing) window.clearTimeout(existing);
+		const timer = window.setTimeout(() => {
+			void window.codepiddy.saveAgentUiState({
+				agentInstanceId: activeAgentId,
+				draft: drafts[activeAgentId] ?? "",
+				scrollTop: scrollPositions.current[activeAgentId] ?? 0,
+				unreadCount: 0,
+			});
+			agentUiSaveTimers.current.delete(activeAgentId);
+		}, 250);
+		agentUiSaveTimers.current.set(activeAgentId, timer);
+		return () => window.clearTimeout(timer);
+	}, [activeAgentId, drafts]);
 
 	const activeDraftStartsWithSlash = Boolean(
 		activeAgentId && (drafts[activeAgentId] ?? "").trimStart().startsWith("/"),
@@ -1628,6 +1740,18 @@ export function App() {
 		if (!element || !activeAgentId) return;
 		scrollPositions.current[activeAgentId] = element.scrollTop;
 		localStorage.setItem("codepiddy:agent-scroll-positions", JSON.stringify(scrollPositions.current));
+		const existing = agentUiSaveTimers.current.get(activeAgentId);
+		if (existing) window.clearTimeout(existing);
+		const timer = window.setTimeout(() => {
+			void window.codepiddy.saveAgentUiState({
+				agentInstanceId: activeAgentId,
+				draft: drafts[activeAgentId] ?? "",
+				scrollTop: scrollPositions.current[activeAgentId] ?? 0,
+				unreadCount: 0,
+			});
+			agentUiSaveTimers.current.delete(activeAgentId);
+		}, 200);
+		agentUiSaveTimers.current.set(activeAgentId, timer);
 		setShowJumpToLatest(element.scrollHeight - element.scrollTop - element.clientHeight > 160);
 	}
 

@@ -63,6 +63,24 @@ describe("recent project SQLite store", () => {
 		try {
 			expect((await store.list())[0]?.name).toBe("A renamed");
 			expect(await store.getActiveProjectRoot()).toBe(projectA);
+			await store.saveProjectUiState({
+				projectRoot: projectA,
+				selectionType: "agent",
+				lane: "requirements",
+				workItemId: "FEAT-001",
+				role: "coding",
+				expandedKeys: ["lane:requirements", "work-item:FEAT-001"],
+			});
+			await store.saveAgentUiState({
+				agentInstanceId: "agent-1",
+				draft: "unfinished",
+				scrollTop: 420,
+				unreadCount: 2,
+			});
+			store.saveWindowState({ x: 100, y: 120, width: 1280, height: 800, maximized: true });
+			expect((await store.getProjectUiState(projectA))?.workItemId).toBe("FEAT-001");
+			expect(await store.getAgentUiState("agent-1")).toMatchObject({ draft: "unfinished", scrollTop: 420 });
+			expect(store.getWindowState()).toEqual({ x: 100, y: 120, width: 1280, height: 800, maximized: true });
 		} finally {
 			store.close();
 		}
