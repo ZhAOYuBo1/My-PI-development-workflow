@@ -899,6 +899,7 @@ export function App() {
 			: {},
 	);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
+	const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 	const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>({});
 	const [pendingPermissionRequests, setPendingPermissionRequests] = useState<Record<string, PendingPermissionRequest>>(
 		{},
@@ -1049,6 +1050,7 @@ export function App() {
 			.then((state) => {
 				if (!state) return;
 				setDrafts((current) => ({ ...current, [activeAgentId]: state.draft }));
+				setUnreadCounts((current) => ({ ...current, [activeAgentId]: state.unreadCount }));
 				scrollPositions.current[activeAgentId] = state.scrollTop;
 			})
 			.catch(() => undefined)
@@ -1068,13 +1070,20 @@ export function App() {
 				agentInstanceId: activeAgentId,
 				draft: drafts[activeAgentId] ?? "",
 				scrollTop: scrollPositions.current[activeAgentId] ?? 0,
-				unreadCount: 0,
+				unreadCount: unreadCounts[activeAgentId] ?? 0,
 			});
 			agentUiSaveTimers.current.delete(activeAgentId);
 		}, 250);
 		agentUiSaveTimers.current.set(activeAgentId, timer);
 		return () => window.clearTimeout(timer);
-	}, [activeAgentId, drafts]);
+	}, [activeAgentId, drafts, unreadCounts]);
+
+	useEffect(() => {
+		if (!activeAgentId || showJumpToLatest) return;
+		setUnreadCounts((current) =>
+			(current[activeAgentId] ?? 0) === 0 ? current : { ...current, [activeAgentId]: 0 },
+		);
+	}, [activeAgentId, showJumpToLatest]);
 
 	const activeDraftStartsWithSlash = Boolean(
 		activeAgentId && (drafts[activeAgentId] ?? "").trimStart().startsWith("/"),
@@ -1146,6 +1155,14 @@ export function App() {
 		}
 	}, []);
 
+	const markAgentUnread = useCallback(
+		(agentId: string): void => {
+			if (agentId === activeAgentId && !showJumpToLatest) return;
+			setUnreadCounts((current) => ({ ...current, [agentId]: (current[agentId] ?? 0) + 1 }));
+		},
+		[activeAgentId, showJumpToLatest],
+	);
+
 	const handleAgentEvent = useCallback(
 		(clientEvent: AgentClientEvent): void => {
 			const { agentInstanceId, event } = clientEvent;
@@ -1192,6 +1209,7 @@ export function App() {
 					setPendingPermissionRequests((current) => ({ ...current, [agentInstanceId]: request }));
 					setDeferredPermissionAgentId((current) => (current === agentInstanceId ? null : current));
 					if (activeAgentId === agentInstanceId) setExtensionDialog(extensionDialogFromPermission(request));
+					markAgentUnread(agentInstanceId);
 					updateAgentStatus(clientEvent, "waiting");
 					updateAgentActivity(agentInstanceId, { label: "等待权限确认", kind: "waiting", queued: 0 });
 				}
@@ -1362,6 +1380,7 @@ export function App() {
 				const message = event.message;
 				if (isRecord(message) && message.role === "assistant") {
 					finishActiveAssistant(message);
+					if (extractMessageText(message.content)) markAgentUnread(agentInstanceId);
 					const status = assistantMessageStatus(message);
 					updateAgentActivity(
 						agentInstanceId,
@@ -1416,6 +1435,7 @@ export function App() {
 						reason: extractMessageText(event.result) || "工具执行失败",
 					});
 				}
+				markAgentUnread(agentInstanceId);
 				updateAgentActivity(
 					agentInstanceId,
 					event.isError === true
@@ -1508,6 +1528,7 @@ export function App() {
 				return;
 			}
 			if (type === "process_recovered") {
+				markAgentUnread(agentInstanceId);
 				updateAgentActivity(agentInstanceId, null);
 				updateAgentStatus(clientEvent, "idle");
 				updateTranscript(agentInstanceId, (items) => [
@@ -1568,6 +1589,7 @@ export function App() {
 			updateAgentActivity,
 			updateAgentStatus,
 			updateTranscript,
+			markAgentUnread,
 		],
 	);
 
@@ -1747,12 +1769,18 @@ export function App() {
 				agentInstanceId: activeAgentId,
 				draft: drafts[activeAgentId] ?? "",
 				scrollTop: scrollPositions.current[activeAgentId] ?? 0,
-				unreadCount: 0,
+				unreadCount: unreadCounts[activeAgentId] ?? 0,
 			});
 			agentUiSaveTimers.current.delete(activeAgentId);
 		}, 200);
 		agentUiSaveTimers.current.set(activeAgentId, timer);
-		setShowJumpToLatest(element.scrollHeight - element.scrollTop - element.clientHeight > 160);
+		const awayFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight > 160;
+		setShowJumpToLatest(awayFromBottom);
+		if (!awayFromBottom) {
+			setUnreadCounts((current) =>
+				(current[activeAgentId] ?? 0) === 0 ? current : { ...current, [activeAgentId]: 0 },
+			);
+		}
 	}
 
 	function jumpToLatest(): void {
@@ -1760,6 +1788,7 @@ export function App() {
 		if (!element) return;
 		element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
 		setShowJumpToLatest(false);
+		if (activeAgentId) setUnreadCounts((current) => ({ ...current, [activeAgentId]: 0 }));
 	}
 
 	async function openProject(): Promise<void> {
@@ -2018,6 +2047,11 @@ export function App() {
 								<span className={`agent-create status-${slot.blockedReason ? "waiting" : slot.status}`}>
 									{slot.blockedReason ? "等待" : statusLabels[slot.status]}
 								</span>
+								{slot.currentInstanceId && (unreadCounts[slot.currentInstanceId] ?? 0) > 0 ? (
+									<span className="agent-unread">
+										{Math.min(99, unreadCounts[slot.currentInstanceId] ?? 0)}
+									</span>
+								) : null}
 							</button>
 						))}
 					</div>
@@ -3078,7 +3112,9 @@ export function App() {
 							</div>
 							{showJumpToLatest ? (
 								<button className="jump-to-latest" type="button" onClick={jumpToLatest}>
-									跳到最新消息
+									{activeAgentId && (unreadCounts[activeAgentId] ?? 0) > 0
+										? `${unreadCounts[activeAgentId]} 条新消息`
+										: "跳到最新消息"}
 									<AppIcon name="arrow-up" size={14} className="jump-arrow" />
 								</button>
 							) : null}

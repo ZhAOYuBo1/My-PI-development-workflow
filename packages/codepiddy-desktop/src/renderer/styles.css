@@ -1330,3 +1330,15 @@ button { color: inherit; }
   cursor: pointer;
 }
 .permission-defer:hover { background: #efefeb; color: #3f3f3c; }
+.agent-unread {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #4f6b56;
+  color: #fff;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
