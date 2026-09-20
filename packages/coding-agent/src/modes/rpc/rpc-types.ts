@@ -69,6 +69,11 @@ export type RpcCommand =
 	| { id?: string; type: "set_session_name"; name: string }
 	| { id?: string; type: "reload" }
 
+	// Authentication
+	| { id?: string; type: "get_auth_providers" }
+	| { id?: string; type: "login_provider"; providerId: string; authType: "oauth" }
+	| { id?: string; type: "logout_provider"; providerId: string }
+
 	// Messages
 	| { id?: string; type: "get_messages" }
 
@@ -227,6 +232,26 @@ export type RpcResponse =
 	  }
 	| { id?: string; type: "response"; command: "set_session_name"; success: true }
 	| { id?: string; type: "response"; command: "reload"; success: true }
+
+	// Authentication
+	| {
+			id?: string;
+			type: "response";
+			command: "get_auth_providers";
+			success: true;
+			data: {
+				providers: Array<{
+					id: string;
+					name: string;
+					oauth: boolean;
+					apiKey: boolean;
+					configured: boolean;
+					source?: string;
+				}>;
+			};
+	  }
+	| { id?: string; type: "response"; command: "login_provider"; success: true }
+	| { id?: string; type: "response"; command: "logout_provider"; success: true }
 
 	// Messages
 	| { id?: string; type: "response"; command: "get_messages"; success: true; data: { messages: AgentMessage[] } }

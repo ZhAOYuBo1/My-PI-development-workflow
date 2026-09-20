@@ -206,6 +206,41 @@ export class PiRpcProcess {
 		});
 	}
 
+	async getAuthProviders(): Promise<
+		Array<{ id: string; name: string; oauth: boolean; apiKey: boolean; configured: boolean; source?: string }>
+	> {
+		const response = await this.send({ type: "get_auth_providers" });
+		const data = response.data as Record<string, unknown> | undefined;
+		return Array.isArray(data?.providers)
+			? data.providers.filter(
+					(
+						provider,
+					): provider is {
+						id: string;
+						name: string;
+						oauth: boolean;
+						apiKey: boolean;
+						configured: boolean;
+						source?: string;
+					} =>
+						typeof provider === "object" &&
+						provider !== null &&
+						"id" in provider &&
+						typeof provider.id === "string" &&
+						"name" in provider &&
+						typeof provider.name === "string",
+				)
+			: [];
+	}
+
+	async loginProvider(providerId: string): Promise<void> {
+		await this.send({ type: "login_provider", providerId, authType: "oauth" }, 10 * 60_000);
+	}
+
+	async logoutProvider(providerId: string): Promise<void> {
+		await this.send({ type: "logout_provider", providerId });
+	}
+
 	async getAvailableModels(): Promise<unknown[]> {
 		const response = await this.send({ type: "get_available_models" });
 		const data = response.data as Record<string, unknown> | undefined;

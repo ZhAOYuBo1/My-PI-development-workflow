@@ -680,6 +680,60 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			}
 
 			// =================================================================
+			// Authentication
+			// =================================================================
+
+			case "get_auth_providers": {
+				const providers = session.modelRuntime.getProviders().map((provider) => {
+					const status = session.modelRuntime.getProviderAuthStatus(provider.id);
+					return {
+						id: provider.id,
+						name: provider.name,
+						oauth: Boolean(provider.auth.oauth),
+						apiKey: Boolean(provider.auth.apiKey),
+						configured: status.configured,
+						...(status.label || status.source ? { source: status.label ?? status.source } : {}),
+					};
+				});
+				return success(id, "get_auth_providers", { providers });
+			}
+
+			case "login_provider": {
+				const provider = session.modelRuntime
+					.getProviders()
+					.find((candidate) => candidate.id === command.providerId);
+				if (!provider?.auth.oauth)
+					return error(id, "login_provider", `OAuth login is unavailable for ${command.providerId}`);
+				const ui = createExtensionUIContext();
+				await session.modelRuntime.login(command.providerId, "oauth", {
+					prompt: async (prompt) => {
+						if (prompt.type === "select") {
+							const labels = prompt.options.map((option) => option.label);
+							const selected = await ui.select(prompt.message, labels, { signal: prompt.signal });
+							const option = prompt.options.find((candidate) => candidate.label === selected);
+							if (!option) throw new Error("Login cancelled");
+							return option.id;
+						}
+						const value = await ui.input(prompt.message, prompt.placeholder, { signal: prompt.signal });
+						if (value === undefined) throw new Error("Login cancelled");
+						return value;
+					},
+					notify: (event) => {
+						if (event.type === "auth_url")
+							ui.notify(`${event.instructions ?? "Open this URL to authenticate:"}\n${event.url}`, "info");
+						else if (event.type === "device_code")
+							ui.notify(`Open ${event.verificationUri} and enter code: ${event.userCode}`, "info");
+						else ui.notify(event.message, "info");
+					},
+				});
+				return success(id, "login_provider");
+			}
+
+			case "logout_provider": {
+				await session.modelRuntime.logout(command.providerId);
+				return success(id, "logout_provider");
+			}
+
 			// Messages
 			// =================================================================
 
@@ -709,6 +763,8 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 					"compact",
 					"resume",
 					"trust",
+					"login",
+					"logout",
 					"quit",
 					"reload",
 				]);

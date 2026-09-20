@@ -692,6 +692,44 @@ class AgentManager {
 			shell.showItemInFolder(exportedPath);
 			return { message: `Session 已导出：${exportedPath}` };
 		}
+		if (input.name === "login") {
+			const providers = await process.getAuthProviders();
+			if (!args) {
+				const lines = providers.map(
+					(provider) =>
+						`${provider.id} · ${provider.name} · ${provider.configured ? `已配置${provider.source ? ` (${provider.source})` : ""}` : provider.oauth ? "可 OAuth 登录" : "请配置 API Key"}`,
+				);
+				return { message: `可用 Provider：\n${lines.join("\n")}\n\n用法：/login <provider-id>` };
+			}
+			const provider = providers.find(
+				(candidate) => candidate.id === args || candidate.name.toLowerCase() === args.toLowerCase(),
+			);
+			if (!provider) throw new Error(`Provider 不存在：${args}`);
+			if (!provider.oauth)
+				throw new Error(
+					`${provider.name} 不支持 OAuth 登录；请在 ~/.pi/agent/auth.json 或环境变量中配置 API Key。`,
+				);
+			await process.loginProvider(provider.id);
+			return { message: `${provider.name} 登录成功。`, commandsChanged: true };
+		}
+		if (input.name === "logout") {
+			const providers = await process.getAuthProviders();
+			if (!args) {
+				const configured = providers.filter((provider) => provider.configured);
+				return {
+					message:
+						configured.length > 0
+							? `已配置 Provider：\n${configured.map((provider) => `${provider.id} · ${provider.name}`).join("\n")}\n\n用法：/logout <provider-id>`
+							: "当前没有已配置的 Provider。",
+				};
+			}
+			const provider = providers.find(
+				(candidate) => candidate.id === args || candidate.name.toLowerCase() === args.toLowerCase(),
+			);
+			if (!provider) throw new Error(`Provider 不存在：${args}`);
+			await process.logoutProvider(provider.id);
+			return { message: `${provider.name} 已登出。`, commandsChanged: true };
+		}
 		if (input.name === "trust") {
 			return { message: "CodePIddy 以 --approve 模式启动当前 Pi 项目；项目资源已在本次运行中允许加载。" };
 		}

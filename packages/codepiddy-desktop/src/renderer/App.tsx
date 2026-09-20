@@ -1222,6 +1222,18 @@ export function App() {
 			};
 			if (type === "extension_ui_request") {
 				const method = event.method;
+				if (method === "notify" && typeof event.message === "string") {
+					updateTranscript(agentInstanceId, (items) => [
+						...items,
+						{
+							id: crypto.randomUUID(),
+							type: "system",
+							text: event.message as string,
+							createdAt: new Date().toISOString(),
+						},
+					]);
+					return;
+				}
 				if (
 					typeof event.id === "string" &&
 					(method === "select" || method === "confirm" || method === "input" || method === "editor")
