@@ -68,6 +68,7 @@ function roleDirectoryName(role: AgentRole): string {
 
 export class AgentRegistry {
 	private readonly runtimeRoot: string;
+	private writeChain: Promise<void> = Promise.resolve();
 
 	constructor(runtimeRoot: string) {
 		this.runtimeRoot = runtimeRoot;
@@ -89,7 +90,24 @@ export class AgentRegistry {
 		return path.join(this.agentDirectory(projectId, workItemId, role), "agent.json");
 	}
 
+	private writeAgent(agent: StoredAgentInstance): Promise<void> {
+		const operation = this.writeChain.then(async () => {
+			const filePath = this.metadataPath(agent.projectId, agent.workItemId, agent.role);
+			const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+			try {
+				await writeFile(temporaryPath, `${JSON.stringify(agent, null, 2)}\n`, "utf8");
+				await rm(filePath, { force: true });
+				await rename(temporaryPath, filePath);
+			} finally {
+				await rm(temporaryPath, { force: true });
+			}
+		});
+		this.writeChain = operation.catch(() => undefined);
+		return operation;
+	}
+
 	async get(projectId: string, workItemId: string, role: AgentRole): Promise<StoredAgentInstance | null> {
+		await this.writeChain;
 		try {
 			return parseAgent(
 				JSON.parse(await readFile(this.metadataPath(projectId, workItemId, role), "utf8")) as unknown,
@@ -118,11 +136,7 @@ export class AgentRegistry {
 			sessionDirectory,
 			createdAt: new Date().toISOString(),
 		};
-		await writeFile(
-			this.metadataPath(input.projectId, input.workItemId, input.role),
-			`${JSON.stringify(agent, null, 2)}\n`,
-			"utf8",
-		);
+		await this.writeAgent(agent);
 		return agent;
 	}
 
@@ -153,11 +167,7 @@ export class AgentRegistry {
 
 	async setStatus(agent: StoredAgentInstance, status: StoredAgentInstance["status"]): Promise<StoredAgentInstance> {
 		const next = { ...agent, status };
-		await writeFile(
-			this.metadataPath(agent.projectId, agent.workItemId, agent.role),
-			`${JSON.stringify(next, null, 2)}\n`,
-			"utf8",
-		);
+		await this.writeAgent(next);
 		return next;
 	}
 

@@ -232,6 +232,10 @@ describe("project service", () => {
 		const first = await registry.create(createInput);
 		const second = await registry.create(createInput);
 		expect(second.id).toBe(first.id);
+		await Promise.all(
+			Array.from({ length: 20 }, (_, index) => registry.setStatus(first, index % 2 === 0 ? "running" : "idle")),
+		);
+		expect((await registry.get(project.id, workItem.id, "coding"))?.id).toBe(first.id);
 		project = await registry.decorateProject(project);
 		expect(project.lanes[0]?.workItems[0]?.agentSlots.find((slot) => slot.role === "coding")?.currentInstanceId).toBe(
 			first.id,
