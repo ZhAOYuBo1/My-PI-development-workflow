@@ -5,6 +5,7 @@ import {
 	parseAgentLocator,
 	parseCreateWorkItemInput,
 	parseExtensionUiResponseInput,
+	parsePermissionDefaults,
 	parseRoleSkillAssignmentsInput,
 	parseSendAgentPromptInput,
 	parseSetAgentScopedModelsInput,
@@ -88,5 +89,10 @@ describe("IPC runtime validation", () => {
 		expect(() => parseSetAgentScopedModelsInput({ ...input, models: [...input.models, ...input.models] })).toThrow(
 			/重复/,
 		);
+	});
+
+	test("validates configurable read and write permission defaults", () => {
+		expect(parsePermissionDefaults({ read: "allow", write: "ask" })).toEqual({ read: "allow", write: "ask" });
+		expect(() => parsePermissionDefaults({ read: "always", write: "allow" })).toThrow(/读取权限状态无效/);
 	});
 });

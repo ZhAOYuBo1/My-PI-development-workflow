@@ -228,6 +228,8 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void>;
 	getPendingPermissionRequest(input: AgentInstanceLocator): Promise<PendingPermissionRequest | null>;
 	getSettingsStatus(): Promise<SettingsStatus>;
+	getPermissionDefaults(): Promise<PermissionDefaults>;
+	setPermissionDefaults(input: PermissionDefaults): Promise<PermissionDefaults>;
 	saveTavilyApiKey(apiKey: string): Promise<SettingsStatus>;
 	clearTavilyApiKey(): Promise<SettingsStatus>;
 	listAgentSkills(projectRoot?: string): Promise<AgentSkillSummary[]>;
@@ -273,6 +275,14 @@ export interface ExtensionUiResponseInput extends AgentInstanceLocator {
 export interface SettingsStatus {
 	tavilyApiKeyConfigured: boolean;
 	encryptionAvailable: boolean;
+}
+
+export const PERMISSION_STATES = ["allow", "ask", "deny"] as const;
+export type PermissionState = (typeof PERMISSION_STATES)[number];
+
+export interface PermissionDefaults {
+	read: PermissionState;
+	write: PermissionState;
 }
 
 export type AgentSkillSource = "builtin" | "codex" | "agents" | "pi" | "project";

@@ -1768,6 +1768,43 @@ textarea:focus-visible,
 .role-skill-heading { border-color: rgb(105 114 106 / 12%); background: rgb(247 248 245 / 52%); }
 .role-skill-option:hover { background: rgb(255 255 255 / 56%); }
 .role-skill-option.selected { border-color: rgb(190 207 193 / 72%); background: rgb(235 243 236 / 68%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%); }
+.permission-settings-card { gap: 16px; }
+.permission-setting-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: 11px;
+  background: rgb(255 255 255 / 42%);
+  box-shadow: var(--cp-glass-highlight);
+}
+.permission-setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  align-items: center;
+  gap: 18px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgb(105 114 106 / 12%);
+}
+.permission-setting-row:last-child { border-bottom: 0; }
+.permission-setting-row > span { display: grid; min-width: 0; gap: 3px; }
+.permission-setting-row strong { color: #343834; font-size: 12px; }
+.permission-setting-row small { color: #828680; font-size: 10px; }
+.permission-setting-row select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 30px 0 10px;
+  border: 1px solid rgb(255 255 255 / 84%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 64%);
+  color: #464a45;
+  outline: 0;
+  box-shadow: var(--cp-glass-highlight), 0 5px 14px rgb(39 46 40 / 5%);
+}
+.permission-setting-row select:focus { border-color: #9cac9e; box-shadow: 0 0 0 3px rgb(83 111 90 / 9%), var(--cp-glass-highlight); }
+.permission-settings-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.permission-settings-footer small { max-width: 68ch; line-height: 1.5; }
+.permission-settings-footer .primary-button { flex: 0 0 auto; }
 
 .modal-backdrop { background: rgb(35 38 35 / 25%); backdrop-filter: blur(9px) saturate(.9); }
 .modal,
@@ -1805,6 +1842,11 @@ textarea:focus-visible,
   .sidebar { border-width: 0 1px 0 0; border-radius: 0; }
   .main-pane { border-width: 0; border-radius: 0; }
   .sidebar-footer { bottom: 0; left: 0; border-radius: 0; }
+}
+
+@media (max-width: 720px) {
+  .permission-setting-row { grid-template-columns: 1fr; gap: 8px; }
+  .permission-settings-footer { align-items: stretch; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

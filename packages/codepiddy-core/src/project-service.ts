@@ -178,7 +178,7 @@ async function ensureDefaultPermissions(dataPath: string): Promise<void> {
 	const filePath = path.join(dataPath, PERMISSIONS_FILE_NAME);
 	const content = {
 		defaultPolicy: { tools: "ask", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
-		tools: { read: "allow", grep: "allow", find: "allow", ls: "allow", write: "ask", edit: "ask" },
+		tools: { read: "allow", grep: "allow", find: "allow", ls: "allow", write: "allow", edit: "allow" },
 		bash: { "git status*": "allow", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "*": "ask" },
 		mcp: {},
 		skills: { "*": "ask" },

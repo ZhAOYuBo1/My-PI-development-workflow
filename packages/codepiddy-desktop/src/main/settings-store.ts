@@ -2,6 +2,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
 	AgentRole,
+	PermissionDefaults,
 	RoleModelDefault,
 	RoleModelDefaults,
 	RoleSkillAssignments,
@@ -9,6 +10,11 @@ import type {
 	SettingsStatus,
 } from "@codepiddy/shared";
 import { safeStorage } from "electron";
+import {
+	createPermissionPolicy,
+	DEFAULT_PERMISSION_DEFAULTS,
+	normalizePermissionDefaults,
+} from "./permission-settings.ts";
 import { DEFAULT_ROLE_SKILL_ASSIGNMENTS } from "./skill-catalog.ts";
 
 interface StoredSecrets {
@@ -30,12 +36,48 @@ export class AppSettingsStore {
 	private readonly secretsPath: string;
 	private readonly roleDefaultsPath: string;
 	private readonly roleSkillsPath: string;
+	private readonly permissionDefaultsPath: string;
+	private readonly permissionPolicyPath: string;
 
 	constructor(userDataPath: string) {
 		const settingsDirectory = path.join(userDataPath, "settings");
 		this.secretsPath = path.join(settingsDirectory, "secrets.json");
 		this.roleDefaultsPath = path.join(settingsDirectory, "role-model-defaults.json");
 		this.roleSkillsPath = path.join(settingsDirectory, "role-skills.json");
+		this.permissionDefaultsPath = path.join(settingsDirectory, "permission-defaults.json");
+		this.permissionPolicyPath = path.join(userDataPath, "permissions", "policy", "pi-permissions.jsonc");
+	}
+
+	async getPermissionDefaults(): Promise<PermissionDefaults> {
+		try {
+			return normalizePermissionDefaults(JSON.parse(await readFile(this.permissionDefaultsPath, "utf8")) as unknown);
+		} catch (error) {
+			if (isNotFound(error)) return { ...DEFAULT_PERMISSION_DEFAULTS };
+			throw error;
+		}
+	}
+
+	private async writePermissionPolicy(defaults: PermissionDefaults): Promise<void> {
+		await mkdir(path.dirname(this.permissionPolicyPath), { recursive: true });
+		await writeFile(
+			this.permissionPolicyPath,
+			`${JSON.stringify(createPermissionPolicy(defaults), null, 2)}\n`,
+			"utf8",
+		);
+	}
+
+	async ensurePermissionPolicy(): Promise<PermissionDefaults> {
+		const defaults = await this.getPermissionDefaults();
+		await this.writePermissionPolicy(defaults);
+		return defaults;
+	}
+
+	async setPermissionDefaults(input: PermissionDefaults): Promise<PermissionDefaults> {
+		const defaults = normalizePermissionDefaults(input);
+		await mkdir(path.dirname(this.permissionDefaultsPath), { recursive: true });
+		await writeFile(this.permissionDefaultsPath, `${JSON.stringify(defaults, null, 2)}\n`, "utf8");
+		await this.writePermissionPolicy(defaults);
+		return defaults;
 	}
 
 	private async readSecrets(): Promise<StoredSecrets> {

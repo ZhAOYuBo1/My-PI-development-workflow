@@ -13,6 +13,8 @@ import type {
 	ForkAgentSessionInput,
 	InvokeAgentBuiltinCommandInput,
 	LaneKind,
+	PermissionDefaults,
+	PermissionState,
 	ProjectUiState,
 	RenameWorkItemInput,
 	ResetAgentInput,
@@ -260,6 +262,19 @@ export function parseProjectId(value: unknown): string {
 
 export function parseBoundedText(value: unknown, label: string, maximum: number, allowEmpty = false): string {
 	return text(value, label, maximum, allowEmpty);
+}
+
+function permissionState(value: unknown, label: string): PermissionState {
+	if (value === "allow" || value === "ask" || value === "deny") return value;
+	throw new Error(`${label}权限状态无效`);
+}
+
+export function parsePermissionDefaults(value: unknown): PermissionDefaults {
+	const input = record(value, "Permission Defaults");
+	return {
+		read: permissionState(input.read, "读取"),
+		write: permissionState(input.write, "修改"),
+	};
 }
 
 export function parseInvokeAgentBuiltinCommandInput(value: unknown): InvokeAgentBuiltinCommandInput {

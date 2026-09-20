@@ -56,6 +56,7 @@ import {
 	parseExtensionUiResponseInput,
 	parseForkAgentSessionInput,
 	parseInvokeAgentBuiltinCommandInput,
+	parsePermissionDefaults,
 	parseProjectId,
 	parseProjectRoot,
 	parseProjectUiState,
@@ -119,7 +120,9 @@ const channels = {
 	settingsSetRoleSkills: "codepiddy:settings:role-skills:set",
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
 	settingsGetRoleDefaults: "codepiddy:settings:role-models:get",
+	settingsGetPermissions: "codepiddy:settings:permissions:get",
 	settingsSetRoleDefault: "codepiddy:settings:role-models:set",
+	settingsSetPermissions: "codepiddy:settings:permissions:set",
 	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
 	settingsStatus: "codepiddy:settings:status",
@@ -1297,6 +1300,10 @@ function registerIpcHandlers(
 		searchProjectFiles(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawQuery, "搜索内容", 500, true)),
 	);
 	ipcMain.handle(channels.settingsStatus, () => settingsStore.status());
+	ipcMain.handle(channels.settingsGetPermissions, () => settingsStore.getPermissionDefaults());
+	ipcMain.handle(channels.settingsSetPermissions, (_event, raw: unknown) =>
+		settingsStore.setPermissionDefaults(parsePermissionDefaults(raw)),
+	);
 	ipcMain.handle(channels.settingsSaveTavily, (_event, rawApiKey: unknown) =>
 		settingsStore.saveTavilyApiKey(parseBoundedText(rawApiKey, "Tavily API Key", 500)),
 	);
@@ -1377,12 +1384,13 @@ if (!hasSingleInstanceLock) {
 		mainWindow.focus();
 	});
 
-	app.whenReady().then(() => {
+	app.whenReady().then(async () => {
 		Menu.setApplicationMenu(null);
 		const repositoryRoot =
 			process.env.CODEPIDDY_REPO_ROOT ??
 			(app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(app.getAppPath(), "..", ".."));
 		const settingsStore = new AppSettingsStore(app.getPath("userData"));
+		await settingsStore.ensurePermissionPolicy();
 		const recentProjects = new RecentProjectStore(app.getPath("userData"));
 		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore);
 		registerIpcHandlers(agentManager, settingsStore, recentProjects);

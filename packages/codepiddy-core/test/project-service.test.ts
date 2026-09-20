@@ -38,6 +38,10 @@ describe("project service", () => {
 		expect(await readFile(path.join(projectRoot, ".codepiddy", "agents", "review.md"), "utf8")).toContain(
 			"禁止修改生产代码",
 		);
+		const permissions = JSON.parse(
+			await readFile(path.join(projectRoot, ".codepiddy", "permissions.jsonc"), "utf8"),
+		) as { tools: Record<string, string> };
+		expect(permissions.tools).toMatchObject({ read: "allow", grep: "allow", write: "allow", edit: "allow" });
 	});
 
 	test("creates and archives an isolated feature work item", async () => {

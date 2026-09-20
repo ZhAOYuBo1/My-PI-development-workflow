@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent, type CodePIddyE2EApp } from "./helpers/app.ts";
 
@@ -30,6 +32,28 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 	await page.keyboard.press("ArrowDown");
 	await page.keyboard.press("Enter");
 	await expect(modelButton).toContainText("Model Two");
+});
+
+test("defaults file reads and writes to allow and persists permission changes", async () => {
+	const { page, userDataRoot } = client;
+	await page.getByRole("button", { name: "设置", exact: true }).click();
+	const readPermission = page.getByLabel("读取文件");
+	const writePermission = page.getByLabel("修改文件");
+	await expect(readPermission).toHaveValue("allow");
+	await expect(writePermission).toHaveValue("allow");
+
+	await writePermission.selectOption("ask");
+	await page.getByRole("button", { name: "保存权限" }).click();
+	await expect(writePermission).toHaveValue("ask");
+
+	const savedDefaults = JSON.parse(
+		await readFile(path.join(userDataRoot, "settings", "permission-defaults.json"), "utf8"),
+	) as Record<string, unknown>;
+	const policy = JSON.parse(
+		await readFile(path.join(userDataRoot, "permissions", "policy", "pi-permissions.jsonc"), "utf8"),
+	) as { tools: Record<string, string> };
+	 expect(savedDefaults).toEqual({ read: "allow", write: "ask" });
+	 expect(policy.tools).toMatchObject({ read: "allow", grep: "allow", write: "ask", edit: "ask" });
 });
 
 test("restores a pending permission request after switching away from the agent", async () => {

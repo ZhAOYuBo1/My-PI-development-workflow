@@ -12,6 +12,8 @@ import type {
 	AgentStatus,
 	LaneKind,
 	PendingPermissionRequest,
+	PermissionDefaults,
+	PermissionState,
 	ProjectSummary,
 	ProjectUiState,
 	ProjectWriteLeaseStatus,
@@ -768,6 +770,32 @@ function IconButton({ label, onClick, children }: { label: string; onClick(): vo
 	);
 }
 
+function PermissionSettingRow({
+	label,
+	description,
+	value,
+	onChange,
+}: {
+	label: string;
+	description: string;
+	value: PermissionState;
+	onChange(value: PermissionState): void;
+}) {
+	return (
+		<label className="permission-setting-row">
+			<span>
+				<strong>{label}</strong>
+				<small>{description}</small>
+			</span>
+			<select aria-label={label} value={value} onChange={(event) => onChange(event.target.value as PermissionState)}>
+				<option value="allow">直接允许</option>
+				<option value="ask">每次询问</option>
+				<option value="deny">禁止</option>
+			</select>
+		</label>
+	);
+}
+
 function formatTokenCount(value: number): string {
 	return new Intl.NumberFormat(undefined, {
 		notation: value >= 10_000 ? "compact" : "standard",
@@ -983,6 +1011,8 @@ export function App() {
 	const [error, setError] = useState<string | null>(null);
 	const [extensionDialog, setExtensionDialog] = useState<ExtensionDialogState | null>(null);
 	const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null);
+	const [permissionDefaults, setPermissionDefaults] = useState<PermissionDefaults>({ read: "allow", write: "allow" });
+	const [permissionSaving, setPermissionSaving] = useState(false);
 	const [tavilyApiKey, setTavilyApiKey] = useState("");
 	const [availableSkills, setAvailableSkills] = useState<AgentSkillSummary[]>([]);
 	const [roleSkillAssignments, setRoleSkillAssignments] = useState<RoleSkillAssignments>({
@@ -2850,16 +2880,31 @@ export function App() {
 	async function openSettings(): Promise<void> {
 		setSelection({ type: "settings" });
 		if (!("codepiddy" in window)) return;
-		const [status, skills, assignments, defaults] = await Promise.all([
+		const [status, permissions, skills, assignments, defaults] = await Promise.all([
 			window.codepiddy.getSettingsStatus(),
+			window.codepiddy.getPermissionDefaults(),
 			window.codepiddy.listAgentSkills(project?.rootPath),
 			window.codepiddy.getRoleSkillAssignments(),
 			window.codepiddy.getRoleModelDefaults(),
 		]);
 		setSettingsStatus(status);
+		setPermissionDefaults(permissions);
 		setAvailableSkills(skills);
 		setRoleSkillAssignments(assignments);
 		setRoleModelDefaults(defaults);
+	}
+
+	async function savePermissionDefaults(): Promise<void> {
+		if (!("codepiddy" in window) || permissionSaving) return;
+		setPermissionSaving(true);
+		setError(null);
+		try {
+			setPermissionDefaults(await window.codepiddy.setPermissionDefaults(permissionDefaults));
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "保存默认权限失败");
+		} finally {
+			setPermissionSaving(false);
+		}
 	}
 
 	async function saveTavilyKey(): Promise<void> {
@@ -3127,6 +3172,40 @@ export function App() {
 			return (
 				<div className="settings-page">
 					<h1>设置</h1>
+					<section className="settings-card permission-settings-card">
+						<div className="settings-card-heading">
+							<div>
+								<h2>默认权限</h2>
+								<p>控制所有 CodePIddy Agent 对文件读取和项目修改操作的默认处理方式。</p>
+							</div>
+							<div className="settings-status">全局</div>
+						</div>
+						<div className="permission-setting-list">
+							<PermissionSettingRow
+								label="读取文件"
+								description="read、grep、find 和 ls"
+								value={permissionDefaults.read}
+								onChange={(read) => setPermissionDefaults((current) => ({ ...current, read }))}
+							/>
+							<PermissionSettingRow
+								label="修改文件"
+								description="write 和 edit"
+								value={permissionDefaults.write}
+								onChange={(write) => setPermissionDefaults((current) => ({ ...current, write }))}
+							/>
+						</div>
+						<div className="permission-settings-footer">
+							<small>Bash、MCP、Skill 和项目外路径仍按各自策略审批；保存后下一次工具调用立即生效。</small>
+							<button
+								className="primary-button"
+								type="button"
+								disabled={permissionSaving}
+								onClick={() => void savePermissionDefaults()}
+							>
+								{permissionSaving ? "保存中" : "保存权限"}
+							</button>
+						</div>
+					</section>
 					<section className="settings-card">
 						<div>
 							<h2>Tavily Search</h2>
