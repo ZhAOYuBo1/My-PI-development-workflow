@@ -23,7 +23,7 @@ import type {
 	SettingsStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
@@ -803,17 +803,10 @@ function formatTokenCount(value: number): string {
 	}).format(value);
 }
 
-function ContextMeter({ snapshot, onClick }: { snapshot?: AgentSessionSnapshot; onClick(): void }) {
+function ContextGauge({ snapshot, onClick }: { snapshot?: AgentSessionSnapshot; onClick(): void }) {
 	const usage = snapshot?.contextUsage;
-	if (!usage) {
-		return (
-			<button className="context-meter context-unknown" type="button" onClick={onClick} title="查看 Session 统计">
-				<span>上下文</span>
-				<strong>读取中</strong>
-			</button>
-		);
-	}
-	const percent = usage.percent ?? (usage.tokens === null ? null : (usage.tokens / usage.contextWindow) * 100);
+	const percent =
+		usage?.percent ?? (usage?.tokens === null || !usage ? null : (usage.tokens / usage.contextWindow) * 100);
 	const level =
 		percent !== null && percent >= 95
 			? "critical"
@@ -822,21 +815,89 @@ function ContextMeter({ snapshot, onClick }: { snapshot?: AgentSessionSnapshot; 
 				: percent !== null && percent >= 70
 					? "watch"
 					: "normal";
-	const label = `${usage.tokens === null ? "—" : formatTokenCount(usage.tokens)} / ${formatTokenCount(usage.contextWindow)}`;
+	const label = usage
+		? `${usage.tokens === null ? "—" : formatTokenCount(usage.tokens)} / ${formatTokenCount(usage.contextWindow)}`
+		: "正在读取";
+	const roundedPercent = percent === null ? null : Math.min(100, Math.max(0, percent));
+	const circumference = 2 * Math.PI * 9;
+	const tooltip = usage
+		? `上下文 ${label} · ${roundedPercent === null ? "等待下一次回复" : `已使用 ${Math.round(roundedPercent)}%`}`
+		: "正在读取上下文容量";
 	return (
 		<button
-			className={`context-meter context-${level}`}
+			className={`context-gauge context-${level} ${usage ? "" : "context-unknown"}`}
 			type="button"
 			onClick={onClick}
-			title={`当前上下文：${label}${percent === null ? "" : `（${Math.round(percent)}%）`}`}
+			aria-label={`${tooltip}。点击查看 Session 统计`}
 		>
-			<span>上下文</span>
-			<strong>{label}</strong>
-			<span className="context-meter-track" aria-hidden="true">
-				<span style={{ width: `${Math.min(100, Math.max(0, percent ?? 0))}%` }} />
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<circle className="context-gauge-track" cx="12" cy="12" r="9" />
+				<circle
+					className="context-gauge-progress"
+					cx="12"
+					cy="12"
+					r="9"
+					strokeDasharray={circumference}
+					strokeDashoffset={circumference * (1 - (roundedPercent ?? 0) / 100)}
+				/>
+			</svg>
+			<span className="context-gauge-value" aria-hidden="true">
+				{roundedPercent === null ? "—" : Math.round(roundedPercent)}
 			</span>
-			<small>{percent === null ? "待下一次回复" : `${Math.round(percent)}%`}</small>
+			<span className="context-gauge-tooltip" role="tooltip">
+				<strong>上下文容量</strong>
+				<span>{label}</span>
+				<small>{roundedPercent === null ? "等待下一次模型回复" : `已使用 ${Math.round(roundedPercent)}%`}</small>
+			</span>
 		</button>
+	);
+}
+
+function transcriptItemSummary(item: TranscriptItem, index: number): string {
+	if (item.type === "tool") return `${index + 1}. 工具 ${item.name}${item.isError ? "，执行失败" : ""}`;
+	const role = item.type === "user" ? "你" : item.type === "assistant" ? "Pi" : "系统";
+	const text = item.text.replace(/\s+/g, " ").trim();
+	return `${index + 1}. ${role}${text ? `：${text.slice(0, 56)}` : ""}`;
+}
+
+function TranscriptMinimap({
+	items,
+	activeIndex,
+	scrollRatio,
+	viewportRatio,
+	onJump,
+}: {
+	items: TranscriptItem[];
+	activeIndex: number;
+	scrollRatio: number;
+	viewportRatio: number;
+	onJump(index: number): void;
+}) {
+	if (items.length < 2) return null;
+	const thumbSize = Math.min(100, Math.max(7, viewportRatio * 100));
+	const thumbTop = Math.min(100 - thumbSize, Math.max(0, scrollRatio * (100 - thumbSize)));
+	return (
+		<nav className="transcript-minimap" aria-label="对话快速定位">
+			<span
+				className="transcript-minimap-viewport"
+				style={{ height: `${thumbSize}%`, top: `${thumbTop}%` }}
+				aria-hidden="true"
+			/>
+			{items.map((item, index) => {
+				const top = (index / (items.length - 1)) * 100;
+				return (
+					<button
+						key={item.id}
+						type="button"
+						className={`transcript-minimap-tick tick-${item.type} ${item.type === "tool" && item.isError ? "tick-error" : ""} ${index === activeIndex ? "active" : ""}`}
+						style={{ top: `${top}%` }}
+						onClick={() => onJump(index)}
+						title={transcriptItemSummary(item, index)}
+						aria-label={transcriptItemSummary(item, index)}
+					/>
+				);
+			})}
+		</nav>
 	);
 }
 
@@ -1102,6 +1163,11 @@ export function App() {
 	const restoringAgentUiIds = useRef(new Set<string>());
 	const agentUiSaveTimers = useRef(new Map<string, number>());
 	const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+	const [transcriptViewport, setTranscriptViewport] = useState({
+		activeIndex: 0,
+		scrollRatio: 0,
+		viewportRatio: 1,
+	});
 
 	const loadAgentCommands = useCallback(async (locator: AgentInstanceLocator): Promise<AgentCommandOption[]> => {
 		const existing = agentCommandLoads.current.get(locator.agentInstanceId);
@@ -1119,6 +1185,40 @@ export function App() {
 			}
 			setAgentCommandsLoading((current) => ({ ...current, [locator.agentInstanceId]: false }));
 		}
+	}, []);
+
+	const updateTranscriptViewport = useCallback((): void => {
+		const element = transcriptRef.current;
+		if (!element) {
+			setTranscriptViewport({ activeIndex: 0, scrollRatio: 0, viewportRatio: 1 });
+			return;
+		}
+		const entries = [...element.querySelectorAll<HTMLElement>("[data-transcript-index]")];
+		const viewportCenter = element.scrollTop + element.clientHeight / 2;
+		let activeIndex = 0;
+		let nearestDistance = Number.POSITIVE_INFINITY;
+		for (const entry of entries) {
+			const index = Number.parseInt(entry.dataset.transcriptIndex ?? "0", 10);
+			const center = entry.offsetTop + entry.offsetHeight / 2;
+			const distance = Math.abs(center - viewportCenter);
+			if (distance < nearestDistance) {
+				nearestDistance = distance;
+				activeIndex = index;
+			}
+		}
+		const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
+		const next = {
+			activeIndex,
+			scrollRatio: maxScroll === 0 ? 0 : element.scrollTop / maxScroll,
+			viewportRatio: element.scrollHeight === 0 ? 1 : Math.min(1, element.clientHeight / element.scrollHeight),
+		};
+		setTranscriptViewport((current) =>
+			current.activeIndex === next.activeIndex &&
+			Math.abs(current.scrollRatio - next.scrollRatio) < 0.002 &&
+			Math.abs(current.viewportRatio - next.viewportRatio) < 0.002
+				? current
+				: next,
+		);
 	}, []);
 
 	useEffect(() => {
@@ -1911,9 +2011,10 @@ export function App() {
 			const stored = scrollPositions.current[activeAgentId];
 			element.scrollTop = stored ?? element.scrollHeight;
 			setShowJumpToLatest(element.scrollHeight - element.scrollTop - element.clientHeight > 160);
+			updateTranscriptViewport();
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [activeAgentId]);
+	}, [activeAgentId, updateTranscriptViewport]);
 
 	useEffect(() => {
 		const element = transcriptRef.current;
@@ -1922,6 +2023,7 @@ export function App() {
 			const frame = requestAnimationFrame(() => {
 				element.scrollTop = element.scrollHeight;
 				scrollPositions.current[activeAgentId] = element.scrollTop;
+				updateTranscriptViewport();
 			});
 			requestAnimationFrame(() => cancelAnimationFrame(frame));
 		};
@@ -1929,7 +2031,27 @@ export function App() {
 		const observer = new MutationObserver(scrollToBottom);
 		observer.observe(element, { childList: true, subtree: true, characterData: true });
 		return () => observer.disconnect();
-	}, [activeAgentId, showJumpToLatest]);
+	}, [activeAgentId, showJumpToLatest, updateTranscriptViewport]);
+
+	useEffect(() => {
+		const element = transcriptRef.current;
+		if (!element || !activeAgentId) return;
+		let frame = 0;
+		const scheduleUpdate = (): void => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(updateTranscriptViewport);
+		};
+		const mutationObserver = new MutationObserver(scheduleUpdate);
+		const resizeObserver = new ResizeObserver(scheduleUpdate);
+		mutationObserver.observe(element, { childList: true, subtree: true, characterData: true });
+		resizeObserver.observe(element);
+		scheduleUpdate();
+		return () => {
+			cancelAnimationFrame(frame);
+			mutationObserver.disconnect();
+			resizeObserver.disconnect();
+		};
+	}, [activeAgentId, updateTranscriptViewport]);
 
 	function handleTranscriptScroll(): void {
 		const element = transcriptRef.current;
@@ -1950,11 +2072,20 @@ export function App() {
 		agentUiSaveTimers.current.set(activeAgentId, timer);
 		const awayFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight > 160;
 		setShowJumpToLatest(awayFromBottom);
+		updateTranscriptViewport();
 		if (!awayFromBottom) {
 			setUnreadCounts((current) =>
 				(current[activeAgentId] ?? 0) === 0 ? current : { ...current, [activeAgentId]: 0 },
 			);
 		}
+	}
+
+	function jumpToTranscriptItem(index: number): void {
+		const element = transcriptRef.current;
+		const entry = element?.querySelector<HTMLElement>(`[data-transcript-index="${index}"]`);
+		if (!element || !entry) return;
+		const top = Math.max(0, entry.offsetTop - Math.max(24, element.clientHeight * 0.28));
+		element.scrollTo({ top, behavior: "smooth" });
 	}
 
 	function jumpToLatest(): void {
@@ -3395,7 +3526,6 @@ export function App() {
 						</div>
 						{agentId ? (
 							<div className="agent-header-actions">
-								<ContextMeter snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
 								{canAbort ? (
 									<button
 										className="secondary-button stop-button"
@@ -3469,43 +3599,56 @@ export function App() {
 					</header>
 					{agentId ? (
 						<>
-							<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>
-								{items.length === 0 ? (
-									<div className="transcript-placeholder compact">
-										<div className="empty-mark small">{roleGlyphs[selection.role]}</div>
-										<h2>{slot.displayName}</h2>
-										<p>发送一条消息开始工作。Agent 会读取当前 Work Item 的交接文档。</p>
-										{slot.kickoffPrompt ? (
-											<button
-												className="quick-start-button"
-												type="button"
-												onClick={() =>
-													setDrafts((current) => ({ ...current, [agentId]: slot.kickoffPrompt! }))
-												}
-											>
-												使用默认交接提示
-											</button>
-										) : null}
-									</div>
-								) : (
-									items.map((item, index) => (
-										<Fragment key={item.id}>
-											{item.type === "user" && index > 0 ? (
-												<div className="turn-divider" aria-hidden="true">
-													<span>下一轮</span>
-												</div>
+							<div className="transcript-stage">
+								<TranscriptMinimap
+									items={items}
+									activeIndex={transcriptViewport.activeIndex}
+									scrollRatio={transcriptViewport.scrollRatio}
+									viewportRatio={transcriptViewport.viewportRatio}
+									onJump={jumpToTranscriptItem}
+								/>
+								<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>
+									{items.length === 0 ? (
+										<div className="transcript-placeholder compact">
+											<div className="empty-mark small">{roleGlyphs[selection.role]}</div>
+											<h2>{slot.displayName}</h2>
+											<p>发送一条消息开始工作。Agent 会读取当前 Work Item 的交接文档。</p>
+											{slot.kickoffPrompt ? (
+												<button
+													className="quick-start-button"
+													type="button"
+													onClick={() =>
+														setDrafts((current) => ({ ...current, [agentId]: slot.kickoffPrompt! }))
+													}
+												>
+													使用默认交接提示
+												</button>
 											) : null}
-											{item.type === "tool" ? (
-												<ToolCallCard item={item} />
-											) : (
-												<TranscriptMessage
-													item={item}
-													assistantModel={modelSelections[agentId]?.model.name}
-												/>
-											)}
-										</Fragment>
-									))
-								)}
+										</div>
+									) : (
+										items.map((item, index) => (
+											<div
+												className={`transcript-entry entry-${item.type}`}
+												data-transcript-index={index}
+												key={item.id}
+											>
+												{item.type === "user" && index > 0 ? (
+													<div className="turn-divider" aria-hidden="true">
+														<span>下一轮</span>
+													</div>
+												) : null}
+												{item.type === "tool" ? (
+													<ToolCallCard item={item} />
+												) : (
+													<TranscriptMessage
+														item={item}
+														assistantModel={modelSelections[agentId]?.model.name}
+													/>
+												)}
+											</div>
+										))
+									)}
+								</div>
 							</div>
 							{showJumpToLatest ? (
 								<button className="jump-to-latest" type="button" onClick={jumpToLatest}>
@@ -3634,6 +3777,7 @@ export function App() {
 											{modelSelections[agentId]?.model.name ?? "选择模型"} ·{" "}
 											{modelSelections[agentId]?.thinkingLevel ?? "—"} ▾
 										</button>
+										<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
 									</div>
 									<button
 										className="send-button"

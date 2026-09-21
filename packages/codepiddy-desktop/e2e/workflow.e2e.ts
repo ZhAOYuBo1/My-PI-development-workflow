@@ -47,6 +47,35 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 	await expect(modelButton).toContainText("Model Two");
 });
 
+test("shows context usage beside the model and jumps through the transcript minimap", async () => {
+	const { page } = client;
+	await createFeatureWorkItem(page);
+	await openRequirementAgent(page);
+	await expect(page.locator(".content-header .context-gauge")).toHaveCount(0);
+	const contextGauge = page.locator(".composer .context-gauge");
+	await expect(contextGauge).toBeVisible();
+	await contextGauge.hover();
+	await expect(page.getByRole("tooltip")).toContainText("1.2万 / 12.8万");
+
+	const composer = page.locator(".composer textarea");
+	for (let index = 0; index < 8; index++) {
+		await composer.fill(`第 ${index + 1} 轮：请核对 OpenSpec proposal、design、specs 和 tasks 的一致性，并说明需要继续确认的边界。`);
+		await composer.press("Enter");
+		await expect(page.getByText("Fake Pi 已完成当前请求。")).toHaveCount(index + 1);
+	}
+
+	const minimap = page.getByRole("navigation", { name: "对话快速定位" });
+	await expect(minimap).toBeVisible();
+	await expect(minimap.locator("button")).toHaveCount(16);
+	const transcript = page.locator(".transcript");
+	await transcript.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	const before = await transcript.evaluate((element) => element.scrollTop);
+	await minimap.locator("button").first().click();
+	await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeLessThan(before);
+});
+
 test("defaults file reads and writes to allow and persists permission changes", async () => {
 	const { page, userDataRoot } = client;
 	await page.getByRole("button", { name: "打开项目", exact: true }).click();
