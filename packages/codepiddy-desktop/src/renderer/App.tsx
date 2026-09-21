@@ -853,48 +853,96 @@ function ContextGauge({ snapshot, onClick }: { snapshot?: AgentSessionSnapshot; 
 	);
 }
 
-function transcriptItemSummary(item: TranscriptItem, index: number): string {
-	if (item.type === "tool") return `${index + 1}. 工具 ${item.name}${item.isError ? "，执行失败" : ""}`;
-	const role = item.type === "user" ? "你" : item.type === "assistant" ? "Pi" : "系统";
-	const text = item.text.replace(/\s+/g, " ").trim();
-	return `${index + 1}. ${role}${text ? `：${text.slice(0, 56)}` : ""}`;
+interface TranscriptTurn {
+	id: string;
+	startIndex: number;
+	endIndex: number;
+	request: string;
+	response: string;
+	hasError: boolean;
+}
+
+function compactTranscriptText(value: string, maximum: number): string {
+	const normalized = value.replace(/\s+/g, " ").trim();
+	return normalized.length > maximum ? `${normalized.slice(0, maximum)}…` : normalized;
+}
+
+function buildTranscriptTurns(items: TranscriptItem[]): TranscriptTurn[] {
+	const turns: TranscriptTurn[] = [];
+	let current: TranscriptTurn | null = null;
+	for (const [index, item] of items.entries()) {
+		if (item.type === "user") {
+			if (current) turns.push(current);
+			current = {
+				id: item.id,
+				startIndex: index,
+				endIndex: index,
+				request: compactTranscriptText(item.text, 80) || "图片消息",
+				response: "",
+				hasError: false,
+			};
+			continue;
+		}
+		if (!current) {
+			current = {
+				id: `turn-${item.id}`,
+				startIndex: index,
+				endIndex: index,
+				request: "会话开始",
+				response: "",
+				hasError: false,
+			};
+		}
+		current.endIndex = index;
+		if (!current.response) {
+			if (item.type === "tool") {
+				current.response = `工具：${item.name}${item.isError ? "（失败）" : ""}`;
+			} else {
+				current.response = compactTranscriptText(item.text, 92);
+			}
+		}
+		if (item.type === "tool" && item.isError) current.hasError = true;
+		if (item.type === "assistant" && item.status === "error") current.hasError = true;
+	}
+	if (current) turns.push(current);
+	return turns;
 }
 
 function TranscriptMinimap({
 	items,
 	activeIndex,
-	scrollRatio,
-	viewportRatio,
 	onJump,
 }: {
 	items: TranscriptItem[];
 	activeIndex: number;
-	scrollRatio: number;
-	viewportRatio: number;
 	onJump(index: number): void;
 }) {
-	if (items.length < 2) return null;
-	const thumbSize = Math.min(100, Math.max(7, viewportRatio * 100));
-	const thumbTop = Math.min(100 - thumbSize, Math.max(0, scrollRatio * (100 - thumbSize)));
+	const turns = buildTranscriptTurns(items);
+	if (turns.length < 2) return null;
+	const activeTurnIndex = Math.max(
+		0,
+		turns.findIndex((turn) => activeIndex >= turn.startIndex && activeIndex <= turn.endIndex),
+	);
 	return (
 		<nav className="transcript-minimap" aria-label="对话快速定位">
-			<span
-				className="transcript-minimap-viewport"
-				style={{ height: `${thumbSize}%`, top: `${thumbTop}%` }}
-				aria-hidden="true"
-			/>
-			{items.map((item, index) => {
-				const top = (index / (items.length - 1)) * 100;
+			{turns.map((turn, index) => {
+				const top = 3 + (index / (turns.length - 1)) * 94;
+				const label = `第 ${index + 1} 轮：${turn.request}`;
 				return (
 					<button
-						key={item.id}
+						key={turn.id}
 						type="button"
-						className={`transcript-minimap-tick tick-${item.type} ${item.type === "tool" && item.isError ? "tick-error" : ""} ${index === activeIndex ? "active" : ""}`}
+						className={`transcript-minimap-tick ${turn.hasError ? "tick-error" : ""} ${index === activeTurnIndex ? "active" : ""}`}
 						style={{ top: `${top}%` }}
-						onClick={() => onJump(index)}
-						title={transcriptItemSummary(item, index)}
-						aria-label={transcriptItemSummary(item, index)}
-					/>
+						onClick={() => onJump(turn.startIndex)}
+						aria-label={label}
+					>
+						<span className="transcript-minimap-preview" role="tooltip">
+							<strong>第 {index + 1} 轮</strong>
+							<span>{turn.request}</span>
+							<small>{turn.response || "Pi 正在处理这一轮"}</small>
+						</span>
+					</button>
 				);
 			})}
 		</nav>
@@ -1163,11 +1211,7 @@ export function App() {
 	const restoringAgentUiIds = useRef(new Set<string>());
 	const agentUiSaveTimers = useRef(new Map<string, number>());
 	const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-	const [transcriptViewport, setTranscriptViewport] = useState({
-		activeIndex: 0,
-		scrollRatio: 0,
-		viewportRatio: 1,
-	});
+	const [activeTranscriptIndex, setActiveTranscriptIndex] = useState(0);
 
 	const loadAgentCommands = useCallback(async (locator: AgentInstanceLocator): Promise<AgentCommandOption[]> => {
 		const existing = agentCommandLoads.current.get(locator.agentInstanceId);
@@ -1190,7 +1234,7 @@ export function App() {
 	const updateTranscriptViewport = useCallback((): void => {
 		const element = transcriptRef.current;
 		if (!element) {
-			setTranscriptViewport({ activeIndex: 0, scrollRatio: 0, viewportRatio: 1 });
+			setActiveTranscriptIndex(0);
 			return;
 		}
 		const entries = [...element.querySelectorAll<HTMLElement>("[data-transcript-index]")];
@@ -1206,19 +1250,7 @@ export function App() {
 				activeIndex = index;
 			}
 		}
-		const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
-		const next = {
-			activeIndex,
-			scrollRatio: maxScroll === 0 ? 0 : element.scrollTop / maxScroll,
-			viewportRatio: element.scrollHeight === 0 ? 1 : Math.min(1, element.clientHeight / element.scrollHeight),
-		};
-		setTranscriptViewport((current) =>
-			current.activeIndex === next.activeIndex &&
-			Math.abs(current.scrollRatio - next.scrollRatio) < 0.002 &&
-			Math.abs(current.viewportRatio - next.viewportRatio) < 0.002
-				? current
-				: next,
-		);
+		setActiveTranscriptIndex((current) => (current === activeIndex ? current : activeIndex));
 	}, []);
 
 	useEffect(() => {
@@ -3602,9 +3634,7 @@ export function App() {
 							<div className="transcript-stage">
 								<TranscriptMinimap
 									items={items}
-									activeIndex={transcriptViewport.activeIndex}
-									scrollRatio={transcriptViewport.scrollRatio}
-									viewportRatio={transcriptViewport.viewportRatio}
+									activeIndex={activeTranscriptIndex}
 									onJump={jumpToTranscriptItem}
 								/>
 								<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>

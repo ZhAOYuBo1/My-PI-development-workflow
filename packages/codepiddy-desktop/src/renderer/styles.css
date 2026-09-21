@@ -1842,7 +1842,7 @@ textarea:focus-visible,
 .transcript-entry { position: relative; }
 .transcript-minimap {
   position: absolute;
-  z-index: 6;
+  z-index: 30;
   top: 20px;
   bottom: 20px;
   left: 12px;
@@ -1850,34 +1850,12 @@ textarea:focus-visible,
   border: 0;
   pointer-events: none;
 }
-.transcript-minimap::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 13px;
-  width: 1px;
-  background: rgb(87 95 88 / 15%);
-  content: "";
-}
-.transcript-minimap-viewport {
-  position: absolute;
-  z-index: 0;
-  left: 9px;
-  width: 9px;
-  min-height: 18px;
-  border: 1px solid rgb(78 89 80 / 22%);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 64%);
-  box-shadow: 0 5px 16px rgb(38 45 39 / 8%);
-  transition: top 100ms ease-out, height 100ms ease-out;
-  backdrop-filter: blur(8px);
-}
 .transcript-minimap-tick {
   position: absolute;
-  z-index: 1;
-  left: 2px;
-  width: 24px;
-  height: 13px;
+  z-index: 2;
+  left: 0;
+  width: 28px;
+  height: 18px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1887,25 +1865,79 @@ textarea:focus-visible,
 }
 .transcript-minimap-tick::after {
   position: absolute;
-  top: 6px;
-  left: 8px;
-  width: 9px;
-  height: 1px;
+  top: 8px;
+  left: 50%;
+  width: 10px;
+  height: 2px;
   border-radius: 999px;
-  background: #b7bcb7;
+  background: #aeb4af;
   content: "";
-  transition: left 120ms ease-out, width 120ms ease-out, background 120ms ease-out;
+  transform: translateX(-50%);
+  transition: width 140ms ease-out, height 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out;
 }
-.transcript-minimap-tick.tick-user::after { background: #888f89; }
-.transcript-minimap-tick.tick-tool::after { width: 12px; background: #9ca89e; }
 .transcript-minimap-tick.tick-error::after { background: #b85c51; }
+.transcript-minimap-tick.active::after { background: #59635c; }
 .transcript-minimap-tick:hover::after,
-.transcript-minimap-tick:focus-visible::after,
-.transcript-minimap-tick.active::after { left: 4px; width: 18px; background: #343a35; }
-.transcript-minimap-tick.tick-error.active::after { background: #a8453e; }
+.transcript-minimap-tick:focus-visible::after {
+  width: 22px;
+  height: 3px;
+  background: #343a35;
+  box-shadow: 0 3px 10px rgb(39 46 40 / 16%);
+  animation: codepiddy-minimap-beat 720ms ease-in-out infinite alternate;
+}
+.transcript-minimap-tick.tick-error:hover::after,
+.transcript-minimap-tick.tick-error:focus-visible::after { background: #a8453e; }
 .transcript-minimap-tick:focus-visible { outline: 1px solid #718f78; outline-offset: -3px; border-radius: 4px; }
+.transcript-minimap-preview {
+  position: absolute;
+  z-index: 30;
+  top: 50%;
+  left: calc(100% + 8px);
+  display: grid;
+  width: 270px;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #d7ddd8;
+  border-radius: 10px;
+  background: #fff;
+  color: #3f4540;
+  box-shadow: 0 14px 36px rgb(31 38 32 / 16%);
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transform: translate(-5px, -50%);
+  transition: opacity 120ms ease-out, transform 160ms cubic-bezier(.2, .8, .2, 1);
+}
+.transcript-minimap-preview strong { color: #252a26; font-size: 11px; }
+.transcript-minimap-preview span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #363c37;
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.transcript-minimap-preview small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #6f7771;
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.transcript-minimap-tick:hover .transcript-minimap-preview,
+.transcript-minimap-tick:focus-visible .transcript-minimap-preview { opacity: 1; transform: translate(0, -50%); }
 
-.composer .context-gauge {
+@keyframes codepiddy-minimap-beat {
+  0% { width: 17px; opacity: .72; }
+  45% { width: 24px; opacity: 1; }
+  75% { width: 19px; opacity: .84; }
+  100% { width: 22px; opacity: .96; }
+}
+
+.composer button.context-gauge:not(:disabled) {
   position: relative;
   display: grid;
   width: 30px;
@@ -1913,20 +1945,20 @@ textarea:focus-visible,
   flex: 0 0 30px;
   place-items: center;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 82%);
+  border: 1px solid #dce2dd;
   border-radius: 50%;
-  background: rgb(246 247 244 / 62%);
+  background: #f7f8f6;
   color: #506b57;
-  box-shadow: var(--cp-glass-highlight), 0 4px 12px rgb(36 43 37 / 5%);
+  box-shadow: inset 0 1px 0 #fff, 0 4px 12px rgb(36 43 37 / 6%);
   cursor: pointer;
   backdrop-filter: blur(10px);
 }
-.composer .context-gauge:hover,
-.composer .context-gauge:focus-visible { border-color: #c5d1c7; background: rgb(255 255 255 / 82%); }
+.composer button.context-gauge:hover:not(:disabled),
+.composer button.context-gauge:focus-visible:not(:disabled) { border-color: #c5d1c7; background: #fff; color: #405d49; }
 .context-gauge svg { width: 25px; height: 25px; overflow: visible; transform: rotate(-90deg); }
 .context-gauge circle { fill: none; stroke-width: 2.2; }
-.context-gauge-track { stroke: #dfe4df; }
-.context-gauge-progress { stroke: #5d7663; stroke-linecap: round; transition: stroke-dashoffset 180ms ease-out, stroke 180ms ease-out; }
+.context-gauge-track { stroke: #d9ded9; }
+.context-gauge-progress { stroke: #6f8c77; stroke-linecap: round; transition: stroke-dashoffset 180ms ease-out, stroke 180ms ease-out; }
 .context-watch .context-gauge-progress { stroke: #9b7a34; }
 .context-high .context-gauge-progress { stroke: #b6662f; }
 .context-critical .context-gauge-progress { stroke: #a8453e; }
@@ -1936,7 +1968,7 @@ textarea:focus-visible,
   inset: 0;
   display: grid;
   place-items: center;
-  color: #4b554e;
+  color: #3f4b42;
   font-size: 7px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
@@ -1952,17 +1984,17 @@ textarea:focus-visible,
   max-width: 240px;
   gap: 3px;
   padding: 9px 11px;
-  border: 1px solid rgb(255 255 255 / 88%);
+  border: 1px solid #dce2dd;
   border-radius: 9px;
-  background: rgb(250 250 248 / 96%);
-  color: #555b56;
-  box-shadow: var(--cp-glass-highlight), 0 14px 34px rgb(31 38 32 / 13%);
+  background: #fcfcfb;
+  color: #4f554f;
+  box-shadow: inset 0 1px 0 #fff, 0 14px 34px rgb(31 38 32 / 13%);
   opacity: 0;
   pointer-events: none;
   text-align: left;
   transform: translateY(4px);
   transition: opacity 120ms ease-out, transform 120ms ease-out;
-  backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(14px);
 }
 .context-gauge-tooltip strong { color: #303530; font-size: 11px; }
 .context-gauge-tooltip span { font-size: 10px; font-variant-numeric: tabular-nums; }
@@ -1993,7 +2025,8 @@ textarea:focus-visible,
   .composer,
   .agent-choice-list > button,
   .new-action,
-  .transcript-minimap-viewport,
   .context-gauge-progress,
-  .context-gauge-tooltip { animation: none; transition: none; }
+  .context-gauge-tooltip,
+  .transcript-minimap-tick::after,
+  .transcript-minimap-preview { animation: none; transition: none; }
 }

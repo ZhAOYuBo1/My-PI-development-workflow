@@ -54,19 +54,23 @@ test("shows context usage beside the model and jumps through the transcript mini
 	await expect(page.locator(".content-header .context-gauge")).toHaveCount(0);
 	const contextGauge = page.locator(".composer .context-gauge");
 	await expect(contextGauge).toBeVisible();
+	expect(await contextGauge.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(247, 248, 246)");
 	await contextGauge.hover();
 	await expect(page.getByRole("tooltip")).toContainText("1.2万 / 12.8万");
 
 	const composer = page.locator(".composer textarea");
+	const assistantReplies = page.locator(".message-assistant").filter({ hasText: "Fake Pi 已完成当前请求。" });
 	for (let index = 0; index < 8; index++) {
 		await composer.fill(`第 ${index + 1} 轮：请核对 OpenSpec proposal、design、specs 和 tasks 的一致性，并说明需要继续确认的边界。`);
 		await composer.press("Enter");
-		await expect(page.getByText("Fake Pi 已完成当前请求。")).toHaveCount(index + 1);
+		await expect(assistantReplies).toHaveCount(index + 1);
 	}
 
 	const minimap = page.getByRole("navigation", { name: "对话快速定位" });
 	await expect(minimap).toBeVisible();
-	await expect(minimap.locator("button")).toHaveCount(16);
+	await expect(minimap.locator("button")).toHaveCount(8);
+	await minimap.locator("button").first().hover();
+	await expect(minimap.locator(".transcript-minimap-preview").first()).toContainText("第 1 轮");
 	const transcript = page.locator(".transcript");
 	await transcript.evaluate((element) => {
 		element.scrollTop = element.scrollHeight;
@@ -149,7 +153,7 @@ test("offers a manual continuation when a failed tool ends without a final respo
 	await expect(page.getByRole("button", { name: /read.*路径不存在/ })).toBeVisible();
 
 	await page.getByRole("button", { name: "让 Pi 继续处理" }).click();
-	await expect(page.getByText("Fake Pi 已完成当前请求。")).toBeVisible();
+	await expect(page.locator(".message-assistant").filter({ hasText: "Fake Pi 已完成当前请求。" }).last()).toBeVisible();
 	await expect(page.getByText("工具失败后本轮已结束")).toBeHidden();
 });
 
@@ -166,5 +170,5 @@ test("executes desktop built-ins and forwards extension commands to Pi", async (
 
 	await composer.fill("/ext-test");
 	await composer.press("Enter");
-	await expect(page.getByText("Fake Pi 已完成当前请求。")).toBeVisible();
+	await expect(page.locator(".message-assistant").filter({ hasText: "Fake Pi 已完成当前请求。" }).last()).toBeVisible();
 });
