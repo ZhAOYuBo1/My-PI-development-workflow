@@ -923,22 +923,29 @@ function TranscriptMinimap({
 		0,
 		turns.findIndex((turn) => activeIndex >= turn.startIndex && activeIndex <= turn.endIndex),
 	);
+	const maximumVisibleTurns = 20;
+	const visibleStart = Math.max(
+		0,
+		Math.min(turns.length - maximumVisibleTurns, activeTurnIndex - Math.floor(maximumVisibleTurns / 2)),
+	);
+	const visibleTurns = turns.slice(visibleStart, visibleStart + maximumVisibleTurns);
 	return (
 		<nav className="transcript-minimap" aria-label="对话快速定位">
-			{turns.map((turn, index) => {
-				const top = 3 + (index / (turns.length - 1)) * 94;
-				const label = `第 ${index + 1} 轮：${turn.request}`;
+			{visibleTurns.map((turn, visibleIndex) => {
+				const turnIndex = visibleStart + visibleIndex;
+				const offset = visibleIndex - (visibleTurns.length - 1) / 2;
+				const label = `第 ${turnIndex + 1} 轮：${turn.request}`;
 				return (
 					<button
 						key={turn.id}
 						type="button"
-						className={`transcript-minimap-tick ${turn.hasError ? "tick-error" : ""} ${index === activeTurnIndex ? "active" : ""}`}
-						style={{ top: `${top}%` }}
+						className={`transcript-minimap-tick ${turn.hasError ? "tick-error" : ""} ${turnIndex === activeTurnIndex ? "active" : ""}`}
+						style={{ top: `calc(50% + ${offset * 20}px)` }}
 						onClick={() => onJump(turn.startIndex)}
 						aria-label={label}
 					>
 						<span className="transcript-minimap-preview" role="tooltip">
-							<strong>第 {index + 1} 轮</strong>
+							<strong>第 {turnIndex + 1} 轮</strong>
 							<span>{turn.request}</span>
 							<small>{turn.response || "Pi 正在处理这一轮"}</small>
 						</span>

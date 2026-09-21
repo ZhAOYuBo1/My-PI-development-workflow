@@ -69,6 +69,16 @@ test("shows context usage beside the model and jumps through the transcript mini
 	const minimap = page.getByRole("navigation", { name: "对话快速定位" });
 	await expect(minimap).toBeVisible();
 	await expect(minimap.locator("button")).toHaveCount(8);
+	const minimapBox = await minimap.boundingBox();
+	const firstTickBox = await minimap.locator("button").first().boundingBox();
+	const lastTickBox = await minimap.locator("button").last().boundingBox();
+	expect(minimapBox).not.toBeNull();
+	expect(firstTickBox).not.toBeNull();
+	expect(lastTickBox).not.toBeNull();
+	const ticksCenter = (firstTickBox!.y + firstTickBox!.height / 2 + lastTickBox!.y + lastTickBox!.height / 2) / 2;
+	const minimapCenter = minimapBox!.y + minimapBox!.height / 2;
+	expect(Math.abs(ticksCenter - minimapCenter)).toBeLessThan(2);
+	expect(Math.round(lastTickBox!.y - firstTickBox!.y)).toBe(140);
 	await minimap.locator("button").first().hover();
 	await expect(minimap.locator(".transcript-minimap-preview").first()).toContainText("第 1 轮");
 	const transcript = page.locator(".transcript");
@@ -78,6 +88,13 @@ test("shows context usage beside the model and jumps through the transcript mini
 	const before = await transcript.evaluate((element) => element.scrollTop);
 	await minimap.locator("button").first().click();
 	await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeLessThan(before);
+
+	for (let index = 8; index < 22; index++) {
+		await composer.fill(`第 ${index + 1} 轮：继续完善当前 Change，并核对剩余任务。`);
+		await composer.press("Enter");
+		await expect(assistantReplies).toHaveCount(index + 1);
+	}
+	await expect(minimap.locator("button")).toHaveCount(20);
 });
 
 test("defaults file reads and writes to allow and persists permission changes", async () => {
