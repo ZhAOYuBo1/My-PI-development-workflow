@@ -284,6 +284,11 @@ export type PermissionState = (typeof PERMISSION_STATES)[number];
 export interface PermissionDefaults {
 	read: PermissionState;
 	write: PermissionState;
+	bash: PermissionState;
+	mcp: PermissionState;
+	skills: PermissionState;
+	otherTools: PermissionState;
+	externalDirectory: PermissionState;
 }
 
 export type AgentSkillSource = "builtin" | "codex" | "agents" | "pi" | "project";

@@ -1104,7 +1104,15 @@ export function App() {
 	const [error, setError] = useState<string | null>(null);
 	const [extensionDialog, setExtensionDialog] = useState<ExtensionDialogState | null>(null);
 	const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null);
-	const [permissionDefaults, setPermissionDefaults] = useState<PermissionDefaults>({ read: "allow", write: "allow" });
+	const [permissionDefaults, setPermissionDefaults] = useState<PermissionDefaults>({
+		read: "allow",
+		write: "allow",
+		bash: "ask",
+		mcp: "ask",
+		skills: "ask",
+		otherTools: "ask",
+		externalDirectory: "ask",
+	});
 	const [permissionSaving, setPermissionSaving] = useState(false);
 	const [tavilyApiKey, setTavilyApiKey] = useState("");
 	const [availableSkills, setAvailableSkills] = useState<AgentSkillSummary[]>([]);
@@ -3339,7 +3347,7 @@ export function App() {
 						<div className="settings-card-heading">
 							<div>
 								<h2>默认权限</h2>
-								<p>控制所有 CodePIddy Agent 对文件读取和项目修改操作的默认处理方式。</p>
+								<p>所有 Agent 共用。按工具类型分别设置；“修改文件”不包含 Bash 命令。</p>
 							</div>
 							<div className="settings-status">全局</div>
 						</div>
@@ -3356,9 +3364,43 @@ export function App() {
 								value={permissionDefaults.write}
 								onChange={(write) => setPermissionDefaults((current) => ({ ...current, write }))}
 							/>
+							<PermissionSettingRow
+								label="命令执行"
+								description="Bash，可执行任意命令；Coding Agent 常用"
+								value={permissionDefaults.bash}
+								onChange={(bash) => setPermissionDefaults((current) => ({ ...current, bash }))}
+							/>
+							<PermissionSettingRow
+								label="MCP 工具"
+								description="调用已配置的 MCP 服务"
+								value={permissionDefaults.mcp}
+								onChange={(mcp) => setPermissionDefaults((current) => ({ ...current, mcp }))}
+							/>
+							<PermissionSettingRow
+								label="Skill"
+								description="读取和使用 Agent Skill"
+								value={permissionDefaults.skills}
+								onChange={(skills) => setPermissionDefaults((current) => ({ ...current, skills }))}
+							/>
+							<PermissionSettingRow
+								label="其他工具"
+								description="未单独列出的工具，如 web_search"
+								value={permissionDefaults.otherTools}
+								onChange={(otherTools) => setPermissionDefaults((current) => ({ ...current, otherTools }))}
+							/>
+							<PermissionSettingRow
+								label="项目外路径"
+								description="通过文件工具访问项目目录之外"
+								value={permissionDefaults.externalDirectory}
+								onChange={(externalDirectory) =>
+									setPermissionDefaults((current) => ({ ...current, externalDirectory }))
+								}
+							/>
 						</div>
 						<div className="permission-settings-footer">
-							<small>Bash、MCP、Skill 和项目外路径仍按各自策略审批；保存后下一次工具调用立即生效。</small>
+							<small>
+								直接允许命令执行可运行任意命令。保存后对所有 Agent 的后续工具调用生效；已弹出的请求仍需处理。
+							</small>
 							<button
 								className="primary-button"
 								type="button"

@@ -274,6 +274,11 @@ export function parsePermissionDefaults(value: unknown): PermissionDefaults {
 	return {
 		read: permissionState(input.read, "读取"),
 		write: permissionState(input.write, "修改"),
+		bash: permissionState(input.bash, "命令执行"),
+		mcp: permissionState(input.mcp, "MCP"),
+		skills: permissionState(input.skills, "Skill"),
+		otherTools: permissionState(input.otherTools, "其他工具"),
+		externalDirectory: permissionState(input.externalDirectory, "项目外路径"),
 	};
 }
 

@@ -3,6 +3,11 @@ import type { PermissionDefaults, PermissionState } from "@codepiddy/shared";
 export const DEFAULT_PERMISSION_DEFAULTS: PermissionDefaults = {
 	read: "allow",
 	write: "allow",
+	bash: "ask",
+	mcp: "ask",
+	skills: "ask",
+	otherTools: "ask",
+	externalDirectory: "ask",
 };
 
 export function isPermissionState(value: unknown): value is PermissionState {
@@ -17,12 +22,25 @@ export function normalizePermissionDefaults(value: unknown): PermissionDefaults 
 	return {
 		read: isPermissionState(record.read) ? record.read : DEFAULT_PERMISSION_DEFAULTS.read,
 		write: isPermissionState(record.write) ? record.write : DEFAULT_PERMISSION_DEFAULTS.write,
+		bash: isPermissionState(record.bash) ? record.bash : DEFAULT_PERMISSION_DEFAULTS.bash,
+		mcp: isPermissionState(record.mcp) ? record.mcp : DEFAULT_PERMISSION_DEFAULTS.mcp,
+		skills: isPermissionState(record.skills) ? record.skills : DEFAULT_PERMISSION_DEFAULTS.skills,
+		otherTools: isPermissionState(record.otherTools) ? record.otherTools : DEFAULT_PERMISSION_DEFAULTS.otherTools,
+		externalDirectory: isPermissionState(record.externalDirectory)
+			? record.externalDirectory
+			: DEFAULT_PERMISSION_DEFAULTS.externalDirectory,
 	};
 }
 
 export function createPermissionPolicy(defaults: PermissionDefaults): Record<string, unknown> {
 	return {
-		defaultPolicy: { tools: "ask", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
+		defaultPolicy: {
+			tools: defaults.otherTools,
+			bash: defaults.bash,
+			mcp: defaults.mcp,
+			skills: defaults.skills,
+			special: "ask",
+		},
 		tools: {
 			read: defaults.read,
 			grep: defaults.read,
@@ -32,14 +50,13 @@ export function createPermissionPolicy(defaults: PermissionDefaults): Record<str
 			edit: defaults.write,
 		},
 		bash: {
-			"git status*": "allow",
-			"git diff*": "allow",
-			"git log*": "allow",
-			"git show*": "allow",
-			"*": "ask",
+			...(defaults.bash === "ask"
+				? { "git status*": "allow", "git diff*": "allow", "git log*": "allow", "git show*": "allow" }
+				: {}),
+			"*": defaults.bash,
 		},
 		mcp: {},
-		skills: { "*": "ask" },
-		special: { external_directory: "ask" },
+		skills: { "*": defaults.skills },
+		special: { external_directory: defaults.externalDirectory },
 	};
 }
