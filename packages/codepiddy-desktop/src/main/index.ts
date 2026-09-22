@@ -131,7 +131,7 @@ const channels = {
 	piRuntimeStatus: "codepiddy:pi-runtime:status",
 	piRuntimeCheck: "codepiddy:pi-runtime:check",
 	piRuntimeInstall: "codepiddy:pi-runtime:install",
-	piRuntimeRestore: "codepiddy:pi-runtime:restore",
+	piRuntimeRollback: "codepiddy:pi-runtime:rollback",
 	piRuntimeRestart: "codepiddy:pi-runtime:restart",
 	searchProjectFiles: "codepiddy:project:files:search",
 	sendAgentPrompt: "codepiddy:agent:prompt",
@@ -1061,7 +1061,10 @@ class AgentManager {
 					projectId: agent.projectId,
 					workItemId: agent.workItemId,
 					role: agent.role,
-					event: { type: "agent_configuration_warning", error: "新版 Pi 启动失败，已自动切回内置版本。" },
+					event: {
+						type: "agent_configuration_warning",
+						error: `新版 Pi 启动失败，已自动回退到 v${this.piRuntimeUpdater.status().currentVersion}。`,
+					},
 				});
 				return this.startProcess(agent);
 			}
@@ -1400,7 +1403,7 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.piRuntimeInstall, (_event, rawVersion: unknown) =>
 		piRuntimeUpdater.installLatest(parseBoundedText(rawVersion, "Pi 版本", 40)),
 	);
-	ipcMain.handle(channels.piRuntimeRestore, () => piRuntimeUpdater.restoreBundled());
+	ipcMain.handle(channels.piRuntimeRollback, () => piRuntimeUpdater.rollback());
 	ipcMain.handle(channels.piRuntimeRestart, () => {
 		app.relaunch();
 		app.quit();

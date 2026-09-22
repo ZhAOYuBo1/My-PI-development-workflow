@@ -11,7 +11,7 @@ export interface CodePIddyE2EApp {
 	close(): Promise<void>;
 }
 
-export async function launchCodePIddy(): Promise<CodePIddyE2EApp> {
+export async function launchCodePIddy(options?: { seedUserData?(userDataRoot: string): Promise<void> }): Promise<CodePIddyE2EApp> {
 	const desktopRoot = path.resolve(import.meta.dirname, "..", "..");
 	const repositoryRoot = path.resolve(desktopRoot, "..", "..");
 	const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "codepiddy-e2e-"));
@@ -23,6 +23,7 @@ export async function launchCodePIddy(): Promise<CodePIddyE2EApp> {
 		`${JSON.stringify({ name: "sample-project", private: true }, null, 2)}\n`,
 		"utf8",
 	);
+	await options?.seedUserData?.(userDataRoot);
 	const application = await electron.launch({
 		args: [desktopRoot],
 		cwd: desktopRoot,

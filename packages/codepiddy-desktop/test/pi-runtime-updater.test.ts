@@ -38,11 +38,19 @@ async function fixture(overrides: { latest?: string; probe?: (runtime: Installed
 }
 
 describe("Pi runtime update", () => {
-	test("stages, verifies, activates on next launch, and restores bundled runtime", async () => {
+	test("stages, verifies, activates on next launch, and rolls back to bundled runtime", async () => {
 		const { updater, options, userDataPath, probeVersions } = await fixture();
-		expect(updater.status()).toMatchObject({ currentVersion: "0.85.1", restartRequired: false });
+		expect(updater.status()).toMatchObject({
+			currentVersion: "0.85.1",
+			rollbackVersion: null,
+			restartRequired: false,
+		});
 		expect(await updater.checkLatest()).toMatchObject({ latestVersion: "0.87.0", updateAvailable: true });
-		expect(await updater.installLatest()).toMatchObject({ currentVersion: "0.87.0", restartRequired: true });
+		expect(await updater.installLatest()).toMatchObject({
+			currentVersion: "0.87.0",
+			rollbackVersion: "0.85.1",
+			restartRequired: true,
+		});
 		expect(probeVersions).toEqual(["0.87.0"]);
 		expect(updater.getLaunchRuntime()).toBeNull();
 		const active = JSON.parse(await readFile(path.join(userDataPath, "pi-updates", "active.json"), "utf8")) as {
@@ -53,26 +61,63 @@ describe("Pi runtime update", () => {
 		await nextLaunch.initialize();
 		expect(nextLaunch.getLaunchRuntime()?.version).toBe("0.87.0");
 		expect(nextLaunch.status().restartRequired).toBe(false);
-		expect(await nextLaunch.restoreBundled()).toMatchObject({ currentVersion: "0.85.1", restartRequired: true });
+		expect(await nextLaunch.rollback()).toMatchObject({
+			currentVersion: "0.85.1",
+			rollbackVersion: null,
+			restartRequired: true,
+		});
 		const restored = new PiRuntimeUpdater(options);
 		await restored.initialize();
 		expect(restored.getLaunchRuntime()).toBeNull();
 	});
 
-	test("replaces the active selection when a newer Pi version is installed", async () => {
+	test("rolls back to the immediately preceding installed version on repeated updates", async () => {
 		const { updater, options, userDataPath } = await fixture({ latest: "0.86.0" });
 		await updater.installLatest();
-		const nextLaunch = new PiRuntimeUpdater({ ...options, requestLatest: async () => "0.87.0" });
-		await nextLaunch.initialize();
-		expect(await nextLaunch.installLatest()).toMatchObject({
+		const secondLaunch = new PiRuntimeUpdater({ ...options, requestLatest: async () => "0.87.0" });
+		await secondLaunch.initialize();
+		expect(await secondLaunch.installLatest()).toMatchObject({
 			currentVersion: "0.87.0",
 			runningVersion: "0.86.0",
+			rollbackVersion: "0.86.0",
 			restartRequired: true,
 		});
-		const active = JSON.parse(await readFile(path.join(userDataPath, "pi-updates", "active.json"), "utf8")) as {
-			version: string;
+		const activePath = path.join(userDataPath, "pi-updates", "active.json");
+		const afterUpdate = JSON.parse(await readFile(activePath, "utf8")) as {
+			history: Array<{ kind: string; version?: string }>;
 		};
-		expect(active.version).toBe("0.87.0");
+		expect(afterUpdate.history).toEqual([
+			{ kind: "bundled" },
+			expect.objectContaining({ kind: "installed", version: "0.86.0" }),
+		]);
+		expect(await secondLaunch.rollback()).toMatchObject({
+			currentVersion: "0.86.0",
+			runningVersion: "0.86.0",
+			rollbackVersion: "0.85.1",
+			restartRequired: false,
+		});
+		const afterFirstRollback = JSON.parse(await readFile(activePath, "utf8")) as { version: string };
+		expect(afterFirstRollback.version).toBe("0.86.0");
+		const thirdLaunch = new PiRuntimeUpdater(options);
+		await thirdLaunch.initialize();
+		expect(await thirdLaunch.rollback()).toMatchObject({
+			currentVersion: "0.85.1",
+			rollbackVersion: null,
+			restartRequired: true,
+		});
+	});
+
+	test("migrates a previously installed Pi without rollback history", async () => {
+		const { updater, options, userDataPath } = await fixture({ latest: "0.87.0" });
+		await updater.installLatest();
+		const activePath = path.join(userDataPath, "pi-updates", "active.json");
+		const active = JSON.parse(await readFile(activePath, "utf8")) as { installId: string; version: string };
+		await writeFile(activePath, JSON.stringify({ installId: active.installId, version: active.version }));
+		const upgraded = new PiRuntimeUpdater({ ...options, requestLatest: async () => "0.88.0" });
+		await upgraded.initialize();
+		expect(upgraded.status()).toMatchObject({ currentVersion: "0.87.0", rollbackVersion: "0.85.1" });
+		expect(await upgraded.installLatest()).toMatchObject({ currentVersion: "0.88.0", rollbackVersion: "0.87.0" });
+		expect(await upgraded.rollback()).toMatchObject({ currentVersion: "0.87.0", rollbackVersion: "0.85.1" });
 	});
 
 	test("failed probe leaves the bundled runtime selected and removes staging", async () => {
@@ -86,14 +131,21 @@ describe("Pi runtime update", () => {
 		expect(await readdir(path.join(userDataPath, "pi-updates"))).toEqual([]);
 	});
 
-	test("automatically falls back if an activated runtime later fails to start", async () => {
-		const { updater, options } = await fixture();
+	test("startup failure automatically rolls back to the previous installed version", async () => {
+		const { updater, options } = await fixture({ latest: "0.86.0" });
 		await updater.installLatest();
+		const second = new PiRuntimeUpdater({ ...options, requestLatest: async () => "0.87.0" });
+		await second.initialize();
+		await second.installLatest();
 		const nextLaunch = new PiRuntimeUpdater(options);
 		await nextLaunch.initialize();
 		expect(await nextLaunch.fallbackAfterStartupFailure()).toBe(true);
-		expect(nextLaunch.getLaunchRuntime()).toBeNull();
-		expect(nextLaunch.status()).toMatchObject({ currentVersion: "0.85.1", warning: expect.any(String) });
+		expect(nextLaunch.getLaunchRuntime()?.version).toBe("0.86.0");
+		expect(nextLaunch.status()).toMatchObject({
+			currentVersion: "0.86.0",
+			rollbackVersion: "0.85.1",
+			warning: expect.any(String),
+		});
 	});
 
 	test("does not install a different version than the user confirmed", async () => {
@@ -117,6 +169,11 @@ describe("Pi runtime update", () => {
 		);
 		const updater = new PiRuntimeUpdater(options);
 		await updater.initialize();
-		expect(updater.status()).toMatchObject({ currentVersion: "0.85.1", warning: expect.any(String) });
+		expect(updater.status()).toMatchObject({
+			currentVersion: "0.85.1",
+			rollbackVersion: null,
+			warning: expect.any(String),
+		});
+		expect(await updater.rollback()).toMatchObject({ currentVersion: "0.85.1", warning: null });
 	});
 });

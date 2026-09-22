@@ -1185,7 +1185,7 @@ export function App() {
 	const [extensionDialog, setExtensionDialog] = useState<ExtensionDialogState | null>(null);
 	const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null);
 	const [piRuntimeStatus, setPiRuntimeStatus] = useState<PiRuntimeStatus | null>(null);
-	const [piRuntimeBusy, setPiRuntimeBusy] = useState<"check" | "install" | "restore" | null>(null);
+	const [piRuntimeBusy, setPiRuntimeBusy] = useState<"check" | "install" | "rollback" | null>(null);
 	const [piUpdateConfirm, setPiUpdateConfirm] = useState(false);
 	const [permissionDefaults, setPermissionDefaults] = useState<PermissionDefaults>({
 		read: "allow",
@@ -3160,7 +3160,7 @@ export function App() {
 		}
 	}
 
-	async function runPiRuntimeAction(action: "check" | "install" | "restore"): Promise<void> {
+	async function runPiRuntimeAction(action: "check" | "install" | "rollback"): Promise<void> {
 		if (!("codepiddy" in window) || piRuntimeBusy) return;
 		setPiRuntimeBusy(action);
 		setPiUpdateConfirm(false);
@@ -3171,10 +3171,16 @@ export function App() {
 					? await window.codepiddy.checkPiRuntimeUpdate()
 					: action === "install"
 						? await window.codepiddy.installPiRuntimeUpdate(piRuntimeStatus?.latestVersion ?? "")
-						: await window.codepiddy.restoreBundledPiRuntime();
+						: await window.codepiddy.rollbackPiRuntime();
 			setPiRuntimeStatus(result);
 		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "Pi 更新失败，原版本保持不变");
+			setError(
+				caught instanceof Error
+					? caught.message
+					: action === "rollback"
+						? "Pi 回退失败，当前版本保持不变"
+						: "Pi 更新失败，原版本保持不变",
+			);
 		} finally {
 			setPiRuntimeBusy(null);
 		}
@@ -3469,6 +3475,9 @@ export function App() {
 								</span>
 								{piRuntimeStatus.restartRequired ? <span>重启后 v{piRuntimeStatus.currentVersion}</span> : null}
 								<span>内置 v{piRuntimeStatus.bundledVersion}</span>
+								{piRuntimeStatus.rollbackVersion ? (
+									<span>可回退 v{piRuntimeStatus.rollbackVersion}</span>
+								) : null}
 								{piRuntimeStatus.latestVersion ? <span>可用 v{piRuntimeStatus.latestVersion}</span> : null}
 							</div>
 						) : null}
@@ -3510,15 +3519,18 @@ export function App() {
 									{piRuntimeBusy === "install" ? "安装并校验中…" : `更新到 v${piRuntimeStatus.latestVersion}`}
 								</button>
 							) : null}
-							{piRuntimeStatus &&
-							(piRuntimeStatus.currentVersion !== piRuntimeStatus.bundledVersion || piRuntimeStatus.warning) ? (
+							{piRuntimeStatus && (piRuntimeStatus.rollbackVersion || piRuntimeStatus.warning) ? (
 								<button
 									className="secondary-button"
 									type="button"
 									disabled={piRuntimeBusy !== null}
-									onClick={() => void runPiRuntimeAction("restore")}
+									onClick={() => void runPiRuntimeAction("rollback")}
 								>
-									恢复内置版本
+									{piRuntimeBusy === "rollback"
+										? "回退中…"
+										: piRuntimeStatus.rollbackVersion
+											? `回退到 v${piRuntimeStatus.rollbackVersion}`
+											: "清除无效更新记录"}
 								</button>
 							) : null}
 							{piRuntimeStatus?.restartRequired ? (
@@ -3534,7 +3546,7 @@ export function App() {
 						</div>
 						<small>
 							{piRuntimeStatus?.npmAvailable
-								? "更新失败时保持原版本；若新版运行异常，可恢复内置版本。"
+								? "更新失败时保持当前版本；新版运行异常时自动回退到上一个可用版本。"
 								: "安装更新需要本机 Node.js/npm；当前内置版本仍可正常使用。"}
 						</small>
 					</section>

@@ -124,7 +124,7 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 
 ## 更新 Pi 内核
 
-在 **设置 → Pi 运行时** 中检查新版本，确认后从 npm 安装 `@earendil-works/pi-coding-agent`。CodePIddy 先在独立目录校验 RPC、模型列表、命令和内置扩展，再切换到新版；现有 Agent 不会在运行中被强制中断，重启客户端后生效。安装或校验失败时保留原版本；如新版启动失败会自动回退，也可手动点击“恢复内置版本”。
+在 **设置 → Pi 运行时** 中检查新版本，确认后从 npm 安装 `@earendil-works/pi-coding-agent`。CodePIddy 先在独立目录校验 RPC、模型列表、命令和内置扩展，再切换到新版；现有 Agent 不会在运行中被强制中断，重启客户端后生效。安装或校验失败时保留原版本；如新版启动失败会自动回退到更新前的版本，也可手动点击“回退到 v…”逐次回退。第一次从内置版本更新后，回退目标才是内置版本；后续更新会把上一次使用的版本作为回退目标。
 
 这只更新 Pi 内核，不更新 CodePIddy UI 或项目文件。Windows 安装包自带更新所需的 npm，无需另装 Node.js；源码开发模式会使用本机 npm。更新前仍应备份重要项目和会话。内置的 Pi 版本可随 CodePIddy 发布升级，独立更新不修改仓库源码。
 

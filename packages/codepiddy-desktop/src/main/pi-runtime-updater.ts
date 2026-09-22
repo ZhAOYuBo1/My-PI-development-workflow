@@ -16,9 +16,12 @@ export interface InstalledPiRuntime {
 	cliPath: string;
 }
 
+type RollbackEntry = { kind: "bundled" } | { kind: "installed"; installId: string; version: string };
+
 interface ActiveRecord {
 	installId: string;
 	version: string;
+	history: RollbackEntry[];
 }
 
 interface UpdaterOptions {
@@ -129,6 +132,8 @@ export class PiRuntimeUpdater {
 	private readonly activeFile: string;
 	private readonly options: UpdaterOptions;
 	private selected: InstalledPiRuntime | null = null;
+	private selectedId: string | null = null;
+	private history: RollbackEntry[] = [];
 	private launched: InstalledPiRuntime | null = null;
 	private latest: string | null = null;
 	private warning: string | null = null;
@@ -166,9 +171,14 @@ export class PiRuntimeUpdater {
 			)
 				throw new Error("无效的更新记录");
 			this.selected = await this.validateInstallation(raw.installId, parseVersion(raw.version));
+			this.selectedId = raw.installId;
+			this.history = await this.loadHistory("history" in raw ? raw.history : undefined, this.selected.version);
 		} catch (error) {
 			if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) {
-				this.warning = "已安装的 Pi 更新不可用，已回退至内置版本。可以在设置中恢复内置版本后重试。";
+				this.selected = null;
+				this.selectedId = null;
+				this.history = [];
+				this.warning = "已安装的 Pi 更新不可用，已回退至内置版本。";
 			}
 		}
 		this.launched = this.selected;
@@ -180,9 +190,15 @@ export class PiRuntimeUpdater {
 
 	status(): PiRuntimeStatus {
 		const currentVersion = this.selected?.version ?? this.options.bundledVersion;
+		const rollbackTarget = this.history.at(-1);
 		return {
 			bundledVersion: this.options.bundledVersion,
 			currentVersion,
+			rollbackVersion: rollbackTarget
+				? rollbackTarget.kind === "bundled"
+					? this.options.bundledVersion
+					: rollbackTarget.version
+				: null,
 			runningVersion: this.launched?.version ?? this.options.bundledVersion,
 			latestVersion: this.latest,
 			updateAvailable: this.latest !== null && compareVersions(this.latest, currentVersion) > 0,
@@ -229,8 +245,15 @@ export class PiRuntimeUpdater {
 			await rename(stagingRoot, destination);
 			stagingRoot = null;
 			const selected = await this.validateInstallation(installId, version);
-			await this.writeActive({ installId, version });
+			const previous: RollbackEntry =
+				this.selected && this.selectedId
+					? { kind: "installed", installId: this.selectedId, version: this.selected.version }
+					: { kind: "bundled" };
+			const history = [...this.history, previous];
+			await this.writeActive({ installId, version, history });
 			this.selected = selected;
+			this.selectedId = installId;
+			this.history = history;
 			this.latest = version;
 			this.warning = null;
 			return this.status();
@@ -245,19 +268,83 @@ export class PiRuntimeUpdater {
 
 	async fallbackAfterStartupFailure(): Promise<boolean> {
 		if (!this.launched) return false;
-		await rm(this.activeFile, { force: true });
-		this.selected = null;
-		this.launched = null;
-		this.warning = "新版 Pi 无法启动，已自动恢复内置版本。";
+		try {
+			await this.rollback();
+		} catch {
+			await rm(this.activeFile, { force: true });
+			this.selected = null;
+			this.selectedId = null;
+			this.history = [];
+		}
+		this.launched = this.selected;
+		this.warning = `新版 Pi 无法启动，已自动回退到 v${this.status().currentVersion}。`;
 		return true;
 	}
 
-	async restoreBundled(): Promise<PiRuntimeStatus> {
+	async rollback(): Promise<PiRuntimeStatus> {
 		if (this.installing) throw new Error("Pi 更新进行中，请稍后重试");
-		await rm(this.activeFile, { force: true });
-		this.selected = null;
+		const previous = this.history[this.history.length - 1];
+		if (!previous) {
+			if (this.warning && !this.selected) {
+				await rm(this.activeFile, { force: true });
+				this.warning = null;
+				return this.status();
+			}
+			throw new Error("没有可回退的 Pi 版本");
+		}
+		const history = this.history.slice(0, -1);
+		if (previous.kind === "bundled") {
+			await rm(this.activeFile, { force: true });
+			this.selected = null;
+			this.selectedId = null;
+		} else {
+			const selected = await this.validateInstallation(previous.installId, previous.version);
+			await this.writeActive({ installId: previous.installId, version: previous.version, history });
+			this.selected = selected;
+			this.selectedId = previous.installId;
+		}
+		this.history = history;
 		this.warning = null;
 		return this.status();
+	}
+
+	private async loadHistory(raw: unknown, currentVersion: string): Promise<RollbackEntry[]> {
+		// Records written before rolling rollback existed imply a single fallback to the bundled runtime.
+		if (raw === undefined) return [{ kind: "bundled" }];
+		if (!Array.isArray(raw) || raw.length === 0 || raw.length > 50) {
+			this.warning = "Pi 回退记录无效，已将内置版本作为回退目标。";
+			return [{ kind: "bundled" }];
+		}
+		const history: RollbackEntry[] = [];
+		for (const value of raw) {
+			if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+			if ("kind" in value && value.kind === "bundled") {
+				if (history.length === 0) history.push({ kind: "bundled" });
+				continue;
+			}
+			if (
+				!("kind" in value) ||
+				value.kind !== "installed" ||
+				!("installId" in value) ||
+				!("version" in value) ||
+				typeof value.installId !== "string"
+			)
+				continue;
+			try {
+				const version = parseVersion(value.version);
+				if (compareVersions(version, currentVersion) >= 0) continue;
+				await this.validateInstallation(value.installId, version);
+				history.push({ kind: "installed", installId: value.installId, version });
+			} catch {
+				/* A deleted or invalid older installation cannot be a rollback target. */
+			}
+		}
+		if (history.length === 0) {
+			this.warning = "以前的 Pi 回退版本不可用，已将内置版本作为回退目标。";
+			return [{ kind: "bundled" }];
+		}
+		if (history.length !== raw.length) this.warning = "部分旧版 Pi 已不可用，已跳过这些回退记录。";
+		return history;
 	}
 
 	private assertStagingPath(target: string): void {
