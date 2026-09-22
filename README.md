@@ -87,13 +87,15 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 <table>
   <tr>
     <td width="50%"><img src="docs/images/codepiddy-agent.png" alt="Agent 对话、上下文与模型控制" /></td>
-    <td width="50%"><img src="docs/images/codepiddy-settings.png" alt="按 Agent 类型配置内置 Skill" /></td>
+    <td width="50%"><img src="docs/images/codepiddy-settings.png" alt="Pi 运行时更新、版本回退与全局权限" /></td>
   </tr>
   <tr>
     <td align="center"><strong>长期 Agent 会话、上下文、模型与工具状态</strong></td>
-    <td align="center"><strong>按 Agent 类型启用或停用内置 Skill</strong></td>
+    <td align="center"><strong>Pi 版本管理与全局权限</strong></td>
   </tr>
 </table>
+
+以上截图来自隔离的演示项目，不包含真实项目文件、API Key 或私人会话。
 
 界面使用原有中性色调，并通过半透明、背景模糊、内高光和多层阴影增加层次。目标是保持长时间编程时的低干扰，同时让项目、工作项、Agent、权限和运行状态清晰可见。
 
