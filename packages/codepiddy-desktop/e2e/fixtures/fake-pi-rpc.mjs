@@ -152,6 +152,10 @@ input.on("line", (line) => {
 			output({ type: "agent_settled" });
 			break;
 		case "compact":
+			if (messages.length === 0) {
+				output({ type: "response", command: "compact", id, success: false, error: "Nothing to compact (session too small)" });
+				break;
+			}
 			output({ type: "compaction_start" });
 			output({ type: "compaction_end" });
 			response("compact", id, { summary: "E2E compact", tokensBefore: 12000 });

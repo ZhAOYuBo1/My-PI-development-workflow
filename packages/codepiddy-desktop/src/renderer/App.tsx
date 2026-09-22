@@ -2103,6 +2103,12 @@ export function App() {
 	}, [drafts, project, selection]);
 
 	useEffect(() => {
+		if (!error) return;
+		const timer = window.setTimeout(() => setError(null), 6500);
+		return () => window.clearTimeout(timer);
+	}, [error]);
+
+	useEffect(() => {
 		if (!archiveToast) return;
 		const timer = window.setTimeout(() => setArchiveToast(null), 4500);
 		return () => window.clearTimeout(timer);
@@ -4257,9 +4263,9 @@ export function App() {
 			</aside>
 			<main className="main-pane">
 				{error ? (
-					<div className="error-banner">
-						{error}
-						<button type="button" onClick={() => setError(null)}>
+					<div className="error-banner" role="alert">
+						<span>{error}</span>
+						<button type="button" aria-label="关闭错误提示" onClick={() => setError(null)}>
 							<AppIcon name="close" />
 						</button>
 					</div>
