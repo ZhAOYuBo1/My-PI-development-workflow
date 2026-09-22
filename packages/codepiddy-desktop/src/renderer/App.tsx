@@ -184,13 +184,6 @@ const roleLabels: Record<AgentRole, string> = {
 	review: "Review Agent",
 };
 
-const roleGlyphs: Record<AgentSlotSummary["role"], string> = {
-	"requirement-analysis": "◇",
-	coding: "⌘",
-	"bug-fix": "⌁",
-	review: "✓",
-};
-
 const PROMPT_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const MAX_PROMPT_IMAGES = 8;
 const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -819,7 +812,6 @@ function ContextGauge({ snapshot, onClick }: { snapshot?: AgentSessionSnapshot; 
 		? `${usage.tokens === null ? "—" : formatTokenCount(usage.tokens)} / ${formatTokenCount(usage.contextWindow)}`
 		: "正在读取";
 	const roundedPercent = percent === null ? null : Math.min(100, Math.max(0, percent));
-	const circumference = 2 * Math.PI * 9;
 	const tooltip = usage
 		? `上下文 ${label} · ${roundedPercent === null ? "等待下一次回复" : `已使用 ${Math.round(roundedPercent)}%`}`
 		: "正在读取上下文容量";
@@ -830,17 +822,11 @@ function ContextGauge({ snapshot, onClick }: { snapshot?: AgentSessionSnapshot; 
 			onClick={onClick}
 			aria-label={`${tooltip}。点击查看 Session 统计`}
 		>
-			<svg viewBox="0 0 24 24" aria-hidden="true">
-				<circle className="context-gauge-track" cx="12" cy="12" r="9" />
-				<circle
-					className="context-gauge-progress"
-					cx="12"
-					cy="12"
-					r="9"
-					strokeDasharray={circumference}
-					strokeDashoffset={circumference * (1 - (roundedPercent ?? 0) / 100)}
-				/>
-			</svg>
+			<span
+				className="context-gauge-ring"
+				style={{ background: `conic-gradient(var(--context-gauge-color) ${roundedPercent ?? 0}%, #d9ded9 0)` }}
+				aria-hidden="true"
+			/>
 			<span className="context-gauge-value" aria-hidden="true">
 				{roundedPercent === null ? "—" : Math.round(roundedPercent)}
 			</span>
@@ -2384,7 +2370,6 @@ export function App() {
 								key={slot.role}
 								onClick={() => setSelection({ type: "agent", lane, workItemId: item.id, role: slot.role })}
 							>
-								<span className="agent-glyph">{roleGlyphs[slot.role]}</span>
 								<span className="truncate" title={slot.blockedReason}>
 									{slot.displayName}
 								</span>
@@ -3647,7 +3632,6 @@ export function App() {
 								<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>
 									{items.length === 0 ? (
 										<div className="transcript-placeholder compact">
-											<div className="empty-mark small">{roleGlyphs[selection.role]}</div>
 											<h2>{slot.displayName}</h2>
 											<p>发送一条消息开始工作。Agent 会读取当前 Work Item 的交接文档。</p>
 											{slot.kickoffPrompt ? (
@@ -3829,7 +3813,6 @@ export function App() {
 					) : (
 						<>
 							<div className="transcript-placeholder">
-								<div className="empty-mark small">{roleGlyphs[selection.role]}</div>
 								<h2>{slot.displayName}</h2>
 								<p>{slot.blockedReason || "这个 Slot 尚未创建 Agent Instance。"}</p>
 							</div>
@@ -3897,7 +3880,6 @@ export function App() {
 									})
 								}
 							>
-								<span className="agent-glyph large">{roleGlyphs[slot.role]}</span>
 								<span>
 									<strong>{slot.displayName}</strong>
 									<small>{slot.blockedReason || statusLabels[slot.status]}</small>

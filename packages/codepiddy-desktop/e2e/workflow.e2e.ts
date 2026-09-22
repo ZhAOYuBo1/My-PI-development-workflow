@@ -16,6 +16,8 @@ test.afterEach(async () => {
 test("creates a work item, runs an agent, and changes model with the keyboard", async () => {
 	const { page } = client;
 	await createFeatureWorkItem(page);
+	await page.locator(".work-item-row").filter({ hasText: "FEAT-001" }).locator(".tree-label").click();
+	await expect(page.locator(".agent-choice-list .agent-glyph")).toHaveCount(0);
 	await openRequirementAgent(page);
 	await page.getByRole("button", { name: "Agent 操作" }).click();
 	const actionsMenu = page.getByRole("menu", { name: "Agent 操作" });
@@ -51,10 +53,14 @@ test("shows context usage beside the model and jumps through the transcript mini
 	const { page } = client;
 	await createFeatureWorkItem(page);
 	await openRequirementAgent(page);
+	await expect(page.locator(".agent-row .agent-glyph")).toHaveCount(0);
+	await expect(page.locator(".agent-pane .empty-mark.small")).toHaveCount(0);
 	await expect(page.locator(".content-header .context-gauge")).toHaveCount(0);
 	const contextGauge = page.locator(".composer .context-gauge");
 	await expect(contextGauge).toBeVisible();
-	expect(await contextGauge.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(247, 248, 246)");
+	await expect(contextGauge.locator(".context-gauge-ring")).toHaveCount(1);
+	await expect(contextGauge.locator("circle, svg")).toHaveCount(0);
+	expect(await contextGauge.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
 	await contextGauge.hover();
 	await expect(page.getByRole("tooltip")).toContainText("1.2万 / 12.8万");
 
