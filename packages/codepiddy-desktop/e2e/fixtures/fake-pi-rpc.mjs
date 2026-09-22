@@ -3,6 +3,9 @@ import readline from "node:readline";
 const models = [
 	{ provider: "test", id: "model-one", name: "Model One", reasoning: true, contextWindow: 128000 },
 	{ provider: "test", id: "model-two", name: "Model Two", reasoning: true, contextWindow: 128000 },
+	...(process.env.CODEPIDDY_TEST_MANY_MODELS === "1"
+		? Array.from({ length: 44 }, (_, index) => ({ provider: "test", id: `model-${index + 3}`, name: `Model ${index + 3}`, reasoning: true, contextWindow: 128000 }))
+		: []),
 ];
 let model = models[0];
 let thinkingLevel = "medium";
@@ -105,7 +108,7 @@ input.on("line", (line) => {
 					{ name: "ext-test", description: "Extension test command", source: "extension" },
 					{ name: "prompt-test", description: "Prompt template test", source: "prompt" },
 					{ name: "skill:test", description: "Skill test", source: "skill" },
-				],
+				].filter((command) => process.env.CODEPIDDY_TEST_PI_COMMANDS_NO_BUILTINS !== "1" || command.source !== "builtin"),
 			});
 			break;
 		case "get_available_models":

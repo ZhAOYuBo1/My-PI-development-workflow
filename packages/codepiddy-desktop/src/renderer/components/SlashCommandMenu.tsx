@@ -1,5 +1,5 @@
 import type { AgentCommandOption, AgentModelSelection } from "@codepiddy/shared";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isExecutableSlashInvocation, shouldExecuteCommandOnSelect } from "./slash-command-utils.ts";
 
 interface MenuItem {
@@ -27,6 +27,8 @@ export function SlashCommandMenu({
 }) {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [dismissedQuery, setDismissedQuery] = useState<string | null>(null);
+	const listRef = useRef<HTMLDivElement>(null);
+	const keyboardScrollRef = useRef(false);
 	const items = useMemo<MenuItem[]>(() => {
 		if (!query.startsWith("/")) return [];
 		const firstSpace = query.indexOf(" ");
@@ -99,8 +101,17 @@ export function SlashCommandMenu({
 
 	useEffect(() => {
 		setSelectedIndex(0);
+		keyboardScrollRef.current = false;
+		listRef.current?.scrollTo({ top: 0 });
 		if (dismissedQuery !== query) setDismissedQuery(null);
 	}, [query, dismissedQuery]);
+
+	useEffect(() => {
+		if (!visible || !keyboardScrollRef.current) return;
+		listRef.current
+			?.querySelector<HTMLElement>(`[data-command-index="${selectedIndex}"]`)
+			?.scrollIntoView({ block: "nearest" });
+	}, [selectedIndex, visible]);
 
 	const selectItem = useCallback(
 		(item: MenuItem): void => {
@@ -116,9 +127,11 @@ export function SlashCommandMenu({
 		const handleKeyDown = (event: KeyboardEvent): void => {
 			if (event.key === "ArrowDown") {
 				event.preventDefault();
+				keyboardScrollRef.current = true;
 				setSelectedIndex((current) => (current + 1) % items.length);
 			} else if (event.key === "ArrowUp") {
 				event.preventDefault();
+				keyboardScrollRef.current = true;
 				setSelectedIndex((current) => (current - 1 + items.length) % items.length);
 			} else if (event.key === "Enter") {
 				if (invocationIsExecutable) return;
@@ -135,19 +148,31 @@ export function SlashCommandMenu({
 	}, [invocationIsExecutable, items, query, selectItem, selectedIndex, visible]);
 
 	if (!visible) {
-		if (query.startsWith("/") && loading) {
+		if (query.trim() === "/" && commands.length === 0 && loading) {
 			return <div className="slash-menu slash-menu-loading">正在从 Pi 加载命令…</div>;
 		}
 		return null;
 	}
 	return (
-		<div className="slash-menu" role="listbox" aria-label="Pi 斜杠命令">
+		<div
+			className="slash-menu"
+			ref={listRef}
+			role="listbox"
+			aria-label="Pi 斜杠命令"
+			onWheel={() => {
+				keyboardScrollRef.current = false;
+			}}
+		>
 			{items.map((item, index) => (
 				<button
 					type="button"
 					className={index === selectedIndex ? "selected" : ""}
 					key={`${item.value}:${index}`}
-					onMouseEnter={() => setSelectedIndex(index)}
+					onMouseEnter={() => {
+						keyboardScrollRef.current = false;
+						setSelectedIndex(index);
+					}}
+					data-command-index={index}
 					onClick={() => selectItem(item)}
 					role="option"
 					aria-selected={index === selectedIndex}

@@ -1274,10 +1274,14 @@ export function App() {
 	const pendingToolFailures = useRef(new Map<string, ToolRecoveryOffer>());
 	const permissionResponsesInFlight = useRef(new Set<string>());
 	const agentCommandLoads = useRef(new Map<string, Promise<AgentCommandOption[]>>());
+	const activatedAgentKey = useRef<string | null>(null);
 	const projectRef = useRef<ProjectSummary | null>(project);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
 	const imageInputRef = useRef<HTMLInputElement | null>(null);
 	const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
+	const modelListRef = useRef<HTMLDivElement | null>(null);
+	const modelPickerInitializedRef = useRef<string | null>(null);
+	const modelPickerKeyboardScrollRef = useRef(false);
 	const modelPickerSelectedIndexRef = useRef(0);
 	const scrollPositions = useRef<Record<string, number>>(readStoredScrollPositions());
 	const restoredProjectUiRoots = useRef(new Set<string>());
@@ -1996,9 +2000,15 @@ export function App() {
 	}, []);
 
 	useEffect(() => {
-		if (!("codepiddy" in window) || !project || !selectedWorkItem || selection.type !== "agent") return;
+		if (!("codepiddy" in window) || !project || !selectedWorkItem || selection.type !== "agent") {
+			activatedAgentKey.current = null;
+			return;
+		}
 		const slot = selectedWorkItem.agentSlots.find((candidate) => candidate.role === selection.role);
 		if (!slot?.currentInstanceId) return;
+		const key = `${project.id}:${slot.currentInstanceId}`;
+		if (activatedAgentKey.current === key) return;
+		activatedAgentKey.current = key;
 		const locator = {
 			agentInstanceId: slot.currentInstanceId,
 			projectId: project.id,
@@ -2072,14 +2082,14 @@ export function App() {
 		)
 			return;
 		const slot = selectedWorkItem.agentSlots.find((candidate) => candidate.role === selection.role);
-		if (!slot?.currentInstanceId) return;
+		if (!slot?.currentInstanceId || agentCommands[slot.currentInstanceId] !== undefined) return;
 		void loadAgentCommands({
 			agentInstanceId: slot.currentInstanceId,
 			projectId: project.id,
 			workItemId: selectedWorkItem.id,
 			role: slot.role,
 		}).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : "读取 Pi 命令失败"));
-	}, [activeDraftStartsWithSlash, loadAgentCommands, project, selectedWorkItem, selection]);
+	}, [activeDraftStartsWithSlash, agentCommands, loadAgentCommands, project, selectedWorkItem, selection]);
 
 	useEffect(() => {
 		if (!("codepiddy" in window) || !project || selection.type !== "agent") {
@@ -3062,8 +3072,13 @@ export function App() {
 	}
 
 	useLayoutEffect(() => {
-		if (!modelPickerAgentId) return;
+		if (!modelPickerAgentId) {
+			modelPickerInitializedRef.current = null;
+			return;
+		}
+		if (modelPickerInitializedRef.current === modelPickerAgentId) return;
 		const currentSelection = modelSelections[modelPickerAgentId];
+		if (!currentSelection) return;
 		const currentIndex = currentSelection
 			? modelPickerOptions.findIndex(
 					(model) => model.provider === currentSelection.model.provider && model.id === currentSelection.model.id,
@@ -3071,13 +3086,17 @@ export function App() {
 			: -1;
 		const nextIndex = currentIndex >= 0 && !modelSearch ? currentIndex : 0;
 		modelPickerSelectedIndexRef.current = nextIndex;
+		modelPickerKeyboardScrollRef.current = true;
+		modelPickerInitializedRef.current = modelPickerAgentId;
 		setModelPickerSelectedIndex(nextIndex);
 		modelSearchInputRef.current?.focus();
 	}, [modelPickerAgentId, modelPickerOptions, modelSearch, modelSelections]);
 
 	useEffect(() => {
-		if (!modelPickerAgentId) return;
-		const selected = document.querySelector<HTMLElement>(`[data-model-index="${modelPickerSelectedIndex}"]`);
+		if (!modelPickerAgentId || !modelPickerKeyboardScrollRef.current) return;
+		const selected = modelListRef.current?.querySelector<HTMLElement>(
+			`[data-model-index="${modelPickerSelectedIndex}"]`,
+		);
 		selected?.scrollIntoView({ block: "nearest" });
 	}, [modelPickerAgentId, modelPickerSelectedIndex]);
 
@@ -4638,6 +4657,7 @@ export function App() {
 									onKeyDown={(event) => {
 										if (event.key === "ArrowDown" && filtered.length > 0) {
 											event.preventDefault();
+											modelPickerKeyboardScrollRef.current = true;
 											setModelPickerSelectedIndex((current) => {
 												const next = (current + 1) % filtered.length;
 												modelPickerSelectedIndexRef.current = next;
@@ -4645,6 +4665,7 @@ export function App() {
 											});
 										} else if (event.key === "ArrowUp" && filtered.length > 0) {
 											event.preventDefault();
+											modelPickerKeyboardScrollRef.current = true;
 											setModelPickerSelectedIndex((current) => {
 												const next = (current - 1 + filtered.length) % filtered.length;
 												modelPickerSelectedIndexRef.current = next;
@@ -4666,7 +4687,13 @@ export function App() {
 									<input
 										ref={modelSearchInputRef}
 										value={modelSearch}
-										onChange={(event) => setModelSearch(event.target.value)}
+										onChange={(event) => {
+											setModelSearch(event.target.value);
+											modelListRef.current?.scrollTo({ top: 0 });
+											modelPickerSelectedIndexRef.current = 0;
+											modelPickerKeyboardScrollRef.current = true;
+											setModelPickerSelectedIndex(0);
+										}}
 										placeholder="搜索模型"
 									/>
 									<div className="thinking-row">
@@ -4682,7 +4709,13 @@ export function App() {
 											</button>
 										))}
 									</div>
-									<div className="model-list">
+									<div
+										className="model-list"
+										ref={modelListRef}
+										onWheel={() => {
+											modelPickerKeyboardScrollRef.current = false;
+										}}
+									>
 										{providers.map((provider) => (
 											<section key={provider}>
 												<h3>{provider}</h3>
@@ -4703,6 +4736,7 @@ export function App() {
 																.join(" ")}
 															data-model-index={index}
 															onMouseEnter={() => {
+																modelPickerKeyboardScrollRef.current = false;
 																modelPickerSelectedIndexRef.current = index;
 																setModelPickerSelectedIndex(index);
 															}}

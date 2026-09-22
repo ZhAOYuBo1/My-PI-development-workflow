@@ -69,6 +69,7 @@ import {
 	parseSetAgentScopedModelsInput,
 	parseSetAgentThinkingInput,
 } from "./ipc-validation.ts";
+import { loadPiBuiltinCommands, mergePiCommands } from "./pi-builtin-commands.ts";
 import { type InstalledPiRuntime, PiRuntimeUpdater } from "./pi-runtime-updater.ts";
 import { RecentProjectStore } from "./recent-project-store.ts";
 import { AppSettingsStore } from "./settings-store.ts";
@@ -356,6 +357,7 @@ class AgentManager {
 	private readonly processAgents = new Map<string, StoredAgentInstance>();
 	private readonly processStarts = new SingleFlightMap<string, PiRpcProcess>();
 	private readonly pendingPermissions = new Map<string, PendingPermissionRequest>();
+	private readonly builtinCommandsCache = new Map<string, AgentCommandOption[]>();
 
 	constructor(
 		runtimeRoot: string,
@@ -440,20 +442,31 @@ class AgentManager {
 	}
 
 	async getCommands(input: AgentInstanceLocator): Promise<AgentCommandOption[]> {
-		const process = await this.ensureProcess(await this.resolve(input));
-		let commands = await process.getCommands();
-		if (commands.length === 0) {
-			await process.reload();
-			commands = await process.getCommands();
+		const rpc = await this.ensureProcess(await this.resolve(input));
+		const remote = (await rpc.getCommands()).map(
+			(command): AgentCommandOption => ({
+				name: command.name,
+				command: `/${command.name}`,
+				description: command.description,
+				...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
+				source: command.source,
+			}),
+		);
+		if (remote.some((command) => command.source === "builtin")) return mergePiCommands(remote, []);
+		const packageDir =
+			this.piRuntimeUpdater.getLaunchRuntime()?.packageDir ??
+			(app.isPackaged
+				? path.join(this.repositoryRoot, "coding-agent-package")
+				: path.join(this.repositoryRoot, "packages", "coding-agent"));
+		let builtins = this.builtinCommandsCache.get(packageDir);
+		if (!builtins) {
+			builtins = await loadPiBuiltinCommands(
+				packageDir,
+				process.env.CODEPIDDY_NODE_EXECUTABLE ?? (app.isPackaged ? process.execPath : "node"),
+			);
+			this.builtinCommandsCache.set(packageDir, builtins);
 		}
-		if (commands.length === 0) throw new Error("Pi 返回了空命令列表");
-		return commands.map((command) => ({
-			name: command.name,
-			command: `/${command.name}`,
-			description: command.description,
-			...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
-			source: command.source,
-		}));
+		return mergePiCommands(remote, builtins);
 	}
 
 	async getModelSelection(input: AgentInstanceLocator): Promise<AgentModelSelection> {

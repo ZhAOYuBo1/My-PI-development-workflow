@@ -11,7 +11,11 @@ export interface CodePIddyE2EApp {
 	close(): Promise<void>;
 }
 
-export async function launchCodePIddy(options?: { seedUserData?(userDataRoot: string): Promise<void> }): Promise<CodePIddyE2EApp> {
+export async function launchCodePIddy(options?: {
+	seedUserData?(userDataRoot: string): Promise<void>;
+	fakePiCommandsWithoutBuiltins?: boolean;
+	manyModels?: boolean;
+}): Promise<CodePIddyE2EApp> {
 	const desktopRoot = path.resolve(import.meta.dirname, "..", "..");
 	const repositoryRoot = path.resolve(desktopRoot, "..", "..");
 	const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "codepiddy-e2e-"));
@@ -36,6 +40,8 @@ export async function launchCodePIddy(options?: { seedUserData?(userDataRoot: st
 			CODEPIDDY_TEST_PROJECT_ROOT: projectRoot,
 			CODEPIDDY_DISABLE_SINGLE_INSTANCE: "1",
 			CODEPIDDY_DISABLE_PROJECT_DISCOVERY: "1",
+			...(options?.fakePiCommandsWithoutBuiltins ? { CODEPIDDY_TEST_PI_COMMANDS_NO_BUILTINS: "1" } : {}),
+			...(options?.manyModels ? { CODEPIDDY_TEST_MANY_MODELS: "1" } : {}),
 		},
 	});
 	const page = await application.firstWindow();
