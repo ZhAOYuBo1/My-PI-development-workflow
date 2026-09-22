@@ -58,7 +58,8 @@ test("requires an explicit work item approval to unlock Coding", async () => {
 		await page.locator(".work-item-row").filter({ hasText: "FEAT-001" }).locator(".chevron-button").click();
 	}
 	await expect(codingRow).toContainText("等待");
-	await expect(page.getByText("对 Agent 说“批准”只是聊天消息。")).toBeVisible();
+	await expect(page.getByText("对 Agent 说“批准”只是聊天消息。")).toHaveCount(0);
+	await expect(page.locator(".content-header").getByRole("button", { name: "批准需求" })).toBeVisible();
 
 	const composer = page.locator(".composer textarea");
 	await composer.fill("我批准这个需求");
@@ -66,7 +67,7 @@ test("requires an explicit work item approval to unlock Coding", async () => {
 	await expect(page.locator(".message-assistant").last()).toContainText("Fake Pi 已完成当前请求。");
 	await expect(codingRow).toContainText("等待");
 
-	await page.getByRole("button", { name: "批准需求并解锁 Coding" }).click();
+	await page.locator(".content-header").getByRole("button", { name: "批准需求" }).click();
 	await expect(codingRow).toContainText("创建");
 	await codingRow.click();
 	await expect(page.getByRole("button", { name: "创建 Agent" })).toBeEnabled();

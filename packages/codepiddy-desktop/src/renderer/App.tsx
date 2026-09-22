@@ -3529,6 +3529,19 @@ export function App() {
 			const toolRecoveryOffer = agentId ? toolRecoveryOffers[agentId] : undefined;
 			const sessionSnapshot = agentId ? agentSessionSnapshots[agentId] : undefined;
 			const canAbort = Boolean(agentId && (activity || slot.status === "running" || slot.status === "waiting"));
+			const approveButton =
+				selectedWorkItem.lane === "requirements" &&
+				!selectedWorkItem.requirementApprovedAt &&
+				(selection.role === "requirement-analysis" || selection.role === "coding") ? (
+					<button
+						className="secondary-button"
+						type="button"
+						disabled={busy || !("codepiddy" in window)}
+						onClick={() => void approveSelectedRequirement()}
+					>
+						批准需求
+					</button>
+				) : null;
 			return (
 				<div className="agent-pane">
 					<header className="content-header">
@@ -3541,6 +3554,7 @@ export function App() {
 						</div>
 						{agentId ? (
 							<div className="agent-header-actions">
+								{approveButton}
 								{canAbort ? (
 									<button
 										className="secondary-button stop-button"
@@ -3601,37 +3615,20 @@ export function App() {
 								</div>
 							</div>
 						) : (
-							<button
-								className="secondary-button"
-								type="button"
-								onClick={() => void createAgent(slot)}
-								disabled={busy || !("codepiddy" in window) || Boolean(slot.blockedReason)}
-								title={slot.blockedReason}
-							>
-								{slot.blockedReason ? "等待用户批准" : "创建 Agent"}
-							</button>
+							<div className="agent-header-actions">
+								{approveButton}
+								<button
+									className="secondary-button"
+									type="button"
+									onClick={() => void createAgent(slot)}
+									disabled={busy || !("codepiddy" in window) || Boolean(slot.blockedReason)}
+									title={slot.blockedReason}
+								>
+									{slot.blockedReason ? "等待用户批准" : "创建 Agent"}
+								</button>
+							</div>
 						)}
 					</header>
-					{selectedWorkItem.lane === "requirements" &&
-					!selectedWorkItem.requirementApprovedAt &&
-					(selection.role === "requirement-analysis" || selection.role === "coding") ? (
-						<div className="requirement-approval-strip">
-							<div>
-								<strong>等待你批准此需求</strong>
-								<span>
-									对 Agent 说“批准”只是聊天消息。确认 Grill 和 OpenSpec 的交接产物后，请在这里解锁 Coding。
-								</span>
-							</div>
-							<button
-								className="primary-button"
-								type="button"
-								disabled={busy || !("codepiddy" in window)}
-								onClick={() => void approveSelectedRequirement()}
-							>
-								批准需求并解锁 Coding
-							</button>
-						</div>
-					) : null}
 					{agentId ? (
 						<>
 							<div className="transcript-stage">
@@ -3858,7 +3855,7 @@ export function App() {
 										disabled={busy}
 										onClick={() => void approveSelectedRequirement()}
 									>
-										批准需求并解锁 Coding
+										批准需求
 									</button>
 								)
 							) : null}
