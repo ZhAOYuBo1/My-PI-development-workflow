@@ -214,6 +214,7 @@ export interface AgentClientEvent {
 }
 
 export interface CodePIddyClientApi extends ProjectClientApi {
+	platform: string;
 	createAgent(input: CreateAgentInput): Promise<ProjectSummary>;
 	activateAgent(input: AgentInstanceLocator): Promise<void>;
 	sendAgentPrompt(input: SendAgentPromptInput): Promise<void>;

@@ -85,6 +85,7 @@ const channels = {
 } as const;
 
 const api: CodePIddyClientApi = {
+	platform: process.platform,
 	listRecentProjects: () => ipcRenderer.invoke(channels.listRecentProjects),
 	getStartupProject: () => ipcRenderer.invoke(channels.getStartupProject),
 	closeProject: (projectRoot: string) => ipcRenderer.invoke(channels.closeProject, projectRoot),

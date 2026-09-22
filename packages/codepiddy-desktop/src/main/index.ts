@@ -1206,7 +1206,13 @@ function createWindow(stateStore: RecentProjectStore): BrowserWindow {
 		...(visibleBounds ? { x: visibleBounds.x, y: visibleBounds.y } : {}),
 		minWidth: 900,
 		minHeight: 620,
-		backgroundColor: "#f7f7f6",
+		backgroundColor: "#eceeea",
+		...(process.platform === "win32"
+			? {
+					titleBarStyle: "hidden" as const,
+					titleBarOverlay: { color: "#eceeea", symbolColor: "#292928", height: 32 },
+				}
+			: {}),
 		show: false,
 		autoHideMenuBar: true,
 		title: "CodePIddy",

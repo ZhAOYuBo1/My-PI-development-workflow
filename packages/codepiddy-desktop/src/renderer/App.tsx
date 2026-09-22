@@ -4183,8 +4183,15 @@ export function App() {
 		);
 	}
 
+	const useWindowOverlay = "codepiddy" in window && window.codepiddy.platform === "win32";
 	return (
-		<div className="app-shell">
+		<div className={`app-shell${useWindowOverlay ? " windows-overlay" : ""}`}>
+			{useWindowOverlay ? (
+				<header className="app-titlebar">
+					<img src="./codepiddy-icon.png" alt="" />
+					<span>CodePIddy</span>
+				</header>
+			) : null}
 			<aside className="sidebar">
 				<div className="brand-row">
 					<div className="brand-title">CodePIddy</div>

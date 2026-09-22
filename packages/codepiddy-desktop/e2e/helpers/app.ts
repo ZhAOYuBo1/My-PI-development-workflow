@@ -61,7 +61,7 @@ export async function launchCodePIddy(options?: {
 export async function createFeatureWorkItem(page: Page): Promise<void> {
 	await page.getByRole("button", { name: "打开项目", exact: true }).click();
 	await page.getByRole("button", { name: "创建新需求" }).click();
-	await page.getByLabel("标题").fill("E2E 登录功能");
+	await page.getByLabel("标题", { exact: true }).fill("E2E 登录功能");
 	await page.getByLabel("初始描述").fill("验证 CodePIddy Electron 工作流");
 	await page.getByRole("button", { name: "创建", exact: true }).click();
 	await page.getByRole("button", { name: /FEAT-001/ }).waitFor();

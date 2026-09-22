@@ -10,7 +10,10 @@ html, body, #root { width: 100%; height: 100%; margin: 0; }
 button, input, textarea { font: inherit; }
 button { color: inherit; }
 
-.app-shell { display: flex; width: 100%; height: 100%; overflow: hidden; background: #fff; }
+.app-titlebar { position: absolute; z-index: 1; top: 0; right: 0; left: 0; display: flex; height: 32px; align-items: center; gap: 7px; padding: 0 10px; background: #eceeea; color: #292928; font-size: 12px; font-weight: 600; user-select: none; -webkit-app-region: drag; }
+.app-titlebar img { display: block; width: 16px; height: 16px; object-fit: contain; }
+
+.app-shell { position: relative; display: flex; width: 100%; height: 100%; overflow: hidden; background: #fff; }
 .sidebar { position: relative; width: 278px; flex: 0 0 278px; height: 100%; padding: 12px 8px 58px; overflow-y: auto; background: #f5f5f3; border-right: 1px solid #e5e5e2; }
 .brand-row { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 7px; }
 .brand-title { padding: 6px 4px; border: 0; background: transparent; font-size: 16px; font-weight: 650; cursor: default; user-select: none; }
@@ -1469,6 +1472,14 @@ textarea:focus-visible,
   gap: 10px;
   padding: 10px;
   background:
+    radial-gradient(circle at 8% 12%, rgb(216 224 216 / 58%), transparent 30%),
+    radial-gradient(circle at 88% 82%, rgb(226 220 209 / 48%), transparent 35%),
+    #eceeea;
+}
+.app-shell.windows-overlay {
+  padding-top: 42px;
+  background:
+    linear-gradient(to bottom, #eceeea, rgb(236 238 234 / 0%) 48px),
     radial-gradient(circle at 8% 12%, rgb(216 224 216 / 58%), transparent 30%),
     radial-gradient(circle at 88% 82%, rgb(226 220 209 / 48%), transparent 35%),
     #eceeea;
