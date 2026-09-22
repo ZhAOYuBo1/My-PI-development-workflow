@@ -869,16 +869,7 @@ function buildTranscriptTurns(items: TranscriptItem[]): TranscriptTurn[] {
 			};
 			continue;
 		}
-		if (!current) {
-			current = {
-				id: `turn-${item.id}`,
-				startIndex: index,
-				endIndex: index,
-				request: "会话开始",
-				response: "",
-				hasError: false,
-			};
-		}
+		if (!current) continue;
 		current.endIndex = index;
 		if (!current.response) {
 			if (item.type === "tool") {
@@ -3617,10 +3608,30 @@ export function App() {
 								disabled={busy || !("codepiddy" in window) || Boolean(slot.blockedReason)}
 								title={slot.blockedReason}
 							>
-								{slot.blockedReason ? "等待交接" : "创建 Agent"}
+								{slot.blockedReason ? "等待用户批准" : "创建 Agent"}
 							</button>
 						)}
 					</header>
+					{selectedWorkItem.lane === "requirements" &&
+					!selectedWorkItem.requirementApprovedAt &&
+					(selection.role === "requirement-analysis" || selection.role === "coding") ? (
+						<div className="requirement-approval-strip">
+							<div>
+								<strong>等待你批准此需求</strong>
+								<span>
+									对 Agent 说“批准”只是聊天消息。确认 Grill 和 OpenSpec 的交接产物后，请在这里解锁 Coding。
+								</span>
+							</div>
+							<button
+								className="primary-button"
+								type="button"
+								disabled={busy || !("codepiddy" in window)}
+								onClick={() => void approveSelectedRequirement()}
+							>
+								批准需求并解锁 Coding
+							</button>
+						</div>
+					) : null}
 					{agentId ? (
 						<>
 							<div className="transcript-stage">
@@ -3847,7 +3858,7 @@ export function App() {
 										disabled={busy}
 										onClick={() => void approveSelectedRequirement()}
 									>
-										批准需求
+										批准需求并解锁 Coding
 									</button>
 								)
 							) : null}
