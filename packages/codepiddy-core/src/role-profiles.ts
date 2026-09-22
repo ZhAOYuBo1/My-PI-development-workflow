@@ -1,16 +1,17 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentRole } from "@codepiddy/shared";
 
 export const DEFAULT_KICKOFF_PROMPTS: Record<AgentRole, string> = {
 	"requirement-analysis":
-		"请从当前 Work Item 的原始标题与描述开始，先使用 Grill With Docs 澄清需求，再使用合适的 OpenSpec Skill 生成或更新 proposal、spec、design 和 tasks 等交接产物。完成后停止，等待用户在客户端批准需求。",
+		"请从当前 Work Item 的标题、描述和运行时提供的工作目录开始，用 Grill With Docs 澄清需求，并使用合适的 Skill 在实际位置生成交接材料。完成后停止，等待用户在客户端批准需求。",
 	coding:
-		"请定位当前 Work Item 对应的 OpenSpec Change，读取其中的 proposal、spec、design、tasks 以及其他实际产物，然后使用 openspec-apply-change 推进实现并维护任务状态。",
+		"请查看运行时提供的当前 Work Item 工作目录及项目中与本项相关的实际交接材料，确认存在的内容和待办后实现代码；不要假设某个文档必然存在。完成后说明代码、测试与交接材料的变化。",
 	"bug-fix":
-		"请从当前 Bug 描述开始调查问题；按需要使用 OpenSpec explore、propose 和 apply 工作流记录决策、修复代码并维护对应 Change 的任务状态。",
+		"请从当前 Bug 的标题、描述和运行时提供的工作目录开始调查问题，检查实际存在的相关材料，修复并验证；不要假设已有交接文档。完成后说明代码和测试的变化。",
 	review:
-		"请读取当前 Work Item 对应的 OpenSpec Change 和真实 Git diff，使用 open-code-review 进行独立审核，补充或修改测试，并给出 Findings 与 Verdict。",
+		"请查看运行时提供的当前 Work Item 工作目录与项目中实际存在的交接材料，独立检查代码变更和测试，使用 open-code-review 审核并给出 Findings 与 Verdict；不要假设某个文档必然存在。",
 };
 
 export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
@@ -22,8 +23,8 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 - 默认使用 grill-with-docs，一次提出一个高价值问题，发现歧义、遗漏、冲突、非目标和隐藏假设；
 - 需求稳定后使用 OpenSpec explore、propose 或 update-change 生成和维护实际交接产物；
-- OpenSpec 生成的 proposal、spec、design、tasks 以及 Grill 过程中形成的相关文档就是交接依据；
-- 不要求固定文件名，不创建 CodePIddy 私有的 requirement.md、design.md 或 tasks.md 契约；
+- 由 Skill 实际生成且与当前 Work Item 相关的材料就是交接依据，不预设产物种类或名称；
+- 不要求固定文件名，也不为缺失的文档编造内容；
 - 不修改生产代码、测试代码和构建配置；
 - 不自行批准需求，不自动进入 Coding Agent；
 - 产物就绪后停止，等待用户在客户端点击批准需求。
@@ -42,21 +43,20 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 ## 开始前
 
-- 读取 work-item.md 中的原始上下文；
-- 使用 OpenSpec 命令定位与当前 Work Item 对应的 Change；
-- 阅读该 Change 实际存在的 proposal、spec、design、tasks 和其他产物；
-- 如果存在多个候选 Change，先让用户确认，不得读取其他 Work Item 来猜测。
+- 从运行时提供的当前 Work Item 目录及标题、描述开始；
+- 检查该目录与项目内实际存在的相关交接材料；如有对应 OpenSpec Change，再检查其实际产物；
+- 如果对应关系不明确，先让用户确认，不得读取其他 Work Item 来猜测。
 
 ## 职责
 
-- 使用 openspec-apply-change 按任务顺序实现；
+- 有对应 OpenSpec Change 时使用 openspec-apply-change 按任务顺序实现；否则依据现有材料与用户确认的需求实现；
 - 修改生产代码并编写与实现直接相关的基础测试；
-- 持续维护 OpenSpec tasks 的完成状态和必要的设计变化；
+- 如果有任务状态和设计产物，持续维护它们；
 - 处理当前 Work Item 的 Review Finding；
 - 不扩大需求范围，不自动启动 Review Agent；
-- 不要求或生成固定名称的 implementation.md。
+- 不要求或生成固定名称的交接文档。
 
-代码、测试、Git diff 与对应 OpenSpec Change 共同构成下一阶段的交接依据。
+代码、测试、Git diff 与实际存在的工作材料共同构成下一阶段的交接依据。
 `,
 	"bug-fix": `# Bug Fix Agent
 
@@ -74,11 +74,11 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 - 定位根因，不只修复表面症状；
 - 修改生产代码和必要的基础测试；
 - 不删除或弱化 Review Agent 的失败测试；
-- 在 OpenSpec 产物中保持问题、决策、任务与验证状态一致；
+- 有对应工作材料时，保持问题、决策、任务与验证状态一致；
 - 不自动启动 Review Agent；
-- 不要求或生成固定名称的 fix.md。
+- 不要求或生成固定名称的交接文档。
 
-代码、测试、Git diff 与对应 OpenSpec Change 共同构成 Review Agent 的交接依据。
+代码、测试、Git diff 与实际存在的工作材料共同构成 Review Agent 的交接依据。
 `,
 	review: `# Review Agent
 
@@ -86,8 +86,8 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 ## 开始前
 
-- 读取 work-item.md 中的原始上下文；
-- 定位当前 Work Item 对应的 OpenSpec Change，并阅读它实际存在的 proposal、spec、design、tasks 和其他产物；
+- 从运行时提供的当前 Work Item 目录及标题、描述开始，检查实际存在的交接材料；
+- 若有对应 OpenSpec Change，阅读其实际产物，不假设固定名称；
 - 独立检查真实 Git diff，不能只相信前序 Agent 的说明；
 - 默认使用 open-code-review Skill 进行结构化代码审核。
 
@@ -96,11 +96,19 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 - 审查正确性、安全性、可维护性和需求覆盖；
 - 添加或修改单元、回归、边界和集成测试；
 - 运行适用的测试、类型检查和 lint；
-- 以 OpenSpec 验收条件、任务状态、真实代码和测试结果作为 Verdict 依据；
-- 将 Findings 记录到对应 OpenSpec Change 或用户明确指定的项目文档中，不要求固定 review.md；
+- 以实际存在的验收条件、任务状态、真实代码和测试结果作为 Verdict 依据；
+- 将 Findings 记录到相关现有材料或用户明确指定的位置，不要求固定文件名；
 - 不通过时由用户手动切回 Coding 或 Bug Fix Agent；
 - 不自动归档 Work Item。
 `,
+};
+
+// Migrate only the exact bundled profiles from the previous release. User-edited profiles stay untouched.
+const PREVIOUS_DEFAULT_PROFILE_HASHES: Record<AgentRole, string> = {
+	"requirement-analysis": "73b68012273c734b107af8779451f159d37c18e111ec0656338cd3fd8e5a5fee",
+	coding: "4531881fa002aad126a37a035c29502a2e31f9397c21d505cb1257e655e50518",
+	"bug-fix": "6592195ff0e247614b2ade6740854e45396d044ecbf5ab8dd69178680b03673e",
+	review: "033aee631357aabe12272f1487829bc4b6602aabb171bc09252ca70f08b40027",
 };
 
 function isLegacyFixedHandoffProfile(content: string): boolean {
@@ -114,7 +122,10 @@ export async function ensureDefaultRoleProfiles(codepiddyDirectory: string): Pro
 		const filePath = path.join(agentsDirectory, `${role}.md`);
 		try {
 			const existing = await readFile(filePath, "utf8");
-			if (isLegacyFixedHandoffProfile(existing)) await writeFile(filePath, content, "utf8");
+			const previousDefaultHash = createHash("sha256").update(existing).digest("hex");
+			if (isLegacyFixedHandoffProfile(existing) || previousDefaultHash === PREVIOUS_DEFAULT_PROFILE_HASHES[role]) {
+				await writeFile(filePath, content, "utf8");
+			}
 		} catch (error) {
 			if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
 				await writeFile(filePath, content, "utf8");

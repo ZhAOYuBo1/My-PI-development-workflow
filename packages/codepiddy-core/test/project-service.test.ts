@@ -34,7 +34,7 @@ describe("project service", () => {
 		expect(project.lanes.map((lane) => lane.kind)).toEqual(["requirements", "bugs"]);
 		expect(
 			await readFile(path.join(projectRoot, ".codepiddy", "agents", "requirement-analysis.md"), "utf8"),
-		).toContain("Grill");
+		).toContain("grill-with-docs");
 		expect(await readFile(path.join(projectRoot, ".codepiddy", "agents", "review.md"), "utf8")).toContain(
 			"不修改生产代码",
 		);
@@ -55,6 +55,9 @@ describe("project service", () => {
 		});
 		const feature = project.lanes[0]?.workItems[0];
 		expect(feature?.id).toBe("FEAT-001");
+		const codingPrompt = feature?.agentSlots.find((slot) => slot.role === "coding")?.kickoffPrompt;
+		expect(codingPrompt).toContain(`当前工作项目录：${feature?.directoryPath}`);
+		expect(codingPrompt).not.toMatch(/proposal|spec|design|tasks|\.md/);
 		expect(feature?.agentSlots.map((slot) => slot.role)).toEqual(["requirement-analysis", "coding", "review"]);
 		expect(
 			await readFile(path.join(projectRoot, ".codepiddy", "requirements", "FEAT-001", "work-item.md"), "utf8"),

@@ -341,6 +341,7 @@ type AppIconName =
 	| "plus"
 	| "restore"
 	| "search"
+	| "stop"
 	| "settings"
 	| "warning";
 
@@ -420,6 +421,7 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 				<path d="m15 15 4 4" />
 			</>
 		),
+		stop: <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />,
 		settings: (
 			<>
 				<circle cx="12" cy="12" r="3" />
@@ -763,6 +765,12 @@ function IconButton({ label, onClick, children }: { label: string; onClick(): vo
 	);
 }
 
+const permissionChoices: { value: PermissionState; label: string }[] = [
+	{ value: "allow", label: "直接允许" },
+	{ value: "ask", label: "每次询问" },
+	{ value: "deny", label: "禁止" },
+];
+
 function PermissionSettingRow({
 	label,
 	description,
@@ -774,18 +782,89 @@ function PermissionSettingRow({
 	value: PermissionState;
 	onChange(value: PermissionState): void;
 }) {
+	const [open, setOpen] = useState(false);
+	const [highlighted, setHighlighted] = useState(0);
+	const rootRef = useRef<HTMLDivElement>(null);
+	const triggerRef = useRef<HTMLButtonElement>(null);
+	const listRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const closeOnOutside = (event: PointerEvent): void => {
+			if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+		};
+		document.addEventListener("pointerdown", closeOnOutside);
+		return () => document.removeEventListener("pointerdown", closeOnOutside);
+	}, [open]);
+	useEffect(() => {
+		if (open) listRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[highlighted]?.focus();
+	}, [open, highlighted]);
+	function choose(next: PermissionState): void {
+		onChange(next);
+		setOpen(false);
+		triggerRef.current?.focus();
+	}
+	function handleKeys(event: React.KeyboardEvent): void {
+		if (event.key === "Escape" && open) {
+			event.preventDefault();
+			event.stopPropagation();
+			setOpen(false);
+			triggerRef.current?.focus();
+		} else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			event.preventDefault();
+			setHighlighted((current) =>
+				open
+					? (current + (event.key === "ArrowDown" ? 1 : 2)) % 3
+					: permissionChoices.findIndex((choice) => choice.value === value),
+			);
+			setOpen(true);
+		}
+	}
 	return (
-		<label className="permission-setting-row">
+		<div className="permission-setting-row">
 			<span>
 				<strong>{label}</strong>
 				<small>{description}</small>
 			</span>
-			<select aria-label={label} value={value} onChange={(event) => onChange(event.target.value as PermissionState)}>
-				<option value="allow">直接允许</option>
-				<option value="ask">每次询问</option>
-				<option value="deny">禁止</option>
-			</select>
-		</label>
+			<div className="permission-picker" ref={rootRef}>
+				<button
+					ref={triggerRef}
+					type="button"
+					className="permission-picker-trigger"
+					onKeyDown={handleKeys}
+					aria-label={`${label}：${permissionChoices.find((choice) => choice.value === value)?.label}`}
+					aria-haspopup="listbox"
+					aria-expanded={open}
+					onClick={() => {
+						setHighlighted(permissionChoices.findIndex((choice) => choice.value === value));
+						setOpen((current) => !current);
+					}}
+				>
+					{permissionChoices.find((choice) => choice.value === value)?.label}
+					<AppIcon name="chevron" size={14} />
+				</button>
+				{open ? (
+					<div
+						className="permission-picker-list"
+						ref={listRef}
+						role="listbox"
+						onKeyDown={handleKeys}
+						aria-label={`${label}权限`}
+					>
+						{permissionChoices.map((choice) => (
+							<button
+								key={choice.value}
+								type="button"
+								role="option"
+								aria-selected={value === choice.value}
+								onClick={() => choose(choice.value)}
+							>
+								{choice.label}
+							</button>
+						))}
+					</div>
+				) : null}
+			</div>
+		</div>
 	);
 }
 
@@ -3597,17 +3676,6 @@ export function App() {
 						{agentId ? (
 							<div className="agent-header-actions">
 								{approveButton}
-								{canAbort ? (
-									<button
-										className="secondary-button stop-button"
-										type="button"
-										onClick={() => void abortAgent(slot)}
-										disabled={abortingAgents[agentId] === true}
-										title="中断当前回复（Esc）"
-									>
-										{abortingAgents[agentId] ? "中断中" : "中断"}
-									</button>
-								) : null}
 								<div className="agent-actions-menu-wrap">
 									<IconButton
 										label="Agent 操作"
@@ -3683,7 +3751,7 @@ export function App() {
 									{items.length === 0 ? (
 										<div className="transcript-placeholder compact">
 											<h2>{slot.displayName}</h2>
-											<p>发送一条消息开始工作。Agent 会读取当前 Work Item 的交接文档。</p>
+											<p>发送一条消息开始工作。Agent 会检查当前工作目录中实际存在的材料。</p>
 											{slot.kickoffPrompt ? (
 												<button
 													className="quick-start-button"
@@ -3720,15 +3788,15 @@ export function App() {
 										))
 									)}
 								</div>
+								{showJumpToLatest ? (
+									<button className="jump-to-latest" type="button" onClick={jumpToLatest}>
+										{activeAgentId && (unreadCounts[activeAgentId] ?? 0) > 0
+											? `${unreadCounts[activeAgentId]} 条新消息`
+											: "跳到最新消息"}
+										<AppIcon name="arrow-up" size={14} className="jump-arrow" />
+									</button>
+								) : null}
 							</div>
-							{showJumpToLatest ? (
-								<button className="jump-to-latest" type="button" onClick={jumpToLatest}>
-									{activeAgentId && (unreadCounts[activeAgentId] ?? 0) > 0
-										? `${unreadCounts[activeAgentId]} 条新消息`
-										: "跳到最新消息"}
-									<AppIcon name="arrow-up" size={14} className="jump-arrow" />
-								</button>
-							) : null}
 							<form
 								className="composer composer-stacked"
 								onDragOver={(event) => {
@@ -3850,13 +3918,27 @@ export function App() {
 										</button>
 										<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
 									</div>
-									<button
-										className="send-button"
-										type="submit"
-										disabled={!draft.trim() && attachments.length === 0}
-									>
-										<AppIcon name="arrow-up" />
-									</button>
+									{canAbort ? (
+										<button
+											className="send-button stop-send-button"
+											type="button"
+											aria-label="中断当前回复"
+											title="中断当前回复（Esc）"
+											disabled={abortingAgents[agentId] === true}
+											onClick={() => void abortAgent(slot)}
+										>
+											<AppIcon name="stop" size={15} />
+										</button>
+									) : (
+										<button
+											className="send-button"
+											type="submit"
+											aria-label="发送消息"
+											disabled={!draft.trim() && attachments.length === 0}
+										>
+											<AppIcon name="arrow-up" />
+										</button>
+									)}
 								</div>
 							</form>
 						</>

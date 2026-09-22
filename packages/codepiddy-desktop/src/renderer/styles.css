@@ -805,8 +805,8 @@ button { color: inherit; }
 .jump-to-latest {
   position: absolute;
   z-index: 7;
-  right: 24px;
-  bottom: 98px;
+  right: max(24px, calc((100% - 840px) / 2));
+  bottom: 12px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1664,6 +1664,10 @@ textarea:focus-visible,
   transition: background 130ms ease-out, box-shadow 130ms ease-out, transform 130ms ease-out;
 }
 .composer button.send-button:hover:not(:disabled) { background: #1e211e; box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%), 0 11px 24px rgb(28 33 29 / 22%); transform: translateY(-1px); }
+.composer .send-button { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; padding: 0; }
+.composer .send-button svg { display: block; }
+.composer button.stop-send-button:not(:disabled) { background: #704b45; color: #fff; }
+.composer button.stop-send-button:hover:not(:disabled) { background: #603c37; }
 .composer .send-button:disabled { background: rgb(225 227 222 / 82%); color: #a6aaa4; box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%); }
 
 .primary-button,
@@ -1707,7 +1711,7 @@ textarea:focus-visible,
 .permission-settings-card { gap: 16px; }
 .permission-setting-list {
   display: grid;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgb(255 255 255 / 82%);
   border-radius: 11px;
   background: rgb(255 255 255 / 42%);
@@ -1726,18 +1730,61 @@ textarea:focus-visible,
 .permission-setting-row > span { display: grid; min-width: 0; gap: 3px; }
 .permission-setting-row strong { color: #343834; font-size: 12px; }
 .permission-setting-row small { color: #828680; font-size: 10px; }
-.permission-setting-row select {
+.permission-setting-row { position: relative; }
+.permission-setting-row:first-child { border-radius: 11px 11px 0 0; }
+.permission-setting-row:last-child { border-radius: 0 0 11px 11px; }
+.permission-setting-row:focus-within { z-index: 9; }
+.permission-picker { position: relative; }
+.permission-picker-trigger {
+  display: flex;
   width: 100%;
-  min-height: 34px;
-  padding: 0 30px 0 10px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 12px;
   border: 1px solid rgb(255 255 255 / 84%);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 64%);
-  color: #464a45;
-  outline: 0;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 72%);
+  color: #404640;
   box-shadow: var(--cp-glass-highlight), 0 5px 14px rgb(39 46 40 / 5%);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
-.permission-setting-row select:focus { border-color: #9cac9e; box-shadow: 0 0 0 3px rgb(83 111 90 / 9%), var(--cp-glass-highlight); }
+.permission-picker-trigger:hover,
+.permission-picker-trigger[aria-expanded="true"] { border-color: #b4c4b7; background: #fff; }
+.permission-picker-trigger:focus-visible { outline: 2px solid #729179; outline-offset: 2px; }
+.permission-picker-trigger svg { flex: 0 0 auto; transform: rotate(90deg); transition: transform 140ms ease; }
+.permission-picker-trigger[aria-expanded="true"] svg { transform: rotate(-90deg); }
+.permission-picker-list {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 11px;
+  background: rgb(252 253 250 / 96%);
+  box-shadow: var(--cp-glass-highlight), 0 12px 30px rgb(36 44 37 / 16%);
+  backdrop-filter: blur(18px);
+}
+.permission-picker-list button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #394039;
+  cursor: pointer;
+  text-align: left;
+}
+.permission-picker-list button:hover,
+.permission-picker-list button:focus-visible { outline: 0; background: #edf3ed; }
+.permission-picker-list button[aria-selected="true"] { background: #e5eee6; color: #354f3b; font-weight: 600; }
 .permission-settings-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .permission-settings-footer small { max-width: 68ch; line-height: 1.5; }
 .permission-settings-footer .primary-button { flex: 0 0 auto; }
@@ -1770,7 +1817,7 @@ textarea:focus-visible,
 
 /* Conversation minimap and compact context gauge */
 .transcript-stage { position: relative; min-height: 0; flex: 1; }
-.transcript-stage > .transcript { height: 100%; }
+.transcript-stage > .transcript { height: 100%; padding-bottom: 70px; }
 .transcript-entry { position: relative; }
 .transcript-minimap {
   position: absolute;

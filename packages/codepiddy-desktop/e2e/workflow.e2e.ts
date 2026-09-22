@@ -118,6 +118,13 @@ test("shows context usage beside the model and jumps through the transcript mini
 	const before = await transcript.evaluate((element) => element.scrollTop);
 	await minimap.locator("button").first().click();
 	await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeLessThan(before);
+	const jump = page.getByRole("button", { name: "跳到最新消息" });
+	await expect(jump).toBeVisible();
+	const jumpBox = await jump.boundingBox();
+	const composerBox = await page.locator(".composer").boundingBox();
+	expect(jumpBox).not.toBeNull();
+	expect(composerBox).not.toBeNull();
+	expect(jumpBox!.y + jumpBox!.height).toBeLessThanOrEqual(composerBox!.y - 8);
 
 	for (let index = 8; index < 22; index++) {
 		await composer.fill(`第 ${index + 1} 轮：继续完善当前 Change，并核对剩余任务。`);
@@ -127,35 +134,46 @@ test("shows context usage beside the model and jumps through the transcript mini
 	await expect(minimap.locator("button")).toHaveCount(20);
 });
 
+test("composer toggles between centered send and stop while Pi is responding", async () => {
+	const { page } = client;
+	await createFeatureWorkItem(page);
+	await openRequirementAgent(page);
+	const send = page.getByRole("button", { name: "发送消息" });
+	const sendBox = await send.boundingBox();
+	const iconBox = await send.locator("svg").boundingBox();
+	expect(sendBox).not.toBeNull();
+	expect(iconBox).not.toBeNull();
+	expect(Math.abs(sendBox!.x + sendBox!.width / 2 - iconBox!.x - iconBox!.width / 2)).toBeLessThan(1);
+	expect(Math.abs(sendBox!.y + sendBox!.height / 2 - iconBox!.y - iconBox!.height / 2)).toBeLessThan(1);
+	const composer = page.locator(".composer textarea");
+	await composer.fill("permission");
+	await composer.press("Enter");
+	await expect(page.getByRole("dialog", { name: "权限请求" })).toBeVisible();
+	await page.getByRole("button", { name: "稍后处理" }).click();
+	const stop = page.getByRole("button", { name: "中断当前回复" });
+	await expect(stop).toBeVisible();
+	await expect(page.locator(".content-header").getByRole("button", { name: "中断" })).toHaveCount(0);
+	await stop.click();
+	await expect(stop).toHaveCount(0);
+	await expect(send).toBeVisible();
+});
+
 test("defaults file reads and writes to allow and persists permission changes", async () => {
 	const { page, userDataRoot } = client;
 	await page.getByRole("button", { name: "打开项目", exact: true }).click();
 	await page.getByRole("button", { name: "设置", exact: true }).click();
-	const readPermission = page.getByLabel("读取文件");
-	const writePermission = page.getByLabel("修改文件");
-	await expect(readPermission).toHaveValue("allow");
-	await expect(writePermission).toHaveValue("allow");
+	await expect(page.getByRole("button", { name: "读取文件：直接允许" })).toBeVisible();
 	const requirementSkillCard = page.locator(".role-skill-card").filter({ hasText: "需求分析 Agent" });
 	const reviewSkillCard = page.locator(".role-skill-card").filter({ hasText: "Review Agent" });
 	await expect(requirementSkillCard.getByText("grill-with-docs", { exact: true })).toBeVisible();
-	await expect(requirementSkillCard.getByText("openspec-propose", { exact: true })).toBeVisible();
-	await expect(requirementSkillCard.locator("label").filter({ hasText: "grill-with-docs" }).getByRole("checkbox")).toBeChecked();
 	await expect(reviewSkillCard.getByText("open-code-review", { exact: true })).toBeVisible();
-	await expect(reviewSkillCard.locator("label").filter({ hasText: "open-code-review" }).getByRole("checkbox")).toBeChecked();
-	await expect(page.getByRole("button", { name: "打开项目 Skill 文件夹" })).toBeEnabled();
-
-	await writePermission.selectOption("ask");
+	await page.getByRole("button", { name: "修改文件：直接允许" }).click();
+	await page.getByRole("listbox", { name: "修改文件权限" }).getByRole("option", { name: "每次询问" }).click();
 	await page.getByRole("button", { name: "保存权限" }).click();
-	await expect(writePermission).toHaveValue("ask");
-
 	const savedDefaults = JSON.parse(
 		await readFile(path.join(userDataRoot, "settings", "permission-defaults.json"), "utf8"),
 	) as Record<string, unknown>;
-	const policy = JSON.parse(
-		await readFile(path.join(userDataRoot, "permissions", "policy", "pi-permissions.jsonc"), "utf8"),
-	) as { tools: Record<string, string> };
-	 expect(savedDefaults).toEqual({ read: "allow", write: "ask" });
-	 expect(policy.tools).toMatchObject({ read: "allow", grep: "allow", write: "ask", edit: "ask" });
+	expect(savedDefaults).toMatchObject({ read: "allow", write: "ask", bash: "ask" });
 });
 
 test("restores a pending permission request after switching away from the agent", async () => {

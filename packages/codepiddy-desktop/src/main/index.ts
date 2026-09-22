@@ -217,40 +217,40 @@ async function readWorkItemPromptContext(agent: StoredAgentInstance): Promise<{ 
 function roleDocumentContract(agent: StoredAgentInstance): string {
 	const sharedRules = [
 		"Never read or write another Work Item directory unless the user explicitly names it.",
-		`The system-owned Work Item context is ${path.join(agent.workItemDirectory, "work-item.md")}.`,
-		"OpenSpec artifacts may live in the project's OpenSpec root rather than the Work Item directory.",
-		"Use OpenSpec commands and the user-provided title, description, or explicit change name to identify the relevant Change. If multiple Changes match, ask the user instead of guessing.",
-		"The actual proposal, specs, design, tasks, review notes, Git diff, and tests are the handoff. CodePIddy does not require private fixed filenames for them.",
+		`Current Work Item directory: ${agent.workItemDirectory}.`,
+		"Inspect only materials that actually exist for this Work Item, including relevant project-level OpenSpec materials if present. Do not assume a named document or Change exists.",
+		"Use the user-provided title and description to identify related materials. If several candidates match, ask instead of guessing.",
+		"The actual materials, code changes, and tests are the handoff. Do not require or invent files with fixed names.",
 	];
 	if (agent.role === "requirement-analysis") {
 		return [
 			...sharedRules,
 			"Start from the user-provided title and description. There are no prerequisite handoff artifacts.",
-			"Use grill-with-docs to clarify the requirement, then OpenSpec explore/propose/update-change to create or refine the Change artifacts.",
-			"Stop when the OpenSpec artifacts are coherent and tell the user they are ready for manual approval. Do not implement code.",
+			"Use grill-with-docs to clarify the requirement, then the enabled Skills to create or refine the actual handoff materials.",
+			"Stop when the actual handoff materials are coherent and tell the user they are ready for manual approval. Do not implement code.",
 		].join("\n");
 	}
 	if (agent.role === "coding") {
 		return [
 			...sharedRules,
-			"Read the selected OpenSpec Change artifacts before editing code.",
-			"Use openspec-apply-change to implement and keep task status synchronized. Use openspec-sync-specs when the workflow requires it.",
-			"The implementation handoff is the updated OpenSpec Change plus the real Git diff and tests; do not create a fixed implementation.md unless the user asks for one.",
+			"Inspect the current Work Item directory and any related project-level materials that actually exist before editing code.",
+			"If a matching OpenSpec Change exists, use openspec-apply-change and keep its task status synchronized. Otherwise work from the actual handoff and ask about essential missing decisions.",
+			"The implementation handoff is the actual work materials plus the real Git diff and tests; do not require a fixed document name.",
 		].join("\n");
 	}
 	if (agent.role === "bug-fix") {
 		return [
 			...sharedRules,
-			"Start from the Bug title and description, reproduce the issue, and inspect existing OpenSpec Changes.",
+			"Start from the Bug title, description, and current Work Item directory; reproduce the issue and inspect only existing related materials.",
 			"Use OpenSpec explore/propose/update/apply as needed to keep the problem, decision, tasks, fix, and validation coherent.",
-			"The fix handoff is the relevant OpenSpec Change plus the real Git diff and tests; do not create a fixed fix.md unless the user asks for one.",
+			"The fix handoff is the actual work materials plus the real Git diff and tests; do not require a fixed document name.",
 		].join("\n");
 	}
 	return [
 		...sharedRules,
-		"Read the selected OpenSpec Change and independently inspect the real Git diff and tests.",
+		"Read the materials actually present for this Work Item and independently inspect the real Git diff and tests.",
 		"Use open-code-review for structured findings. Add or modify tests when useful, but do not modify production code.",
-		"Record findings in the relevant OpenSpec Change or a user-selected project document; no fixed review.md is required.",
+		"Record findings in a relevant existing location or a user-selected project location; no fixed document name is required.",
 	].join("\n");
 }
 
@@ -267,7 +267,7 @@ async function rolePrompt(agent: StoredAgentInstance, webSearchAvailable: boolea
 		`Work item directory: ${agent.workItemDirectory}`,
 		`User-provided title: ${workItem.title}`,
 		`User-provided description: ${workItem.description || "No description provided."}`,
-		"OpenSpec artifacts and other documents produced by the enabled Skills are the workflow handoff source of truth.",
+		"Actually existing materials produced by the enabled Skills and related to this Work Item are the workflow handoff source of truth; do not assume any specific file exists.",
 		"",
 		"# Web Search Contract",
 		webSearchAvailable

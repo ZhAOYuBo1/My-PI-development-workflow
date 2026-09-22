@@ -52,7 +52,7 @@ function rolesForLane(lane: LaneKind): AgentRole[] {
 	return lane === "requirements" ? ["requirement-analysis", "coding", "review"] : ["bug-fix", "review"];
 }
 
-function createAgentSlots(lane: LaneKind, manifest: WorkItemManifest): AgentSlotSummary[] {
+function createAgentSlots(lane: LaneKind, manifest: WorkItemManifest, workItemDirectory: string): AgentSlotSummary[] {
 	return rolesForLane(lane).map((role) => {
 		let blockedReason: string | undefined;
 		if (role === "coding" && !manifest.requirementApprovedAt) {
@@ -62,7 +62,7 @@ function createAgentSlots(lane: LaneKind, manifest: WorkItemManifest): AgentSlot
 			role,
 			displayName: roleDisplayNames[role],
 			status: "not-created" as const,
-			kickoffPrompt: DEFAULT_KICKOFF_PROMPTS[role],
+			kickoffPrompt: `${DEFAULT_KICKOFF_PROMPTS[role]}\n当前工作项目录：${workItemDirectory}`,
 			...(blockedReason ? { blockedReason } : {}),
 		};
 	});
@@ -206,7 +206,7 @@ async function listWorkItems(projectRoot: string, lane: LaneKind): Promise<WorkI
 					? {}
 					: { requirementApprovedAt: manifest.requirementApprovedAt }),
 				directoryPath: itemDirectory,
-				agentSlots: createAgentSlots(lane, manifest),
+				agentSlots: createAgentSlots(lane, manifest, itemDirectory),
 			});
 		} catch {
 			// Ignore directories that are not valid CodePIddy work items.
