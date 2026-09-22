@@ -66,6 +66,7 @@
 		"@typescript/native-preview": "7.0.0-dev.20260120.1",
 		"esbuild": "0.28.2",
 		"husky": "9.1.7",
+		"npm": "11.19.1",
 		"shx": "0.4.0",
 		"tsx": "4.22.1",
 		"typescript": "5.9.3",

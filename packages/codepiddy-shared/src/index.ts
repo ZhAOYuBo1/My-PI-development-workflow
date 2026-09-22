@@ -228,6 +228,11 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void>;
 	getPendingPermissionRequest(input: AgentInstanceLocator): Promise<PendingPermissionRequest | null>;
 	getSettingsStatus(): Promise<SettingsStatus>;
+	getPiRuntimeStatus(): Promise<PiRuntimeStatus>;
+	checkPiRuntimeUpdate(): Promise<PiRuntimeStatus>;
+	installPiRuntimeUpdate(version: string): Promise<PiRuntimeStatus>;
+	restoreBundledPiRuntime(): Promise<PiRuntimeStatus>;
+	restartCodePIddy(): Promise<void>;
 	getPermissionDefaults(): Promise<PermissionDefaults>;
 	setPermissionDefaults(input: PermissionDefaults): Promise<PermissionDefaults>;
 	saveTavilyApiKey(apiKey: string): Promise<SettingsStatus>;
@@ -276,6 +281,17 @@ export interface ExtensionUiResponseInput extends AgentInstanceLocator {
 export interface SettingsStatus {
 	tavilyApiKeyConfigured: boolean;
 	encryptionAvailable: boolean;
+}
+
+export interface PiRuntimeStatus {
+	bundledVersion: string;
+	currentVersion: string;
+	runningVersion: string;
+	latestVersion: string | null;
+	updateAvailable: boolean;
+	restartRequired: boolean;
+	npmAvailable: boolean;
+	warning: string | null;
 }
 
 export const PERMISSION_STATES = ["allow", "ask", "deny"] as const;

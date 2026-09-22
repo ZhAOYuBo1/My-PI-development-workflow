@@ -14,6 +14,7 @@ import type {
 	PendingPermissionRequest,
 	PermissionDefaults,
 	PermissionState,
+	PiRuntimeStatus,
 	ProjectSummary,
 	ProjectUiState,
 	ProjectWriteLeaseStatus,
@@ -1183,6 +1184,9 @@ export function App() {
 	const [error, setError] = useState<string | null>(null);
 	const [extensionDialog, setExtensionDialog] = useState<ExtensionDialogState | null>(null);
 	const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null);
+	const [piRuntimeStatus, setPiRuntimeStatus] = useState<PiRuntimeStatus | null>(null);
+	const [piRuntimeBusy, setPiRuntimeBusy] = useState<"check" | "install" | "restore" | null>(null);
+	const [piUpdateConfirm, setPiUpdateConfirm] = useState(false);
 	const [permissionDefaults, setPermissionDefaults] = useState<PermissionDefaults>({
 		read: "allow",
 		write: "allow",
@@ -3121,14 +3125,16 @@ export function App() {
 	async function openSettings(): Promise<void> {
 		setSelection({ type: "settings" });
 		if (!("codepiddy" in window)) return;
-		const [status, permissions, skills, assignments, defaults] = await Promise.all([
+		const [status, permissions, skills, assignments, defaults, piRuntime] = await Promise.all([
 			window.codepiddy.getSettingsStatus(),
 			window.codepiddy.getPermissionDefaults(),
 			window.codepiddy.listAgentSkills(project?.rootPath),
 			window.codepiddy.getRoleSkillAssignments(),
 			window.codepiddy.getRoleModelDefaults(),
+			window.codepiddy.getPiRuntimeStatus(),
 		]);
 		setSettingsStatus(status);
+		setPiRuntimeStatus(piRuntime);
 		setPermissionDefaults(permissions);
 		setAvailableSkills(skills);
 		setRoleSkillAssignments(assignments);
@@ -3145,6 +3151,26 @@ export function App() {
 			setError(caught instanceof Error ? caught.message : "保存默认权限失败");
 		} finally {
 			setPermissionSaving(false);
+		}
+	}
+
+	async function runPiRuntimeAction(action: "check" | "install" | "restore"): Promise<void> {
+		if (!("codepiddy" in window) || piRuntimeBusy) return;
+		setPiRuntimeBusy(action);
+		setPiUpdateConfirm(false);
+		setError(null);
+		try {
+			const result =
+				action === "check"
+					? await window.codepiddy.checkPiRuntimeUpdate()
+					: action === "install"
+						? await window.codepiddy.installPiRuntimeUpdate(piRuntimeStatus?.latestVersion ?? "")
+						: await window.codepiddy.restoreBundledPiRuntime();
+			setPiRuntimeStatus(result);
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "Pi 更新失败，原版本保持不变");
+		} finally {
+			setPiRuntimeBusy(null);
 		}
 	}
 
@@ -3422,6 +3448,90 @@ export function App() {
 			return (
 				<div className="settings-page">
 					<h1>设置</h1>
+					<section className="settings-card pi-runtime-card">
+						<div className="settings-card-heading">
+							<div>
+								<h2>Pi 运行时</h2>
+								<p>单独更新 Agent 内核，不替换 CodePIddy 客户端或项目文件。</p>
+							</div>
+							<div className="settings-status">{piRuntimeStatus?.restartRequired ? "待重启" : "运行中"}</div>
+						</div>
+						{piRuntimeStatus ? (
+							<div className="pi-runtime-versions">
+								<span>
+									正在使用 <strong>v{piRuntimeStatus.runningVersion}</strong>
+								</span>
+								{piRuntimeStatus.restartRequired ? <span>重启后 v{piRuntimeStatus.currentVersion}</span> : null}
+								<span>内置 v{piRuntimeStatus.bundledVersion}</span>
+								{piRuntimeStatus.latestVersion ? <span>可用 v{piRuntimeStatus.latestVersion}</span> : null}
+							</div>
+						) : null}
+						{piRuntimeStatus?.warning ? <p className="pi-runtime-warning">{piRuntimeStatus.warning}</p> : null}
+						{piUpdateConfirm ? (
+							<div className="pi-runtime-confirm">
+								<p>
+									将从 npm 安装 Pi v{piRuntimeStatus?.latestVersion} 到独立目录。校验 RPC
+									与内置扩展通过后才启用；现有会话不会自动中断。
+								</p>
+								<button className="secondary-button" type="button" onClick={() => setPiUpdateConfirm(false)}>
+									取消
+								</button>
+								<button
+									className="primary-button"
+									type="button"
+									onClick={() => void runPiRuntimeAction("install")}
+								>
+									确认安装
+								</button>
+							</div>
+						) : null}
+						<div className="settings-actions">
+							<button
+								className="secondary-button"
+								type="button"
+								disabled={piRuntimeBusy !== null}
+								onClick={() => void runPiRuntimeAction("check")}
+							>
+								{piRuntimeBusy === "check" ? "检查中…" : "检查更新"}
+							</button>
+							{piRuntimeStatus?.updateAvailable ? (
+								<button
+									className="primary-button"
+									type="button"
+									disabled={piRuntimeBusy !== null || !piRuntimeStatus.npmAvailable}
+									onClick={() => setPiUpdateConfirm(true)}
+								>
+									{piRuntimeBusy === "install" ? "安装并校验中…" : `更新到 v${piRuntimeStatus.latestVersion}`}
+								</button>
+							) : null}
+							{piRuntimeStatus &&
+							(piRuntimeStatus.currentVersion !== piRuntimeStatus.bundledVersion || piRuntimeStatus.warning) ? (
+								<button
+									className="secondary-button"
+									type="button"
+									disabled={piRuntimeBusy !== null}
+									onClick={() => void runPiRuntimeAction("restore")}
+								>
+									恢复内置版本
+								</button>
+							) : null}
+							{piRuntimeStatus?.restartRequired ? (
+								<button
+									className="secondary-button"
+									type="button"
+									disabled={piRuntimeBusy !== null}
+									onClick={() => void window.codepiddy.restartCodePIddy()}
+								>
+									重启客户端以生效
+								</button>
+							) : null}
+						</div>
+						<small>
+							{piRuntimeStatus?.npmAvailable
+								? "更新失败时保持原版本；若新版运行异常，可恢复内置版本。"
+								: "安装更新需要本机 Node.js/npm；当前内置版本仍可正常使用。"}
+						</small>
+					</section>
 					<section className="settings-card permission-settings-card">
 						<div className="settings-card-heading">
 							<div>

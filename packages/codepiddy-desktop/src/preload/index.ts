@@ -75,6 +75,11 @@ const channels = {
 	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
 	settingsStatus: "codepiddy:settings:status",
+	piRuntimeStatus: "codepiddy:pi-runtime:status",
+	piRuntimeCheck: "codepiddy:pi-runtime:check",
+	piRuntimeInstall: "codepiddy:pi-runtime:install",
+	piRuntimeRestore: "codepiddy:pi-runtime:restore",
+	piRuntimeRestart: "codepiddy:pi-runtime:restart",
 	searchProjectFiles: "codepiddy:project:files:search",
 	sendAgentPrompt: "codepiddy:agent:prompt",
 } as const;
@@ -127,6 +132,11 @@ const api: CodePIddyClientApi = {
 	searchProjectFiles: (projectRoot: string, query: string) =>
 		ipcRenderer.invoke(channels.searchProjectFiles, projectRoot, query),
 	getSettingsStatus: () => ipcRenderer.invoke(channels.settingsStatus),
+	getPiRuntimeStatus: () => ipcRenderer.invoke(channels.piRuntimeStatus),
+	checkPiRuntimeUpdate: () => ipcRenderer.invoke(channels.piRuntimeCheck),
+	installPiRuntimeUpdate: (version: string) => ipcRenderer.invoke(channels.piRuntimeInstall, version),
+	restoreBundledPiRuntime: () => ipcRenderer.invoke(channels.piRuntimeRestore),
+	restartCodePIddy: () => ipcRenderer.invoke(channels.piRuntimeRestart),
 	getPermissionDefaults: () => ipcRenderer.invoke(channels.settingsGetPermissions),
 	setPermissionDefaults: (input: PermissionDefaults) => ipcRenderer.invoke(channels.settingsSetPermissions, input),
 	saveTavilyApiKey: (apiKey: string) => ipcRenderer.invoke(channels.settingsSaveTavily, apiKey),

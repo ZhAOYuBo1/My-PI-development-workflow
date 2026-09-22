@@ -18,6 +18,7 @@ const common = {
 	bundle: true,
 	format: "esm",
 	legalComments: "none",
+	ignoreAnnotations: true,
 	minify: true,
 	platform: "node",
 	target: "node22.19",
@@ -63,6 +64,7 @@ await Promise.all([
 		recursive: true,
 	}),
 	cp(path.join(repositoryRoot, "packages", "chord", "package.json"), path.join(outputRoot, "dependencies", "@earendil-works", "chord", "package.json")),
+	cp(path.join(repositoryRoot, "node_modules", "npm"), path.join(outputRoot, "npm"), { recursive: true }),
 	cp(path.join(repositoryRoot, "node_modules", "jiti"), path.join(outputRoot, "dependencies", "jiti"), { recursive: true }),
 	cp(
 		path.join(repositoryRoot, "node_modules", "@silvia-odwyer", "photon-node"),

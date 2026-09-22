@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, realpath } from "node:fs/promises";
+import { copyFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -69,6 +69,7 @@ import {
 	parseSetAgentScopedModelsInput,
 	parseSetAgentThinkingInput,
 } from "./ipc-validation.ts";
+import { type InstalledPiRuntime, PiRuntimeUpdater } from "./pi-runtime-updater.ts";
 import { RecentProjectStore } from "./recent-project-store.ts";
 import { AppSettingsStore } from "./settings-store.ts";
 import { SingleFlightMap } from "./single-flight.ts";
@@ -127,6 +128,11 @@ const channels = {
 	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
 	settingsStatus: "codepiddy:settings:status",
+	piRuntimeStatus: "codepiddy:pi-runtime:status",
+	piRuntimeCheck: "codepiddy:pi-runtime:check",
+	piRuntimeInstall: "codepiddy:pi-runtime:install",
+	piRuntimeRestore: "codepiddy:pi-runtime:restore",
+	piRuntimeRestart: "codepiddy:pi-runtime:restart",
 	searchProjectFiles: "codepiddy:project:files:search",
 	sendAgentPrompt: "codepiddy:agent:prompt",
 } as const;
@@ -283,23 +289,86 @@ async function rolePrompt(agent: StoredAgentInstance, webSearchAvailable: boolea
 	].join("\n");
 }
 
+async function probePiUpdate(
+	runtime: InstalledPiRuntime,
+	stagingRoot: string,
+	repositoryRoot: string,
+	userDataRoot: string,
+): Promise<void> {
+	const packaged = app.isPackaged;
+	const extensions = packaged
+		? path.join(repositoryRoot, "extensions")
+		: path.join(app.getAppPath(), "dist", "runtime-extensions");
+	const probeDirectories = ["probe-project", "probe-sessions", "probe-logs"].map((name) =>
+		path.join(stagingRoot, name),
+	);
+	if (probeDirectories.some((directory) => path.dirname(directory) !== stagingRoot))
+		throw new Error("Pi 校验目录无效");
+	const [projectRoot] = probeDirectories;
+	if (!projectRoot) throw new Error("Pi 校验目录无效");
+	await mkdir(projectRoot, { recursive: true });
+	const rpc = new PiRpcProcess({
+		command: process.env.CODEPIDDY_NODE_EXECUTABLE ?? (packaged ? process.execPath : "node"),
+		cwd: projectRoot,
+		env: {
+			...(packaged ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+			PI_PACKAGE_DIR: runtime.packageDir,
+			PI_PERMISSION_SYSTEM_CONFIG_PATH: path.join(userDataRoot, "permissions", "extension.json"),
+			PI_PERMISSION_SYSTEM_LOGS_DIR: path.join(stagingRoot, "probe-logs"),
+			PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR: path.join(userDataRoot, "permissions", "policy"),
+			CODEPIDDY_TAVILY_MCP_ENTRY: path.join(extensions, "tavily-search.js"),
+		},
+		args: [
+			runtime.cliPath,
+			"--mode",
+			"rpc",
+			"--no-extensions",
+			"--session-dir",
+			path.join(stagingRoot, "probe-sessions"),
+			"--continue",
+			"--extension",
+			path.join(extensions, "permission.js"),
+			"--extension",
+			path.join(extensions, "tavily-tool.js"),
+			"--approve",
+		],
+	});
+	try {
+		await rpc.start();
+		const commands = await rpc.getCommands();
+		if (commands.length === 0) throw new Error("Pi 更新校验失败：RPC 命令列表为空");
+		await rpc.getMessages();
+		await rpc.getAvailableModels();
+	} finally {
+		await rpc.stop().catch(() => undefined);
+		for (const directory of probeDirectories) await rm(directory, { recursive: true, force: true });
+	}
+}
+
 class AgentManager {
 	private readonly registry: AgentRegistry;
 	private readonly repositoryRoot: string;
 	private readonly runtimeRoot: string;
 	private readonly writeLeases: ProjectWriteLeaseManager;
 	private readonly settingsStore: AppSettingsStore;
+	private readonly piRuntimeUpdater: PiRuntimeUpdater;
 	private readonly processes = new Map<string, PiRpcProcess>();
 	private readonly processAgents = new Map<string, StoredAgentInstance>();
 	private readonly processStarts = new SingleFlightMap<string, PiRpcProcess>();
 	private readonly pendingPermissions = new Map<string, PendingPermissionRequest>();
 
-	constructor(runtimeRoot: string, repositoryRoot: string, settingsStore: AppSettingsStore) {
+	constructor(
+		runtimeRoot: string,
+		repositoryRoot: string,
+		settingsStore: AppSettingsStore,
+		piRuntimeUpdater: PiRuntimeUpdater,
+	) {
 		this.registry = new AgentRegistry(runtimeRoot);
 		this.runtimeRoot = runtimeRoot;
 		this.writeLeases = new ProjectWriteLeaseManager(runtimeRoot);
 		this.repositoryRoot = repositoryRoot;
 		this.settingsStore = settingsStore;
+		this.piRuntimeUpdater = piRuntimeUpdater;
 	}
 
 	get repositoryPath(): string {
@@ -799,8 +868,14 @@ class AgentManager {
 
 	private async startProcess(agent: StoredAgentInstance): Promise<PiRpcProcess> {
 		const packaged = app.isPackaged;
+		const updatedRuntime = this.piRuntimeUpdater.getLaunchRuntime();
+		const compiledRuntime = packaged || updatedRuntime !== null;
+		const extensionRoot = packaged
+			? path.join(this.repositoryRoot, "extensions")
+			: path.join(app.getAppPath(), "dist", "runtime-extensions");
 		const cliPath =
 			process.env.CODEPIDDY_PI_CLI ??
+			updatedRuntime?.cliPath ??
 			(packaged
 				? path.join(this.repositoryRoot, "coding-agent-package", "dist", "bundle", "cli.js")
 				: path.join(this.repositoryRoot, "packages", "coding-agent", "src", "cli.ts"));
@@ -822,13 +897,20 @@ class AgentManager {
 			env: {
 				...(packaged ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
 				TSX_TSCONFIG_PATH: path.join(this.repositoryRoot, "tsconfig.json"),
-				...(packaged ? { PI_PACKAGE_DIR: path.join(this.repositoryRoot, "coding-agent-package") } : {}),
+				...(compiledRuntime
+					? {
+							PI_PACKAGE_DIR:
+								updatedRuntime?.packageDir ?? path.join(this.repositoryRoot, "coding-agent-package"),
+						}
+					: {}),
 				PI_PERMISSION_SYSTEM_CONFIG_PATH: path.join(this.runtimeRoot, "permissions", "extension.json"),
 				PI_PERMISSION_SYSTEM_LOGS_DIR: path.join(this.runtimeRoot, "permissions", "logs"),
 				PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR: path.join(this.runtimeRoot, "permissions", "policy"),
 				CODEPIDDY_TAVILY_MCP_ENTRY: packaged
 					? path.join(this.repositoryRoot, "mcp", "tavily-search.js")
-					: path.join(this.repositoryRoot, "packages", "codepiddy-tavily-search-mcp", "src", "index.ts"),
+					: updatedRuntime
+						? path.join(extensionRoot, "tavily-search.js")
+						: path.join(this.repositoryRoot, "packages", "codepiddy-tavily-search-mcp", "src", "index.ts"),
 				...(packaged
 					? {}
 					: {
@@ -842,7 +924,7 @@ class AgentManager {
 				CODEPIDDY_WORK_ITEM_DIR: agent.workItemDirectory,
 			},
 			args: [
-				...(packaged
+				...(compiledRuntime
 					? [cliPath]
 					: [
 							"--import",
@@ -856,12 +938,12 @@ class AgentManager {
 				agent.sessionDirectory,
 				"--continue",
 				"--extension",
-				packaged
-					? path.join(this.repositoryRoot, "extensions", "permission.js")
+				compiledRuntime
+					? path.join(extensionRoot, "permission.js")
 					: path.join(this.repositoryRoot, "packages", "codepiddy-permission-extension", "index.ts"),
 				"--extension",
-				packaged
-					? path.join(this.repositoryRoot, "extensions", "tavily-tool.js")
+				compiledRuntime
+					? path.join(extensionRoot, "tavily-tool.js")
 					: path.join(this.repositoryRoot, "packages", "codepiddy-tavily-tool-extension", "index.ts"),
 				...roleSkillPaths.flatMap((skillPath) => ["--skill", skillPath]),
 				"--name",
@@ -929,8 +1011,10 @@ class AgentManager {
 				void this.recoverProcess(agent);
 			}
 		});
+		let handshakeComplete = false;
 		try {
 			await rpc.start();
+			handshakeComplete = true;
 			this.processes.set(agent.id, rpc);
 			this.processAgents.set(agent.id, agent);
 			if (roleModelDefault) {
@@ -966,6 +1050,21 @@ class AgentManager {
 			if (this.processes.get(agent.id) === rpc) this.processes.delete(agent.id);
 			this.processAgents.delete(agent.id);
 			await rpc.stop().catch(() => undefined);
+			if (
+				!handshakeComplete &&
+				updatedRuntime &&
+				!process.env.CODEPIDDY_PI_CLI &&
+				(await this.piRuntimeUpdater.fallbackAfterStartupFailure())
+			) {
+				this.broadcast({
+					agentInstanceId: agent.id,
+					projectId: agent.projectId,
+					workItemId: agent.workItemId,
+					role: agent.role,
+					event: { type: "agent_configuration_warning", error: "新版 Pi 启动失败，已自动切回内置版本。" },
+				});
+				return this.startProcess(agent);
+			}
 			throw error;
 		}
 	}
@@ -1136,6 +1235,7 @@ function registerIpcHandlers(
 	agentManager: AgentManager,
 	settingsStore: AppSettingsStore,
 	recentProjects: RecentProjectStore,
+	piRuntimeUpdater: PiRuntimeUpdater,
 ): void {
 	const openedProjects = new Map<string, string>();
 	const rootKey = (projectRoot: string): string =>
@@ -1295,6 +1395,16 @@ function registerIpcHandlers(
 		searchProjectFiles(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawQuery, "搜索内容", 500, true)),
 	);
 	ipcMain.handle(channels.settingsStatus, () => settingsStore.status());
+	ipcMain.handle(channels.piRuntimeStatus, () => piRuntimeUpdater.status());
+	ipcMain.handle(channels.piRuntimeCheck, () => piRuntimeUpdater.checkLatest());
+	ipcMain.handle(channels.piRuntimeInstall, (_event, rawVersion: unknown) =>
+		piRuntimeUpdater.installLatest(parseBoundedText(rawVersion, "Pi 版本", 40)),
+	);
+	ipcMain.handle(channels.piRuntimeRestore, () => piRuntimeUpdater.restoreBundled());
+	ipcMain.handle(channels.piRuntimeRestart, () => {
+		app.relaunch();
+		app.quit();
+	});
 	ipcMain.handle(channels.settingsGetPermissions, () => settingsStore.getPermissionDefaults());
 	ipcMain.handle(channels.settingsSetPermissions, (_event, raw: unknown) =>
 		settingsStore.setPermissionDefaults(parsePermissionDefaults(raw)),
@@ -1396,8 +1506,20 @@ if (!hasSingleInstanceLock) {
 		const recentProjects = new RecentProjectStore(app.getPath("userData"), {
 			discoverKnownRoots: process.env.CODEPIDDY_DISABLE_PROJECT_DISCOVERY !== "1",
 		});
-		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore);
-		registerIpcHandlers(agentManager, settingsStore, recentProjects);
+		const bundledManifestPath = app.isPackaged
+			? path.join(repositoryRoot, "coding-agent-package", "package.json")
+			: path.join(repositoryRoot, "packages", "coding-agent", "package.json");
+		const bundledManifest = JSON.parse(await readFile(bundledManifestPath, "utf8")) as { version: string };
+		const piRuntimeUpdater = new PiRuntimeUpdater({
+			userDataPath: app.getPath("userData"),
+			bundledVersion: bundledManifest.version,
+			nodeExecutable: process.execPath,
+			...(app.isPackaged ? { npmCliPath: path.join(repositoryRoot, "npm", "bin", "npm-cli.js") } : {}),
+			probe: (runtime, stagingRoot) => probePiUpdate(runtime, stagingRoot, repositoryRoot, app.getPath("userData")),
+		});
+		await piRuntimeUpdater.initialize();
+		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore, piRuntimeUpdater);
+		registerIpcHandlers(agentManager, settingsStore, recentProjects, piRuntimeUpdater);
 		mainWindow = createWindow(recentProjects);
 		mainWindow.on("closed", () => {
 			mainWindow = null;

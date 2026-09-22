@@ -47,6 +47,7 @@
     },
     "files": [
       "dist/**/*",
+      "!dist/runtime-extensions/**/*",
       "resources/icons/codepiddy-icon-1024.png",
       "package.json"
     ],

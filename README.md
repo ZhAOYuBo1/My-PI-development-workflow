@@ -122,6 +122,12 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 
 > OpenSpec Skill 调用 `openspec` CLI，Open Code Review Skill 调用 `ocr` CLI。Skill 指令随应用分发；使用对应能力时仍需要相应 CLI 和模型 Provider 可用。
 
+## 更新 Pi 内核
+
+在 **设置 → Pi 运行时** 中检查新版本，确认后从 npm 安装 `@earendil-works/pi-coding-agent`。CodePIddy 先在独立目录校验 RPC、模型列表、命令和内置扩展，再切换到新版；现有 Agent 不会在运行中被强制中断，重启客户端后生效。安装或校验失败时保留原版本；如新版启动失败会自动回退，也可手动点击“恢复内置版本”。
+
+这只更新 Pi 内核，不更新 CodePIddy UI 或项目文件。Windows 安装包自带更新所需的 npm，无需另装 Node.js；源码开发模式会使用本机 npm。更新前仍应备份重要项目和会话。内置的 Pi 版本可随 CodePIddy 发布升级，独立更新不修改仓库源码。
+
 ## 已实现能力
 
 - Windows Electron 桌面客户端；
@@ -142,6 +148,7 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 - 项目级单写入 Lease；
 - Tavily Search-only Web Search；
 - Pi 进程崩溃检测和自动重连；
+- Pi 运行时独立版本检查、校验更新和回退；
 - SQLite UI 状态持久化；
 - Electron IPC 校验、CSP、Context Isolation 和 Renderer Sandbox；
 - Core、Desktop 与 Electron E2E 测试。
