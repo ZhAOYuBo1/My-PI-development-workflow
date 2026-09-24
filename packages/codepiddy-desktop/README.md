@@ -2,6 +2,15 @@
 
 CodePIddy Windows desktop client prototype.
 
+## First-time setup
+
+Run from the repository root:
+
+```powershell
+npm ci --ignore-scripts
+npm run install:electron
+```
+
 ## Build
 
 ```powershell

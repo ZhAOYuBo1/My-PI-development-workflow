@@ -185,10 +185,29 @@ x64
 - Node.js 22.19 或更高版本
 - npm
 
-### 启动
+### 从 GitHub 克隆并启动
 
 ```powershell
+git clone https://github.com/ZhAOYuBo1/My-PI-development-workflow.git
+cd My-PI-development-workflow
 npm ci --ignore-scripts
+npm run install:electron
+npm run build:codepiddy
+npm start --workspace=@codepiddy/desktop
+```
+
+说明：
+
+1. `npm ci --ignore-scripts` 按锁文件安装依赖，同时避免自动执行第三方安装脚本；
+2. `npm run install:electron` 显式下载 Electron 运行文件，首次开发必须执行；
+3. `npm run build:codepiddy` 构建共享类型、核心服务、Tavily MCP 和桌面客户端；
+4. `npm start --workspace=@codepiddy/desktop` 启动 CodePIddy。
+
+`npm run install:electron` 会优先使用 Electron 官方下载地址；如果下载失败且没有手动配置 `ELECTRON_MIRROR`，会自动改用 npmmirror 镜像重试。
+
+后续日常开发通常只需重新构建并启动：
+
+```powershell
 npm run build:codepiddy
 npm start --workspace=@codepiddy/desktop
 ```
