@@ -38,6 +38,7 @@
 - When regressions tests for fixing a github issue, add a comment with the github issue number next to the test.
 - For ad-hoc scripts, `write` them to a temp file (e.g. `/tmp`), run, edit if needed, remove when done. Don't embed multi-line scripts in `bash` commands.
 - Never commit unless the user asks.
+- **Commit after acceptance, without asking.** Once a task passes verification (tests, typecheck, build — whichever the task requires) and the user has accepted the result, commit it in the same session. Do not leave accepted work uncommitted waiting for a separate "commit it" instruction. Use explicit paths, the message format below, and never `git add -A`.
 
 ## Dependency and Install Security
 

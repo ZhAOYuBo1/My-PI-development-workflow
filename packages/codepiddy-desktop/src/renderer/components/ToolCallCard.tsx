@@ -1,5 +1,7 @@
 import { memo, useState } from "react";
 import { classifyToolFailure, toolFailureGuidance, toolFailureLabel } from "./tool-failure-utils.ts";
+import { formatElapsed } from "./stream-stats.ts";
+import { resolveToolExpanded, toggleToolPin, type ToolPinMode } from "./tool-collapse.ts";
 import { ToolIcon, toolIconForTool } from "./tool-icons.tsx";
 
 export interface ToolCallCardItem {
@@ -9,6 +11,8 @@ export interface ToolCallCardItem {
 	text: string;
 	status: "running" | "completed";
 	isError: boolean;
+	startedAt?: number;
+	completedAt?: number;
 }
 
 const OUTPUT_PREVIEW_LIMIT = 6000;
@@ -20,7 +24,7 @@ function friendlyToolText(item: ToolCallCardItem): string {
 	return item.text;
 }
 
-function Output({ item, showAll }: { item: ToolCallCardItem; showAll: boolean }) {
+export function ToolCallOutput({ item, showAll }: { item: ToolCallCardItem; showAll: boolean }) {
 	const name = item.name.toLowerCase();
 	const terminal = name === "bash" || name === "powershell";
 	const diff = name === "edit" || name === "write";
@@ -48,14 +52,20 @@ function Output({ item, showAll }: { item: ToolCallCardItem; showAll: boolean })
 }
 
 export const ToolCallCard = memo(function ToolCallCard({ item }: { item: ToolCallCardItem }) {
-	const [expanded, setExpanded] = useState(false);
+	const [pin, setPin] = useState<ToolPinMode>("auto");
 	const [showAll, setShowAll] = useState(false);
+	const expanded = resolveToolExpanded(pin, item.status);
 	const friendlyText = friendlyToolText(item);
 	const truncated = friendlyText.length > OUTPUT_PREVIEW_LIMIT;
 	const failureKind = item.isError ? classifyToolFailure(friendlyText) : null;
+	const duration =
+		item.status === "completed" && typeof item.startedAt === "number" && typeof item.completedAt === "number"
+			? formatElapsed(Math.max(0, item.completedAt - item.startedAt))
+			: null;
 	return (
 		<div className={`tool-block ${item.isError ? "error" : ""}`}>
-			<button className="tool-summary" type="button" onClick={() => setExpanded((current) => !current)}>
+			{duration ? <span className="tool-elapsed">用时 {duration}</span> : null}
+			<button className="tool-summary" type="button" onClick={() => setPin(toggleToolPin(expanded))}>
 				<strong className="tool-title">
 					<ToolIcon name={toolIconForTool(item.name)} size={14} />
 					<span>{item.name}</span>
@@ -65,9 +75,9 @@ export const ToolCallCard = memo(function ToolCallCard({ item }: { item: ToolCal
 						name={item.status === "running" ? "clock" : item.isError ? "x-circle" : "check-circle"}
 						size={12}
 					/>
-					{item.status === "running" ? "运行中" : failureKind ? toolFailureLabel(failureKind) : "完成"}{" "}
-					{expanded ? "⌃" : "⌄"}
+					{item.status === "running" ? "运行中" : failureKind ? toolFailureLabel(failureKind) : "完成"}
 				</span>
+				<ToolIcon name="caret" size={13} className={`tool-caret${expanded ? " open" : ""}`} />
 			</button>
 			{expanded ? (
 				<div className="tool-details">
@@ -79,8 +89,8 @@ export const ToolCallCard = memo(function ToolCallCard({ item }: { item: ToolCal
 					) : null}
 					{item.text ? (
 						<>
-							<small>结果</small>
-							<Output item={item} showAll={showAll} />
+					<small>结果</small>
+						<ToolCallOutput item={item} showAll={showAll} />
 							{truncated ? (
 								<button
 									className="tool-show-all"

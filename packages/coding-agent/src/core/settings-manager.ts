@@ -990,9 +990,13 @@ export class SettingsManager {
 		this.save();
 	}
 
+	/**
+	 * `PI_SHELL_PATH` 供宿主应用（如 CodePIddy 设置页）在不改写 settings.json 的前提下覆盖 bash 路径，
+	 * 用于 Git for Windows 装在非标准目录（如 D:\git\Git）导致自动探测失败的场景。
+	 */
 	getShellPath(): string | undefined {
-		const shellPath = this.settings.shellPath;
-		return shellPath ? normalizePath(shellPath) : shellPath;
+		const shellPath = process.env.PI_SHELL_PATH?.trim() || this.settings.shellPath;
+		return shellPath ? normalizePath(shellPath) : undefined;
 	}
 
 	setShellPath(path: string | undefined): void {

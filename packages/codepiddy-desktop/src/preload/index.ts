@@ -74,6 +74,7 @@ const channels = {
 	settingsSetPermissions: "codepiddy:settings:permissions:set",
 	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
+	settingsSaveShell: "codepiddy:settings:shell:save",
 	settingsStatus: "codepiddy:settings:status",
 	piRuntimeStatus: "codepiddy:pi-runtime:status",
 	piRuntimeCheck: "codepiddy:pi-runtime:check",
@@ -81,6 +82,8 @@ const channels = {
 	piRuntimeRollback: "codepiddy:pi-runtime:rollback",
 	piRuntimeRestart: "codepiddy:pi-runtime:restart",
 	searchProjectFiles: "codepiddy:project:files:search",
+	listWorkspaceDir: "codepiddy:workspace:dir:list",
+	readWorkspaceFile: "codepiddy:workspace:file:read",
 	sendAgentPrompt: "codepiddy:agent:prompt",
 } as const;
 
@@ -132,6 +135,10 @@ const api: CodePIddyClientApi = {
 		ipcRenderer.invoke(channels.getPendingPermissionRequest, input),
 	searchProjectFiles: (projectRoot: string, query: string) =>
 		ipcRenderer.invoke(channels.searchProjectFiles, projectRoot, query),
+	listWorkspaceDir: (projectRoot: string, relativeDir: string) =>
+		ipcRenderer.invoke(channels.listWorkspaceDir, projectRoot, relativeDir),
+	readWorkspaceFile: (projectRoot: string, relativePath: string) =>
+		ipcRenderer.invoke(channels.readWorkspaceFile, projectRoot, relativePath),
 	getSettingsStatus: () => ipcRenderer.invoke(channels.settingsStatus),
 	getPiRuntimeStatus: () => ipcRenderer.invoke(channels.piRuntimeStatus),
 	checkPiRuntimeUpdate: () => ipcRenderer.invoke(channels.piRuntimeCheck),
@@ -142,6 +149,7 @@ const api: CodePIddyClientApi = {
 	setPermissionDefaults: (input: PermissionDefaults) => ipcRenderer.invoke(channels.settingsSetPermissions, input),
 	saveTavilyApiKey: (apiKey: string) => ipcRenderer.invoke(channels.settingsSaveTavily, apiKey),
 	clearTavilyApiKey: () => ipcRenderer.invoke(channels.settingsClearTavily),
+	saveShellPath: (shellPath: string) => ipcRenderer.invoke(channels.settingsSaveShell, shellPath),
 	listAgentSkills: (projectRoot?: string) => ipcRenderer.invoke(channels.settingsListSkills, projectRoot),
 	getRoleSkillAssignments: () => ipcRenderer.invoke(channels.settingsGetRoleSkills),
 	setRoleSkillAssignments: (input: SetRoleSkillAssignmentsInput) =>

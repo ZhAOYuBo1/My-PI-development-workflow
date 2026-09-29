@@ -238,6 +238,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	setPermissionDefaults(input: PermissionDefaults): Promise<PermissionDefaults>;
 	saveTavilyApiKey(apiKey: string): Promise<SettingsStatus>;
 	clearTavilyApiKey(): Promise<SettingsStatus>;
+	saveShellPath(shellPath: string): Promise<SettingsStatus>;
 	listAgentSkills(projectRoot?: string): Promise<AgentSkillSummary[]>;
 	getRoleSkillAssignments(): Promise<RoleSkillAssignments>;
 	setRoleSkillAssignments(input: SetRoleSkillAssignmentsInput): Promise<RoleSkillAssignments>;
@@ -256,6 +257,8 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	openRecentProject(projectRoot: string): Promise<ProjectSummary>;
 	forgetRecentProject(projectRoot: string): Promise<RecentProject[]>;
 	searchProjectFiles(projectRoot: string, query: string): Promise<string[]>;
+	listWorkspaceDir(projectRoot: string, relativeDir: string): Promise<WorkspaceDirEntry[]>;
+	readWorkspaceFile(projectRoot: string, relativePath: string): Promise<WorkspaceFileContent>;
 	getProjectWriteLeaseStatus(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	clearStaleProjectWriteLease(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	onAgentEvent(listener: (event: AgentClientEvent) => void): () => void;
@@ -272,6 +275,25 @@ export interface PendingPermissionRequest extends AgentInstanceLocator {
 	createdAt: string;
 }
 
+// 工作区文件系统直读（desktop-work-panel 文件管理器的数据源）。
+export interface WorkspaceDirEntry {
+	name: string;
+	kind: "dir" | "file";
+	/** 文件字节数，目录恒为 0。 */
+	size: number;
+}
+
+export type WorkspaceFileKind = "text" | "image" | "binary" | "tooLarge";
+
+export interface WorkspaceFileContent {
+	kind: WorkspaceFileKind;
+	size: number;
+	/** kind 为 text 时的 UTF-8 内容。 */
+	content?: string;
+	/** kind 为 image 时的 dataUrl。 */
+	dataUrl?: string;
+}
+
 export interface ExtensionUiResponseInput extends AgentInstanceLocator {
 	requestId: string;
 	value?: string;
@@ -282,6 +304,8 @@ export interface ExtensionUiResponseInput extends AgentInstanceLocator {
 export interface SettingsStatus {
 	tavilyApiKeyConfigured: boolean;
 	encryptionAvailable: boolean;
+	/** 用户配置的 bash 路径；为 null 表示交给 pi 自动探测。 */
+	shellPath: string | null;
 }
 
 export interface PiRuntimeStatus {

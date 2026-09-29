@@ -15,6 +15,8 @@ import {
 	restoreWorkItem,
 	type StoredAgentInstance,
 	searchProjectFiles,
+	listWorkspaceDir,
+	readWorkspaceFile,
 } from "@codepiddy/core";
 import type {
 	AgentBuiltinCommandResult,
@@ -128,6 +130,7 @@ const channels = {
 	settingsSetPermissions: "codepiddy:settings:permissions:set",
 	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
+	settingsSaveShell: "codepiddy:settings:shell:save",
 	settingsStatus: "codepiddy:settings:status",
 	piRuntimeStatus: "codepiddy:pi-runtime:status",
 	piRuntimeCheck: "codepiddy:pi-runtime:check",
@@ -135,6 +138,8 @@ const channels = {
 	piRuntimeRollback: "codepiddy:pi-runtime:rollback",
 	piRuntimeRestart: "codepiddy:pi-runtime:restart",
 	searchProjectFiles: "codepiddy:project:files:search",
+	listWorkspaceDir: "codepiddy:workspace:dir:list",
+	readWorkspaceFile: "codepiddy:workspace:file:read",
 	sendAgentPrompt: "codepiddy:agent:prompt",
 } as const;
 
@@ -893,10 +898,11 @@ class AgentManager {
 				? path.join(this.repositoryRoot, "coding-agent-package", "dist", "bundle", "cli.js")
 				: path.join(this.repositoryRoot, "packages", "coding-agent", "src", "cli.ts"));
 		const nodeExecutable = process.env.CODEPIDDY_NODE_EXECUTABLE ?? (packaged ? process.execPath : "node");
-		const [tavilyApiKey, roleModelDefault, roleSkillAssignments] = await Promise.all([
+		const [tavilyApiKey, roleModelDefault, roleSkillAssignments, shellPath] = await Promise.all([
 			this.settingsStore.getTavilyApiKey(),
 			this.settingsStore.getRoleModelDefault(agent.role),
 			this.settingsStore.getRoleSkillAssignments(),
+			this.settingsStore.getShellPath(),
 		]);
 		const roleSkillPaths = await resolveRoleSkillPaths(
 			this.repositoryRoot,
@@ -932,6 +938,9 @@ class AgentManager {
 							).href,
 						}),
 				...(tavilyApiKey ? { TAVILY_API_KEY: tavilyApiKey } : {}),
+				// pi 只从 settings.json 读 shellPath；用环境变量把设置页的路径喂进去，
+				// 免得改写用户自己的 ~/.pi/agent/settings.json。Git for Windows 装在非标准目录时必需。
+				...(shellPath ? { PI_SHELL_PATH: shellPath } : {}),
 				CODEPIDDY_AGENT_ROLE: agent.role,
 				CODEPIDDY_PROJECT_ROOT: agent.projectRoot,
 				CODEPIDDY_WORK_ITEM_DIR: agent.workItemDirectory,
@@ -1416,6 +1425,15 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.searchProjectFiles, (_event, rawProjectRoot: unknown, rawQuery: unknown) =>
 		searchProjectFiles(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawQuery, "搜索内容", 500, true)),
 	);
+	ipcMain.handle(channels.listWorkspaceDir, (_event, rawProjectRoot: unknown, rawDir: unknown) =>
+		listWorkspaceDir(
+			requireOpenProjectRoot(rawProjectRoot),
+			parseBoundedText(rawDir, "目录", 1000, true),
+		),
+	);
+	ipcMain.handle(channels.readWorkspaceFile, (_event, rawProjectRoot: unknown, rawPath: unknown) =>
+		readWorkspaceFile(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawPath, "文件路径", 1000)),
+	);
 	ipcMain.handle(channels.settingsStatus, () => settingsStore.status());
 	ipcMain.handle(channels.piRuntimeStatus, () => piRuntimeUpdater.status());
 	ipcMain.handle(channels.piRuntimeCheck, () => piRuntimeUpdater.checkLatest());
@@ -1435,6 +1453,9 @@ function registerIpcHandlers(
 		settingsStore.saveTavilyApiKey(parseBoundedText(rawApiKey, "Tavily API Key", 500)),
 	);
 	ipcMain.handle(channels.settingsClearTavily, () => settingsStore.clearTavilyApiKey());
+	ipcMain.handle(channels.settingsSaveShell, (_event, rawShellPath: unknown) =>
+		settingsStore.setShellPath(parseBoundedText(rawShellPath, "Shell 路径", 1024)),
+	);
 	ipcMain.handle(channels.settingsListSkills, (_event, rawProjectRoot?: unknown) => {
 		const projectRoot = rawProjectRoot === undefined ? undefined : requireOpenProjectRoot(rawProjectRoot);
 		return discoverAgentSkills(agentManager.repositoryPath, projectRoot);

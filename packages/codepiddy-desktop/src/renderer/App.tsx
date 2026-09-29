@@ -26,9 +26,24 @@ import type {
 } from "@codepiddy/shared";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
+import { MessageContent } from "./components/message-content.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
+import { StreamStats } from "./components/StreamStats.tsx";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
+import {
+	formatTurnElapsed,
+	groupTranscriptIntoTurns,
+	splitTurnEntries,
+	turnElapsedMs,
+} from "./components/turn-group.ts";
+import { WorkPanel } from "./components/WorkPanel.tsx";
 import { demoProject } from "./demo-project.ts";
+import {
+	estimateTokens,
+	extractUsageOutput,
+	formatElapsed,
+	type FinalStreamStats,
+} from "./components/stream-stats.ts";
 
 type Selection =
 	| { type: "welcome" }
@@ -130,6 +145,8 @@ type TranscriptItem =
 			thinking?: string;
 			status: AssistantMessageStatus;
 			createdAt?: string;
+			streamStartedAt?: number;
+			streamStats?: FinalStreamStats;
 	  }
 	| { id: string; type: "system"; text: string; createdAt?: string }
 	| {
@@ -274,6 +291,8 @@ function finalizeAssistantTranscript(
 		const text = finalText || item.text;
 		const thinking = finalThinking || item.thinking;
 		if (status === "complete" && !text && !thinking) return [];
+		const usageOutput = messageRecord ? extractUsageOutput(messageRecord) : null;
+		const statsTokens = usageOutput ?? estimateTokens(text.length);
 		return [
 			{
 				...item,
@@ -282,9 +301,28 @@ function finalizeAssistantTranscript(
 					(status === "aborted" ? "本轮已中断。" : status === "error" ? errorMessage || "本轮回复失败。" : ""),
 				...(thinking ? { thinking } : {}),
 				status,
+				...(statsTokens > 0
+					? {
+							streamStats: {
+								tokens: statsTokens,
+								estimated: usageOutput === null,
+								...(typeof item.streamStartedAt === "number"
+									? { elapsedMs: Math.max(0, Date.now() - item.streamStartedAt) }
+									: {}),
+							} satisfies FinalStreamStats,
+						}
+					: {}),
 			},
 		];
 	});
+}
+
+/** 会话历史里的 timestamp 是 Unix 毫秒数（AgentMessage 定义），在线消息才带 ISO 字符串。 */
+function historyTimestamp(message: Record<string, unknown>): string | null {
+	const value = message.timestamp;
+	if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+	if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
+	return null;
 }
 
 function normalizeHistory(messages: unknown[]): TranscriptItem[] {
@@ -295,6 +333,7 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 		const images = extractMessageImages(message.content, index);
 		const role = message.role;
 		if (!text && !(role === "user" && images.length > 0)) continue;
+		const createdAt = historyTimestamp(message);
 		if (role === "toolResult") {
 			items.push({
 				id: typeof message.toolCallId === "string" ? message.toolCallId : `history-tool-${index}`,
@@ -304,16 +343,22 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 				text,
 				status: "completed",
 				isError: message.isError === true,
+				...(createdAt ? { completedAt: Date.parse(createdAt) } : {}),
 			});
 		} else if (role === "assistant") {
 			const thinking = extractThinkingText(message.content);
+			const historyUsage = extractUsageOutput(message);
+			const historyTokens = historyUsage ?? estimateTokens(text.length);
 			items.push({
 				id: `history-${index}`,
 				type: "assistant",
 				text,
 				...(thinking ? { thinking } : {}),
 				status: assistantMessageStatus(message),
-				...(typeof message.timestamp === "string" ? { createdAt: message.timestamp } : {}),
+				...(createdAt ? { createdAt } : {}),
+				...(historyTokens > 0
+					? { streamStats: { tokens: historyTokens, estimated: historyUsage === null } }
+					: {}),
 			});
 		} else {
 			items.push({
@@ -321,7 +366,7 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 				type: role === "user" ? "user" : "system",
 				text,
 				...(role === "user" && images.length > 0 ? { images } : {}),
-				...(typeof message.timestamp === "string" ? { createdAt: message.timestamp } : {}),
+				...(createdAt ? { createdAt } : {}),
 			});
 		}
 	}
@@ -339,6 +384,7 @@ type AppIconName =
 	| "folder"
 	| "more"
 	| "paperclip"
+	| "panel"
 	| "plus"
 	| "restore"
 	| "search"
@@ -359,200 +405,233 @@ type AppIconName =
 	| "clock"
 	| "check-circle"
 	| "x-circle"
+	| "caret"
 	| "shield";
 
 function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?: number; className?: string }) {
 	const paths: Record<AppIconName, React.ReactNode> = {
 		archive: (
 			<>
-				<path d="M4 7h16" />
-				<path d="M6 7l1 12h10l1-12" />
-				<path d="M9 11h6" />
-				<path d="M8 4h8l1 3H7l1-3Z" />
+				<path d="M5 9h14v10H5zM4.5 6h15v3h-15zM9 12h6" />
+				<path d="M11 10.8h2v3.1h2.2L12 17l-3.2-3.1H11z" fill="currentColor" stroke="none" />
 			</>
 		),
 		"arrow-up": (
 			<>
-				<path d="m7 11 5-5 5 5" />
-				<path d="M12 6v12" />
+				<path d="M12 15.5V13M5 18.5h14" />
+				<path d="M12 4 6.7 9.4h3.8v4.2h3V9.4h3.8z" fill="currentColor" stroke="none" />
 			</>
 		),
 		branch: (
 			<>
-				<circle cx="7" cy="6" r="2" />
-				<circle cx="17" cy="18" r="2" />
-				<circle cx="7" cy="18" r="2" />
-				<path d="M7 8v8" />
-				<path d="M9 8c5 0 8 2 8 8" />
+				<path d="M12 8v4m0 0h5v3m-5-3H7v3" />
+				<circle cx="12" cy="6" r="2" />
+				<circle cx="7" cy="17" r="2" />
+				<circle cx="17" cy="17" r="2" />
+				<circle cx="17" cy="17" r="1.35" fill="currentColor" stroke="none" />
 			</>
 		),
-		chevron: <path d="m9 6 6 6-6 6" />,
+		chevron: (
+			<>
+				<path d="m7 9 5-5 5 5M7 15l5 5 5-5" />
+				<circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+			</>
+		),
 		close: (
 			<>
-				<path d="m7 7 10 10" />
-				<path d="M17 7 7 17" />
+				<path d="M7.5 7.5 16.5 16.5M16.5 7.5l-9 9" />
+				<circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
 			</>
 		),
 		copy: (
 			<>
-				<rect x="8" y="8" width="11" height="11" rx="2" />
-				<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+				<path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h7l3 3v9.5a1.5 1.5 0 0 1-1.5 1.5H17" />
+				<path d="M16 7h3.5M16 7V4" />
+				<rect x="5" y="8" width="11" height="12" rx="1.5" />
+				<path d="M14.5 8H16v1.5h-1.5z" fill="currentColor" stroke="none" />
 			</>
 		),
 		edit: (
 			<>
-				<path d="M4 20h4l11-11-4-4L4 16v4Z" />
-				<path d="m13.5 6.5 4 4" />
+				<path d="m13.5 6 4.5 4.5M5 19l4.2-.9L19 8.3a2.1 2.1 0 0 0-3-3L6.2 15.1 5 19z" />
+				<path d="M5 19l3.2-3.2" />
+				<path d="M15 5.3 18.7 9l-1.4 1.4-3.7-3.7z" fill="currentColor" stroke="none" />
 			</>
 		),
-		folder: <path d="M3.5 6.5h6l2 2H20.5v9.5H3.5z" />,
+		folder: (
+			<>
+				<path d="M4.5 8V7a1.5 1.5 0 0 1 1.5-1.5h4l2 2H18A1.5 1.5 0 0 1 19.5 9v8a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17z" />
+				<path d="M4.5 10h15" />
+				<circle cx="16" cy="14.5" r="1.1" fill="currentColor" stroke="none" />
+			</>
+		),
 		more: (
 			<>
-				<circle cx="6" cy="12" r="1" fill="currentColor" stroke="none" />
-				<circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-				<circle cx="18" cy="12" r="1" fill="currentColor" stroke="none" />
+				<circle cx="6" cy="12" r="1.4" />
+				<circle cx="12" cy="12" r="1.4" />
+				<circle cx="18" cy="12" r="1.4" />
+				<circle cx="12" cy="12" r="1.05" fill="currentColor" stroke="none" />
 			</>
 		),
 		paperclip: (
 			<>
-				<path d="m9.5 12.5 5.7-5.7a3 3 0 0 1 4.2 4.2l-7.8 7.8a5 5 0 0 1-7.1-7.1l7.5-7.5" />
-				<path d="m7.3 14.7 7.1-7.1a1.5 1.5 0 0 1 2.1 2.1l-7.1 7.1a2 2 0 0 1-2.8-2.8l6.4-6.4" />
+				<path d="M8 12.5 14 6.5a3 3 0 0 1 4.2 4.2l-7 7a4 4 0 0 1-5.7-5.7l7-7" />
+				<circle cx="17.2" cy="7.1" r="0.8" fill="currentColor" stroke="none" />
+			</>
+		),
+		panel: (
+			<>
+				<rect x="4.5" y="5" width="15" height="14" rx="2" />
+				<path d="M10 5v14" />
+				<rect x="6.5" y="9" width="1.5" height="6" rx="0.75" fill="currentColor" stroke="none" />
 			</>
 		),
 		plus: (
 			<>
-				<path d="M12 5v14" />
-				<path d="M5 12h14" />
+				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+				<path d="M11 7.5h2v3.5h3.5v2H13V16.5h-2V13H7.5v-2H11z" fill="currentColor" stroke="none" />
 			</>
 		),
 		restore: (
 			<>
-				<path d="M4 8v5h5" />
-				<path d="M5.5 12a7 7 0 1 0 2-5" />
+				<path d="M5.2 8.5A7.5 7.5 0 1 1 4.5 12M5 5.2v4h4M12 8v4l3 2" />
+				<path d="M4.2 5h4.6L5 9.6z" fill="currentColor" stroke="none" />
 			</>
 		),
 		search: (
 			<>
-				<circle cx="10.5" cy="10.5" r="5.5" />
-				<path d="m15 15 4 4" />
+				<path d="M14.8 14.8 20 20M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12z" />
+				<path d="M11 8.9 11.6 10.4l1.5.6-1.5.6L11 13l-.6-1.4-1.5-.6 1.5-.6z" fill="currentColor" stroke="none" />
 			</>
 		),
-		stop: <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />,
+		stop: (
+			<>
+				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+				<rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none" />
+			</>
+		),
 		settings: (
 			<>
-				<circle cx="12" cy="12" r="3" />
-				<path d="M18.02 10.5L19.92 10.89L19.92 13.11L18.02 13.5L17.31 15.19L18.39 16.81L16.81 18.39L15.19 17.31L13.5 18.02L13.11 19.92L10.89 19.92L10.5 18.02L8.81 17.31L7.19 18.39L5.61 16.81L6.69 15.19L5.98 13.5L4.08 13.11L4.08 10.89L5.98 10.5L6.69 8.81L5.61 7.19L7.19 5.61L8.81 6.69L10.5 5.98L10.89 4.08L13.11 4.08L13.5 5.98L15.19 6.69L16.81 5.61L18.39 7.19L17.31 8.81Z" />
+				<path d="M10.44 4.66 L13.56 4.66 L13.80 6.12 L14.89 6.57 L16.08 5.71 L18.29 7.92 L17.43 9.11 L17.88 10.20 L19.34 10.44 L19.34 13.56 L17.88 13.80 L17.43 14.89 L18.29 16.08 L16.08 18.29 L14.89 17.43 L13.80 17.88 L13.56 19.34 L10.44 19.34 L10.20 17.88 L9.11 17.43 L7.92 18.29 L5.71 16.08 L6.57 14.89 L6.12 13.80 L4.66 13.56 L4.66 10.44 L6.12 10.20 L6.57 9.11 L5.71 7.92 L7.92 5.71 L9.11 6.57 L10.20 6.12Z" />
+				<path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4z" />
+				<circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
 			</>
 		),
 		warning: (
 			<>
-				<path d="M12 4 3.5 19h17L12 4Z" />
-				<path d="M12 9v4" />
-				<path d="M12 16h.01" />
+				<path d="M12 4.8 20 19H4z" />
+				<path d="M12 9.2v4.3" />
+				<circle cx="12" cy="16.3" r="0.85" fill="currentColor" stroke="none" />
 			</>
 		),
 		eye: (
 			<>
-				<path d="M2.5 12C5.5 8.6 8.8 7 12 7c3.2 0 6.5 1.6 9.5 5-3 3.4-6.3 5-9.5 5-3.2 0-6.5-1.6-9.5-5Z" />
-				<circle cx="12" cy="12" r="2" />
+				<path d="M4.2 12c2-3.2 4.6-4.8 7.8-4.8s5.8 1.6 7.8 4.8c-2 3.2-4.6 4.8-7.8 4.8S6.2 15.2 4.2 12z" />
+				<path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />
+				<circle cx="11.2" cy="11.8" r="1.15" fill="currentColor" stroke="none" />
 			</>
 		),
 		terminal: (
 			<>
-				<rect x="4" y="4" width="16" height="16" rx="2" />
-				<path d="M8.5 9.5 12 12l-3.5 2.5" />
-				<path d="M13.5 15H17" />
+				<rect x="4.5" y="5.5" width="15" height="13" rx="2.5" />
+				<path d="m7.5 9.5 2.5 2.5-2.5 2.5" />
+				<path d="M12.5 14.5h3.5" />
+				<rect x="14.5" y="14" width="3.5" height="1.5" rx="0.75" fill="currentColor" stroke="none" />
 			</>
 		),
 		"file-plus": (
 			<>
-				<path d="M6 3.5h7l4 4v13H6Z" />
-				<path d="M13 3.5v4h4" />
-				<path d="M11.5 13v5M9 15.5h5" />
+				<path d="M6 4.5h7l5 5V13M13 4.5v5h5M6 4.5v15h6" />
+				<path d="M15 14h2v2h2v2h-2v2h-2v-2h-2v-2h2z" fill="currentColor" stroke="none" />
 			</>
 		),
 		"text-search": (
 			<>
-				<circle cx="9" cy="9" r="4.5" />
-				<path d="M12.5 12.5l3.5 3.5" />
-				<path d="M17 8h3.5M17 11.5h3.5M17 15h3.5" />
+				<path d="M4.5 6.5h10M4.5 10h8M4.5 13.5h6" />
+				<circle cx="15.2" cy="14.2" r="3.1" />
+				<path d="m17.5 16.5 2.2 2.2" />
+				<circle cx="15.2" cy="14.2" r="1" fill="currentColor" stroke="none" />
 			</>
 		),
 		"file-search": (
 			<>
-				<path d="M5.5 4h8L18 8.5V19a1 1 0 0 1-1 1H5.5Z" />
-				<path d="M13.5 4v4.5H18" />
-				<circle cx="11.5" cy="14" r="3" />
-				<path d="M13.8 16.3l3 3" />
+				<path d="M6 4.5h7l5 5v2M13 4.5v5h5M6 4.5v15h5" />
+				<circle cx="14.5" cy="14.5" r="3" />
+				<path d="m16.7 16.7 2.5 2.5" />
+				<circle cx="14.5" cy="14.5" r="0.9" fill="currentColor" stroke="none" />
 			</>
 		),
 		list: (
 			<>
-				<circle cx="5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-				<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
-				<circle cx="5" cy="17.5" r="1" fill="currentColor" stroke="none" />
-				<path d="M9 6.5h11M9 12h11M9 17.5h11" />
+				<circle cx="6" cy="6.5" r="1" />
+				<circle cx="6" cy="12" r="1" />
+				<circle cx="6" cy="17.5" r="1" />
+				<path d="M10 6.5h9M10 12h9M10 17.5h9" />
+				<circle cx="6" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
 			</>
 		),
 		sparkles: (
 			<>
-				<path d="M10.5 4c.9 3.9 2 5.6 6.5 6.5-4.5.9-5.6 2.6-6.5 6.5-.9-3.9-2-5.6-6.5-6.5 4.5-.9 5.6-2.6 6.5-6.5Z" />
-				<path d="M19 15v4M17 17h4" />
+				<path d="M11.5 4.5 13 9l4.5 1.5L13 12l-1.5 4.5L10 12l-4.5-1.5L10 9z" />
+				<path d="m18 4 .5 1.3 1.3.5-1.3.5L18 7.6l-.5-1.3-1.3-.5 1.3-.5z" />
+				<path d="M6 17.2l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z" fill="currentColor" stroke="none" />
 			</>
 		),
 		plug: (
 			<>
-				<path d="M9.5 3v4M14.5 3v4" />
-				<path d="M7.5 7h9v4a4.5 4.5 0 0 1-9 0Z" />
-				<path d="M12 15.5V20" />
+				<path d="M9 4.5v4m6-4v4M7 8.5h10V12a5 5 0 0 1-5 5 5 5 0 0 1-5-5zM12 17v2.5" />
+				<path d="M5 12h2" />
+				<circle cx="12" cy="19" r="0.8" fill="currentColor" stroke="none" />
 			</>
 		),
 		checklist: (
 			<>
-				<rect x="9" y="3" width="6" height="4" rx="1" />
-				<path d="M5.5 6.5H9M15 6.5h3.5" />
-				<rect x="5.5" y="6.5" width="13" height="14" rx="2" />
-				<path d="M8.5 12.5l1.7 1.7 3.1-3.5" />
-				<path d="M8.5 16.5l1.7 1.7 3.1-3.5" />
+				<rect x="4.5" y="5" width="5" height="5" rx="1.5" />
+				<path d="M12 7.5h7" />
+				<rect x="4.5" y="14" width="5" height="5" rx="1.5" />
+				<path d="M12 16.5h7" />
+				<path d="M5.3 7.4 6.6 8.7l2.5-2.8 1.2 1.1-3.7 4z" fill="currentColor" stroke="none" />
 			</>
 		),
 		"message-question": (
 			<>
-				<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3.5V16H6a2 2 0 0 1-2-2Z" />
-				<path d="M10 9.5a2 2 0 1 1 3 1.7c-.7.4-1 .7-1 1.5" />
-				<path d="M12 15h.01" />
+				<path d="M6.5 5.5h11a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-6l-4.5 3v-3a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2z" />
+				<path d="M9.5 9.8a2.5 2.5 0 1 1 4.5 1.5c-.7.9-2 1.1-2 2.5" />
+				<circle cx="12" cy="16" r="0.8" fill="currentColor" stroke="none" />
 			</>
 		),
 		globe: (
 			<>
-				<circle cx="12" cy="12" r="8" />
-				<ellipse cx="12" cy="12" rx="3.5" ry="8" />
-				<path d="M4.6 9.5h14.8M4.6 14.5h14.8" />
+				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+				<path d="M4.7 12h14.6M12 4.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5m0-15c-2 2-3 4.5-3 7.5s1 5.5 3 7.5" />
+				<path d="M16 6.5a2.1 2.1 0 0 0-2.1 2.1c0 1.5 2.1 3.8 2.1 3.8s2.1-2.3 2.1-3.8A2.1 2.1 0 0 0 16 6.5z" fill="currentColor" stroke="none" />
 			</>
 		),
 		clock: (
 			<>
-				<circle cx="12" cy="12" r="8" />
-				<path d="M12 7.5V12l3.5 2.2" />
-				<path d="M12 12h.01" />
+				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+				<path d="M12 7.5V12l3.5 2" />
+				<circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
 			</>
 		),
 		"check-circle": (
 			<>
-				<circle cx="12" cy="12" r="8" />
-				<path d="M7.5 12.5l3 3 5.5-6.5" />
+				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+				<path d="M7.6 12.1 10.5 15l6-6.2-1.3-1.2-4.7 4.9-1.7-1.7z" fill="currentColor" stroke="none" />
 			</>
 		),
 		"x-circle": (
 			<>
-				<circle cx="12" cy="12" r="8" />
-				<path d="M9.5 9.5l5 5M14.5 9.5l-5 5" />
+				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+				<path d="M9.1 7.8 12 10.7l2.9-2.9 1.3 1.3-2.9 2.9 2.9 2.9-1.3 1.3-2.9-2.9-2.9 2.9-1.3-1.3 2.9-2.9-2.9-2.9z" fill="currentColor" stroke="none" />
 			</>
 		),
+		caret: <path d="M9.5 5.5 16.5 12l-7 6.5" />,
 		shield: (
 			<>
-				<path d="M12 3l7 2.5v5.2c0 5-3 8.3-7 10.3-4-2-7-5.3-7-10.3V5.5Z" />
-				<path d="M8.8 12l2.2 2.2 4.2-4.7" />
+				<path d="M12 4.5 19 7v5c0 4.2-2.8 6.8-7 8-4.2-1.2-7-3.8-7-8V7z" />
+				<path d="M12 11v4" />
+				<circle cx="12" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
 			</>
 		),
 	};
@@ -564,7 +643,7 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
-			strokeWidth="1.7"
+			strokeWidth="2"
 			strokeLinecap="round"
 			strokeLinejoin="round"
 			aria-hidden="true"
@@ -574,165 +653,11 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 	);
 }
 
-function InlineText({ text }: { text: string }) {
-	const tokens = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
-	return (
-		<>
-			{tokens.map((token, index) => {
-				if (token.startsWith("**") && token.endsWith("**")) {
-					return <strong key={`${index}-${token}`}>{token.slice(2, -2)}</strong>;
-				}
-				if (token.startsWith("`") && token.endsWith("`")) {
-					return (
-						<code className="inline-code" key={`${index}-${token}`}>
-							{token.slice(1, -1)}
-						</code>
-					);
-				}
-				return <span key={`${index}-${token}`}>{token}</span>;
-			})}
-		</>
-	);
+/** 统计行只保留一条：该 assistant 消息之后是否还有更新的 assistant 消息。 */
+function hasLaterAssistant(items: TranscriptItem[], index: number): boolean {
+	for (let i = index + 1; i < items.length; i += 1) if (items[i]?.type === "assistant") return true;
+	return false;
 }
-
-function RichText({ text }: { text: string }) {
-	const lines = text.split("\n");
-	const blocks: React.ReactNode[] = [];
-	let paragraph: string[] = [];
-	let list: { ordered: boolean; items: string[] } | null = null;
-	const flushParagraph = (): void => {
-		if (paragraph.length === 0) return;
-		const value = paragraph.join("\n").trim();
-		if (value)
-			blocks.push(
-				<p key={`p-${blocks.length}`}>
-					<InlineText text={value} />
-				</p>,
-			);
-		paragraph = [];
-	};
-	const flushList = (): void => {
-		if (!list) return;
-		const Tag = list.ordered ? "ol" : "ul";
-		blocks.push(
-			<Tag key={`list-${blocks.length}`}>
-				{list.items.map((item, index) => (
-					<li key={`${index}-${item}`}>
-						<InlineText text={item} />
-					</li>
-				))}
-			</Tag>,
-		);
-		list = null;
-	};
-	for (const line of lines) {
-		const heading = /^(#{1,4})\s+(.+)$/.exec(line);
-		const unordered = /^[-*]\s+(.+)$/.exec(line);
-		const ordered = /^\d+[.)]\s+(.+)$/.exec(line);
-		const quote = /^>\s?(.*)$/.exec(line);
-		if (heading) {
-			flushParagraph();
-			flushList();
-			const level = Math.min(heading[1]!.length + 2, 6);
-			const Tag = `h${level}` as "h3" | "h4" | "h5" | "h6";
-			blocks.push(
-				<Tag key={`h-${blocks.length}`}>
-					<InlineText text={heading[2] ?? ""} />
-				</Tag>,
-			);
-		} else if (unordered || ordered) {
-			flushParagraph();
-			const isOrdered = Boolean(ordered);
-			if (list && list.ordered !== isOrdered) flushList();
-			list ??= { ordered: isOrdered, items: [] };
-			list.items.push((ordered?.[1] ?? unordered?.[1] ?? "").trim());
-		} else if (quote) {
-			flushParagraph();
-			flushList();
-			blocks.push(
-				<blockquote key={`q-${blocks.length}`}>
-					<InlineText text={quote[1] ?? ""} />
-				</blockquote>,
-			);
-		} else if (!line.trim()) {
-			flushParagraph();
-			flushList();
-		} else {
-			flushList();
-			paragraph.push(line);
-		}
-	}
-	flushParagraph();
-	flushList();
-	return <>{blocks}</>;
-}
-
-function MessageCodeBlock({ value, language }: { value: string; language?: string }) {
-	const [copied, setCopied] = useState(false);
-	const [collapsed, setCollapsed] = useState(value.length > 3000 || value.split("\n").length > 24);
-	const [wrapped, setWrapped] = useState(false);
-	async function copyCode(): Promise<void> {
-		try {
-			await navigator.clipboard.writeText(value.replace(/\n$/, ""));
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1400);
-		} catch {}
-	}
-	return (
-		<div className={`message-code-block ${collapsed ? "collapsed" : ""} ${wrapped ? "wrapped" : ""}`}>
-			<div className="message-code-toolbar">
-				<span>{language || "code"}</span>
-				<div>
-					<button type="button" onClick={() => setWrapped((current) => !current)}>
-						{wrapped ? "不换行" : "自动换行"}
-					</button>
-					<button type="button" onClick={() => void copyCode()}>
-						{copied ? "已复制" : "复制代码"}
-					</button>
-					<button type="button" onClick={() => setCollapsed((current) => !current)}>
-						{collapsed ? "展开" : "折叠"}
-					</button>
-				</div>
-			</div>
-			<pre>
-				<code>{value.replace(/\n$/, "")}</code>
-			</pre>
-		</div>
-	);
-}
-
-const MessageContent = memo(function MessageContent({ text }: { text: string }) {
-	const parts = useMemo(() => {
-		const result: Array<{ type: "text" | "code"; value: string; language?: string }> = [];
-		const pattern = /```([^\n`]*)\n?([\s\S]*?)```/g;
-		let cursor = 0;
-		for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
-			if (match.index > cursor) result.push({ type: "text", value: text.slice(cursor, match.index) });
-			result.push({ type: "code", value: match[2] ?? "", language: match[1]?.trim() || undefined });
-			cursor = match.index + match[0].length;
-		}
-		if (cursor < text.length) result.push({ type: "text", value: text.slice(cursor) });
-		if (result.length === 0) result.push({ type: "text", value: text });
-		return result;
-	}, [text]);
-	return (
-		<>
-			{parts.map((part, index) =>
-				part.type === "code" ? (
-					<MessageCodeBlock
-						key={`${index}-${part.value.slice(0, 20)}`}
-						value={part.value}
-						language={part.language}
-					/>
-				) : (
-					<div className="message-rich-text" key={`${index}-${part.value.slice(0, 20)}`}>
-						<RichText text={part.value} />
-					</div>
-				),
-			)}
-		</>
-	);
-});
 
 function formatMessageTime(value: string | undefined): string | null {
 	if (!value) return null;
@@ -744,12 +669,18 @@ function formatMessageTime(value: string | undefined): string | null {
 const TranscriptMessage = memo(function TranscriptMessage({
 	item,
 	assistantModel,
+	showStats,
 }: {
 	item: Extract<TranscriptItem, { type: "user" | "assistant" | "system" }>;
 	assistantModel?: string;
+	showStats: boolean;
 }) {
 	const [copied, setCopied] = useState(false);
 	const messageTime = formatMessageTime(item.createdAt);
+	const elapsedText =
+		item.type === "assistant" && item.status !== "streaming" && item.streamStats?.elapsedMs !== undefined
+			? formatElapsed(item.streamStats.elapsedMs)
+			: null;
 	const systemOutputIsLong = item.type === "system" && (item.text.length > 360 || item.text.split("\n").length > 8);
 	async function copyMessage(): Promise<void> {
 		if (!item.text) return;
@@ -785,6 +716,7 @@ const TranscriptMessage = memo(function TranscriptMessage({
 						<span className={`message-status status-${item.status}`}>{assistantStatus}</span>
 					) : null}
 					{messageTime ? <time>{messageTime}</time> : null}
+					{elapsedText ? <span className="message-elapsed">用时 {elapsedText}</span> : null}
 				</div>
 				{item.type === "assistant" && item.thinking ? (
 					<details className="thinking-block">
@@ -829,20 +761,99 @@ const TranscriptMessage = memo(function TranscriptMessage({
 						{item.delivery === "steer" ? "已追加到当前运行" : "已排队等待"}
 					</small>
 				) : null}
+				{item.type === "assistant" && showStats ? (
+					<StreamStats
+						status={item.status}
+						text={item.text}
+						streamStartedAt={item.streamStartedAt}
+						streamStats={item.streamStats}
+					/>
+				) : null}
+				{item.text ? (
+					<button
+						className="message-copy"
+						type="button"
+						aria-label="复制消息"
+						title={copied ? "已复制" : "复制消息"}
+						onClick={() => void copyMessage()}
+					>
+						<AppIcon name="copy" size={14} />
+						<span>{copied ? "已复制" : "复制"}</span>
+					</button>
+				) : null}
 			</div>
-			{item.text ? (
-				<button
-					className="message-copy"
-					type="button"
-					aria-label="复制消息"
-					title={copied ? "已复制" : "复制消息"}
-					onClick={() => void copyMessage()}
-				>
-					<AppIcon name="copy" size={14} />
-					<span>{copied ? "已复制" : "复制"}</span>
-				</button>
-			) : null}
 		</div>
+	);
+});
+
+const TranscriptTurns = memo(function TranscriptTurns({
+	items,
+	assistantModel,
+	idPrefix,
+	collapsedRounds,
+	onToggleRound,
+}: {
+	items: TranscriptItem[];
+	assistantModel?: string;
+	idPrefix: string;
+	collapsedRounds: Record<string, boolean>;
+	onToggleRound(id: string, collapsed: boolean): void;
+}) {
+	const turns = groupTranscriptIntoTurns(items);
+	return (
+		<>
+			{turns.map((turn) => {
+				const key = `${idPrefix}:${turn.id}`;
+				// 一轮一折：只折中间过程，用户消息与最终结果常显。历史轮默认收起，最新轮展开。
+				const { head, middle, tail } = splitTurnEntries(turn);
+				const collapsed = collapsedRounds[key] ?? turn.id !== turns[turns.length - 1]!.id;
+				const elapsed = turnElapsedMs(turn);
+				const renderEntry = (entry: TranscriptItem, index: number) => (
+					<div
+						className={`transcript-entry entry-${entry.type}`}
+						data-transcript-index={index}
+						key={entry.id}
+					>
+						{entry.type === "tool" ? (
+							<ToolCallCard item={entry} />
+						) : (
+							<TranscriptMessage
+								item={entry}
+								assistantModel={assistantModel}
+								showStats={
+									entry.type === "assistant" && !hasLaterAssistant(items, index)
+								}
+							/>
+						)}
+					</div>
+				);
+				return (
+					<section className="turn-group" key={turn.id}>
+						{head.map((entry) => renderEntry(entry.item, entry.index))}
+						{middle.length > 0 ? (
+							<>
+								<button
+									type="button"
+									className="turn-process-toggle"
+									aria-expanded={!collapsed}
+									onClick={() => onToggleRound(key, !collapsed)}
+								>
+									<AppIcon name="caret" size={13} className={`turn-caret${collapsed ? "" : " open"}`} />
+									<span>{middle.length} 条过程</span>
+									{elapsed !== null ? (
+										<span className="turn-elapsed">用时 {formatTurnElapsed(elapsed)}</span>
+									) : null}
+								</button>
+								{collapsed
+									? null
+									: middle.map((entry) => renderEntry(entry.item, entry.index))}
+							</>
+						) : null}
+						{tail.map((entry) => renderEntry(entry.item, entry.index))}
+					</section>
+				);
+			})}
+		</>
 	);
 });
 
@@ -877,9 +888,26 @@ function Chevron({ expanded }: { expanded: boolean }) {
 	return <AppIcon name="chevron" size={15} className={`chevron ${expanded ? "expanded" : ""}`} />;
 }
 
-function IconButton({ label, onClick, children }: { label: string; onClick(): void; children: React.ReactNode }) {
+function IconButton({
+	label,
+	active,
+	onClick,
+	children,
+}: {
+	label: string;
+	active?: boolean;
+	onClick(): void;
+	children: React.ReactNode;
+}) {
 	return (
-		<button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
+		<button
+			className={`icon-button${active ? " active" : ""}`}
+			type="button"
+			aria-label={label}
+			title={label}
+			aria-pressed={active ?? false}
+			onClick={onClick}
+		>
 			{children}
 		</button>
 	);
@@ -1317,6 +1345,7 @@ export function App() {
 	});
 	const [permissionSaving, setPermissionSaving] = useState(false);
 	const [tavilyApiKey, setTavilyApiKey] = useState("");
+	const [shellPath, setShellPath] = useState("");
 	const [availableSkills, setAvailableSkills] = useState<AgentSkillSummary[]>([]);
 	const [roleSkillAssignments, setRoleSkillAssignments] = useState<RoleSkillAssignments>({
 		"requirement-analysis": [],
@@ -1347,6 +1376,14 @@ export function App() {
 			: {},
 	);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
+	const [collapsedRounds, setCollapsedRounds] = useState<Record<string, boolean>>({});
+	const [workPanelVisible, setWorkPanelVisible] = useState<boolean>(() => {
+		try {
+			return window.localStorage.getItem("codepiddy.work-panel.visible") !== "0";
+		} catch {
+			return true;
+		}
+	});
 	const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 	const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>({});
 	const [pendingPermissionRequests, setPendingPermissionRequests] = useState<Record<string, PendingPermissionRequest>>(
@@ -1809,6 +1846,7 @@ export function App() {
 							thinking: "",
 							status: "streaming",
 							createdAt: new Date().toISOString(),
+							streamStartedAt: Date.now(),
 						},
 					]);
 				}
@@ -1841,11 +1879,19 @@ export function App() {
 										text: delta,
 										status: "streaming",
 										createdAt: new Date().toISOString(),
+										streamStartedAt: Date.now(),
 									},
 								];
 							return items.map((item) =>
 								item.id === id && item.type === "assistant"
-									? { ...item, text: item.text + delta, status: "streaming" }
+									? {
+											...item,
+											text: item.text + delta,
+											status: "streaming",
+											...(typeof item.streamStartedAt === "number"
+												? {}
+												: { streamStartedAt: Date.now() }),
+										}
 									: item,
 							);
 						});
@@ -1868,11 +1914,19 @@ export function App() {
 										thinking: delta,
 										status: "streaming",
 										createdAt: new Date().toISOString(),
+										streamStartedAt: Date.now(),
 									},
 								];
 							return items.map((item) =>
 								item.id === id && item.type === "assistant"
-									? { ...item, thinking: (item.thinking ?? "") + delta, status: "streaming" }
+									? {
+											...item,
+											thinking: (item.thinking ?? "") + delta,
+											status: "streaming",
+											...(typeof item.streamStartedAt === "number"
+												? {}
+												: { streamStartedAt: Date.now() }),
+										}
 									: item,
 							);
 						});
@@ -1916,6 +1970,7 @@ export function App() {
 						text: "",
 						status: "running",
 						isError: false,
+						startedAt: Date.now(),
 					},
 				]);
 				return;
@@ -1954,6 +2009,7 @@ export function App() {
 									status: "completed",
 									text: extractMessageText(event.result) || item.text || "已完成",
 									isError: event.isError === true,
+									completedAt: Date.now(),
 								}
 							: item,
 					),
@@ -3339,6 +3395,16 @@ export function App() {
 		setSettingsStatus(await window.codepiddy.clearTavilyApiKey());
 	}
 
+	async function saveShellPath(value: string): Promise<void> {
+		if (!("codepiddy" in window)) return;
+		try {
+			setSettingsStatus(await window.codepiddy.saveShellPath(value));
+			setShellPath("");
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "保存 Shell 路径失败");
+		}
+	}
+
 	async function toggleRoleSkill(role: AgentRole, skillId: string, enabled: boolean): Promise<void> {
 		if (!("codepiddy" in window) || roleSkillSaving) return;
 		const current = roleSkillAssignments[role];
@@ -3786,8 +3852,49 @@ export function App() {
 								清除
 							</button>
 						</div>
-						<small>修改后，新启动或重新启动的 Agent 才会使用新 Key。</small>
-					</section>
+					<small>修改后，新启动或重新启动的 Agent 才会使用新 Key。</small>
+				</section>
+
+				<section className="settings-card">
+					<div>
+						<h2>Shell</h2>
+						<p>
+							Agent 的 <code>bash</code> 工具需要一个 bash 可执行文件。留空则自动探测（Program Files 下的 Git
+							Bash、PATH 上的 bash.exe）；Git for Windows 装在非标准目录时填这里，否则工具会报
+							“No bash shell found”。
+						</p>
+					</div>
+					<div className="settings-status">
+						{settingsStatus?.shellPath ? "已配置" : "自动探测"}
+					</div>
+					{settingsStatus?.shellPath ? <code className="settings-shell-current">{settingsStatus.shellPath}</code> : null}
+					<input
+						type="text"
+						value={shellPath}
+						onChange={(event) => setShellPath(event.target.value)}
+						placeholder="留空自动探测，或填 bash.exe 完整路径"
+					/>
+					<div className="settings-actions">
+						<button
+							className="primary-button"
+							type="button"
+							disabled={shellPath.trim().length === 0}
+							onClick={() => void saveShellPath(shellPath)}
+						>
+							保存
+						</button>
+						<button
+							className="secondary-button"
+							type="button"
+							disabled={!settingsStatus?.shellPath}
+							onClick={() => void saveShellPath("")}
+						>
+							清除
+						</button>
+					</div>
+					<small>修改后，新启动或重置后的 Agent 才会使用新路径。</small>
+				</section>
+
 
 					<section className="settings-card skill-settings-card">
 						<div className="settings-card-heading">
@@ -3942,6 +4049,24 @@ export function App() {
 						{agentId ? (
 							<div className="agent-header-actions">
 								{approveButton}
+								<IconButton
+									label={workPanelVisible ? "隐藏文件管理器" : "显示文件管理器"}
+									active={workPanelVisible}
+									onClick={() =>
+										setWorkPanelVisible((current) => {
+											const next = !current;
+											try {
+												window.localStorage.setItem(
+													"codepiddy.work-panel.visible",
+													next ? "1" : "0",
+												);
+											} catch {}
+											return next;
+										})
+									}
+								>
+									<AppIcon name="panel" />
+								</IconButton>
 								<div className="agent-actions-menu-wrap">
 									<IconButton
 										label="Agent 操作"
@@ -4031,29 +4156,26 @@ export function App() {
 											) : null}
 										</div>
 									) : (
-										items.map((item, index) => (
-											<div
-												className={`transcript-entry entry-${item.type}`}
-												data-transcript-index={index}
-												key={item.id}
-											>
-												{item.type === "user" && index > 0 ? (
-													<div className="turn-divider" aria-hidden="true">
-														<span>下一轮</span>
-													</div>
-												) : null}
-												{item.type === "tool" ? (
-													<ToolCallCard item={item} />
-												) : (
-													<TranscriptMessage
-														item={item}
-														assistantModel={modelSelections[agentId]?.model.name}
-													/>
-												)}
-											</div>
-										))
+										<TranscriptTurns
+											items={items}
+											assistantModel={modelSelections[agentId]?.model.name}
+											idPrefix={agentId}
+											collapsedRounds={collapsedRounds}
+											onToggleRound={(id, collapsed) =>
+												setCollapsedRounds((current) => ({ ...current, [id]: collapsed }))
+											}
+										/>
 									)}
 								</div>
+								{workPanelVisible && project ? (
+									<WorkPanel
+										projectRoot={project.rootPath}
+										toolItems={items.filter(
+											(item): item is Extract<TranscriptItem, { type: "tool" }> =>
+												item.type === "tool",
+										)}
+									/>
+								) : null}
 								{showJumpToLatest ? (
 									<button className="jump-to-latest" type="button" onClick={jumpToLatest}>
 										{activeAgentId && (unreadCounts[activeAgentId] ?? 0) > 0

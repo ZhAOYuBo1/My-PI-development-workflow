@@ -95,9 +95,11 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
   </tr>
 </table>
 
-以上截图来自隔离的演示项目，不包含真实项目文件、API Key 或私人会话。
+以上截图来自隔离的演示项目，不包含真实项目文件、API Key 或私人会话。运行 `node --import tsx packages/codepiddy-desktop/scripts/capture-screenshots.mts` 可以重新生成：脚本自己造项目目录和会话历史，不依赖本机任何项目。
 
 界面使用原有中性色调，并通过半透明、背景模糊、内高光和多层阴影增加层次。目标是保持长时间编程时的低干扰，同时让项目、工作项、Agent、权限和运行状态清晰可见。
+
+对话流按轮组织：用户消息和该轮最终结果常显，中间的工具调用与中间回复收在一行 `N 条过程` 里，点击展开。右侧文件管理器跟随 Agent 的读写自动打开对应文件，可手动锁定或恢复跟随。
 
 ## 内置 Skill
 

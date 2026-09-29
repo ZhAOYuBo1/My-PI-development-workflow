@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -65,6 +66,7 @@ export class AppSettingsStore {
 	private readonly roleSkillsPath: string;
 	private readonly permissionDefaultsPath: string;
 	private readonly permissionPolicyPath: string;
+	private readonly shellPathFile: string;
 
 	constructor(userDataPath: string) {
 		const settingsDirectory = path.join(userDataPath, "settings");
@@ -73,6 +75,35 @@ export class AppSettingsStore {
 		this.roleSkillsPath = path.join(settingsDirectory, "role-skills.json");
 		this.permissionDefaultsPath = path.join(settingsDirectory, "permission-defaults.json");
 		this.permissionPolicyPath = path.join(userDataPath, "permissions", "policy", "pi-permissions.jsonc");
+		this.shellPathFile = path.join(settingsDirectory, "shell.json");
+	}
+
+	async getShellPath(): Promise<string | null> {
+		try {
+			const parsed = JSON.parse(await readFile(this.shellPathFile, "utf8")) as unknown;
+			if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+			const value = (parsed as Record<string, unknown>).shellPath;
+			return typeof value === "string" && value.trim().length > 0 ? value : null;
+		} catch (error) {
+			if (isNotFound(error)) return null;
+			throw error;
+		}
+	}
+
+	async setShellPath(value: string): Promise<SettingsStatus> {
+		const shellPath = value.trim();
+		if (shellPath && !existsSync(shellPath)) throw new Error(`Shell 路径不存在：${shellPath}`);
+		if (shellPath) {
+			await mkdir(path.dirname(this.shellPathFile), { recursive: true });
+			await writeFile(this.shellPathFile, `${JSON.stringify({ shellPath }, null, 2)}\n`, "utf8");
+		} else {
+			try {
+				await unlink(this.shellPathFile);
+			} catch (error) {
+				if (!isNotFound(error)) throw error;
+			}
+		}
+		return this.status();
 	}
 
 	async getPermissionDefaults(): Promise<PermissionDefaults> {
@@ -262,6 +293,7 @@ export class AppSettingsStore {
 		return {
 			tavilyApiKeyConfigured: (await this.getTavilyApiKey()) !== null,
 			encryptionAvailable: safeStorage.isEncryptionAvailable(),
+			shellPath: await this.getShellPath(),
 		};
 	}
 
