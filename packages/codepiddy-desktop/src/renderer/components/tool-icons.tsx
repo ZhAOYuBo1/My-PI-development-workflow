@@ -1,7 +1,7 @@
 import { memo } from "react";
 
-// 与 App.tsx AppIcon 同风格：24 grid、线宽 1.7、圆角、currentColor。
-// 几何数据由 svg-precision-skill 生成（spec -> build -> validate），
+// 与 App.tsx AppIcon 同源：24 grid、2px 粗线、圆角、每图标一个实心点缀、currentColor。
+// 几何数据由 svg-precision-skill 生成（spec -> build -> validate），v3 高级版（2px + 实心点缀），
 // 详见 src/renderer/assets/icons/*.svg，此处仅保留几何以继承主题色。
 export type ToolIconName =
 	| "eye"
@@ -55,127 +55,131 @@ export const ToolIcon = memo(function ToolIcon({
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
-			strokeWidth="1.7"
+			strokeWidth="2"
 			strokeLinecap="round"
 			strokeLinejoin="round"
 			aria-hidden="true"
 		>
 			{name === "eye" ? (
 				<>
-					<path d="M3.5 12 C6 7.5 9.5 5.5 12 5.5 C14.5 5.5 18 7.5 20.5 12 C18 16.5 14.5 18.5 12 18.5 C9.5 18.5 6 16.5 3.5 12 Z" />
-					<circle cx="12" cy="12" r="2.5" />
+					<path d="M3.5 12Q7.5 5.8 12 5.8Q16.5 5.8 20.5 12Q16.5 18.2 12 18.2Q7.5 18.2 3.5 12Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "terminal" ? (
 				<>
-					<rect x="4" y="4" width="16" height="16" rx="2" />
-					<path d="M8.5 9.5 L11.5 12 L8.5 14.5" />
-					<line x1="13.5" y1="15" x2="16" y2="15" />
+					<rect x="5" y="4.5" width="14" height="15" rx="3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M9.3 9.3L12.3 12L9.3 14.7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<rect x="13.6" y="10.9" width="3" height="2.2" rx="1.1" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "edit" ? (
 				<>
-					<path d="M4 20h4l11-11-4-4L4 16v4Z" />
-					<path d="m13.5 6.5 4 4" />
+					<path d="M4.8 19.2l1-3.8L16.3 4.9a2.05 2.05 0 0 1 2.9 2.9L8.7 18.3Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M14.8 6.4l2.9 2.9" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="5.6" cy="18.4" r="1.4" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "file-plus" ? (
 				<>
-					<path d="M6 3.5 H13 L17.5 8 V20.5 H6 Z" />
-					<path d="M13 3.5 V8 H17.5" />
-					<line x1="10" y1="13" x2="10" y2="17" />
-					<line x1="8" y1="15" x2="12" y2="15" />
+					<path d="M7 3.5h5.5L17 8v12.5h-10Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M12.5 3.5V8H17" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<rect x="12.6" y="14.7" width="6.4" height="2.6" rx="1.3" fill="currentColor" stroke="none" />
+					<rect x="14.5" y="12.8" width="2.6" height="6.4" rx="1.3" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "text-search" ? (
 				<>
-					<circle cx="9" cy="9" r="4.5" />
-					<path d="M12.5 12.5 L15.5 15.5" />
-					<line x1="17" y1="8.5" x2="20.5" y2="8.5" />
-					<line x1="17" y1="12" x2="20.5" y2="12" />
-					<line x1="17" y1="15.5" x2="20.5" y2="15.5" />
+					<path d="M4.5 7h8.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M4.5 10.5h8.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<rect x="4.5" y="12.9" width="5" height="2.6" rx="1.3" fill="currentColor" stroke="none" />
+					<circle cx="16.3" cy="16.3" r="2.9" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M18.4 18.4L20.5 20.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 			{name === "file-search" ? (
 				<>
-					<path d="M6 4 H14 L18 8 V20 H6 Z" />
-					<path d="M14 4 V8 H18" />
-					<circle cx="12" cy="13.5" r="2.8" />
-					<path d="M14.2 15.7 L16.5 18" />
+					<path d="M7 3.5h5.5L17 8v12.5h-10Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M12.5 3.5V8H17" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="15.3" cy="15.3" r="3.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M17.7 17.7L20.3 20.3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="15.3" cy="15.3" r="1.6" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "list" ? (
 				<>
-					<line x1="9" y1="6.5" x2="20" y2="6.5" />
-					<line x1="9" y1="12" x2="20" y2="12" />
-					<line x1="9" y1="17.5" x2="20" y2="17.5" />
-					<line x1="4" y1="6.5" x2="6.5" y2="6.5" />
-					<line x1="4" y1="12" x2="6.5" y2="12" />
-					<line x1="4" y1="17.5" x2="6.5" y2="17.5" />
+					<circle cx="5.3" cy="6.5" r="1.8" fill="currentColor" stroke="none" />
+					<circle cx="5.3" cy="12" r="1.8" fill="currentColor" stroke="none" />
+					<circle cx="5.3" cy="17.5" r="1.8" fill="currentColor" stroke="none" />
+					<path d="M9.8 6.5h9.7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M9.8 12h9.7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M9.8 17.5h9.7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 			{name === "sparkles" ? (
 				<>
-					<path d="M12 4 C12.8 8 13.5 10 18 11 C13.5 12 12.8 14 12 18 C11.2 14 10.5 12 6 11 C10.5 10 11.2 8 12 4 Z" />
-					<path d="M18.5 15 C18.9 16.8 19.3 17.5 21 18 C19.3 18.5 18.9 19.2 18.5 21 C18.1 19.2 17.7 18.5 16 18 C17.7 17.5 18.1 16.8 18.5 15 Z" />
+					<path d="M10 3Q11.2 8.8 17 10Q11.2 11.2 10 17Q8.8 11.2 3 10Q8.8 8.8 10 3Z" fill="currentColor" stroke="none" />
+					<path d="M17.3 14.1Q17.7 16.9 20.5 17.3Q17.7 17.7 17.3 20.5Q16.9 17.7 14.1 17.3Q16.9 16.9 17.3 14.1Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="18.3" cy="6.3" r="1.3" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "plug" ? (
 				<>
-					<line x1="9" y1="3.5" x2="9" y2="7" />
-					<line x1="15" y1="3.5" x2="15" y2="7" />
-					<path d="M7.5 7 H16.5 V12.5 A4.5 4.5 0 0 1 7.5 12.5 Z" />
-					<line x1="12" y1="17" x2="12" y2="20.5" />
-					<line x1="9.5" y1="17" x2="14.5" y2="17" />
+					<rect x="8.7" y="3.5" width="2.4" height="4.5" rx="1.2" fill="currentColor" stroke="none" />
+					<rect x="12.9" y="3.5" width="2.4" height="4.5" rx="1.2" fill="currentColor" stroke="none" />
+					<path d="M8 10h8v4a4 4 0 0 1-8 0Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M12 18v2.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 			{name === "checklist" ? (
 				<>
-					<rect x="5" y="4" width="14" height="16" rx="2" />
-					<path d="M8.5 9 L10 10.5 L12.5 8" />
-					<path d="M8.5 14 L10 15.5 L12.5 13" />
-					<line x1="14" y1="9.5" x2="17" y2="9.5" />
-					<line x1="14" y1="14.5" x2="17" y2="14.5" />
-					<line x1="8.5" y1="18.5" x2="15.5" y2="18.5" />
+					<rect x="6" y="4.5" width="12" height="15.5" rx="2.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<rect x="9.8" y="3" width="4.4" height="3" rx="1.5" fill="currentColor" stroke="none" />
+					<path d="M8.3 10.2l1.5 1.5 2.7-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M13.8 10.2h2.7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M8.3 14.7l1.5 1.5 2.7-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M13.8 14.7h2.7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 			{name === "message-question" ? (
 				<>
-					<path d="M4 5.5 H20 V14.5 H12 L8.5 18.5 V14.5 H4 Z" />
-					<path d="M10.5 9.5 A1.8 1.8 0 1 1 12.5 11.5 C12.5 12.3 12 12.5 12 13.2" />
-					<line x1="12" y1="15.5" x2="12.1" y2="15.5" />
+					<rect x="3.5" y="4" width="17" height="12" rx="3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M9 15.8V19.2L13 15.8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M10.2 10.4c0-1.9 1-2.8 2-2.8 1 0 1.8.9 1.6 2-.2 1.2-1 1.6-1.8 1.9v.8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="12" cy="13.9" r="1.4" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "globe" ? (
 				<>
-					<circle cx="12" cy="12" r="7.5" />
-					<path d="M12 4.5 C14.5 7 14.5 17 12 19.5 C9.5 17 9.5 7 12 4.5 Z" />
-					<line x1="4.5" y1="12" x2="19.5" y2="12" />
+					<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<ellipse cx="12" cy="12" rx="3.6" ry="8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M4 12h16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="14.6" cy="8.6" r="1.7" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "clock" ? (
 				<>
-					<circle cx="12" cy="12" r="7.5" />
-					<path d="M12 8 V12 L15 14" />
+					<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M12 7.5V12L15.3 13.9" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
 				</>
 			) : null}
 			{name === "check-circle" ? (
 				<>
-					<circle cx="12" cy="12" r="7.5" />
-					<path d="M8.5 12.2 L11 14.7 L15.5 9.8" />
+					<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M8.3 12.3l2.5 2.5 4.9-5.4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 			{name === "x-circle" ? (
 				<>
-					<circle cx="12" cy="12" r="7.5" />
-					<path d="M9.5 9.5 L14.5 14.5" />
-					<path d="M14.5 9.5 L9.5 14.5" />
+					<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M9.4 9.4L14.6 14.6M14.6 9.4L9.4 14.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 			{name === "shield" ? (
 				<>
-					<path d="M12 3.5 L18.5 6 V11.5 C18.5 15.5 15.5 18.5 12 20.5 C8.5 18.5 5.5 15.5 5.5 11.5 V6 Z" />
-					<path d="M9.5 11.8 L11.3 13.6 L14.8 10" />
+					<path d="M12 3.5L18 6v5.5c0 4-2.6 6.8-6 8.5-3.4-1.7-6-4.5-6-8.5V6Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+					<path d="M9.2 11.6l2 2.1 3.9-4.4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
 				</>
 			) : null}
 		</svg>
