@@ -344,7 +344,22 @@ type AppIconName =
 	| "search"
 	| "stop"
 	| "settings"
-	| "warning";
+	| "warning"
+	| "eye"
+	| "terminal"
+	| "file-plus"
+	| "text-search"
+	| "file-search"
+	| "list"
+	| "sparkles"
+	| "plug"
+	| "checklist"
+	| "message-question"
+	| "globe"
+	| "clock"
+	| "check-circle"
+	| "x-circle"
+	| "shield";
 
 function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?: number; className?: string }) {
 	const paths: Record<AppIconName, React.ReactNode> = {
@@ -434,6 +449,118 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 				<path d="M12 4 3.5 19h17L12 4Z" />
 				<path d="M12 9v4" />
 				<path d="M12 16h.01" />
+			</>
+		),
+		eye: (
+			<>
+				<path d="M3.5 12 C6 7.5 9.5 5.5 12 5.5 C14.5 5.5 18 7.5 20.5 12 C18 16.5 14.5 18.5 12 18.5 C9.5 18.5 6 16.5 3.5 12 Z" />
+				<circle cx="12" cy="12" r="2.5" />
+			</>
+		),
+		terminal: (
+			<>
+				<rect x="4" y="4" width="16" height="16" rx="2" />
+				<path d="M8.5 9.5 L11.5 12 L8.5 14.5" />
+				<path d="M13.5 15 H16" />
+			</>
+		),
+		"file-plus": (
+			<>
+				<path d="M6 3.5 H13 L17.5 8 V20.5 H6 Z" />
+				<path d="M13 3.5 V8 H17.5" />
+				<path d="M10 13v4" />
+				<path d="M8 15h4" />
+			</>
+		),
+		"text-search": (
+			<>
+				<circle cx="9" cy="9" r="4.5" />
+				<path d="M12.5 12.5 L15.5 15.5" />
+				<path d="M17 8.5 H20.5" />
+				<path d="M17 12 H20.5" />
+				<path d="M17 15.5 H20.5" />
+			</>
+		),
+		"file-search": (
+			<>
+				<path d="M6 4 H14 L18 8 V20 H6 Z" />
+				<path d="M14 4 V8 H18" />
+				<circle cx="12" cy="13.5" r="2.8" />
+				<path d="M14.2 15.7 L16.5 18" />
+			</>
+		),
+		list: (
+			<>
+				<path d="M9 6.5 H20" />
+				<path d="M9 12 H20" />
+				<path d="M9 17.5 H20" />
+				<path d="M4 6.5 H6.5" />
+				<path d="M4 12 H6.5" />
+				<path d="M4 17.5 H6.5" />
+			</>
+		),
+		sparkles: (
+			<>
+				<path d="M12 4 C12.8 8 13.5 10 18 11 C13.5 12 12.8 14 12 18 C11.2 14 10.5 12 6 11 C10.5 10 11.2 8 12 4 Z" />
+				<path d="M18.5 15 C18.9 16.8 19.3 17.5 21 18 C19.3 18.5 18.9 19.2 18.5 21 C18.1 19.2 17.7 18.5 16 18 C17.7 17.5 18.1 16.8 18.5 15 Z" />
+			</>
+		),
+		plug: (
+			<>
+				<path d="M9 3.5 V7" />
+				<path d="M15 3.5 V7" />
+				<path d="M7.5 7 H16.5 V12.5 A4.5 4.5 0 0 1 7.5 12.5 Z" />
+				<path d="M12 17 V20.5" />
+				<path d="M9.5 17 H14.5" />
+			</>
+		),
+		checklist: (
+			<>
+				<rect x="5" y="4" width="14" height="16" rx="2" />
+				<path d="M8.5 9 L10 10.5 L12.5 8" />
+				<path d="M8.5 14 L10 15.5 L12.5 13" />
+				<path d="M14 9.5 H17" />
+				<path d="M14 14.5 H17" />
+				<path d="M8.5 18.5 H15.5" />
+			</>
+		),
+		"message-question": (
+			<>
+				<path d="M4 5.5 H20 V14.5 H12 L8.5 18.5 V14.5 H4 Z" />
+				<path d="M10.5 9.5 A1.8 1.8 0 1 1 12.5 11.5 C12.5 12.3 12 12.5 12 13.2" />
+				<path d="M12 15.5 H12.1" />
+			</>
+		),
+		globe: (
+			<>
+				<circle cx="12" cy="12" r="7.5" />
+				<path d="M12 4.5 C14.5 7 14.5 17 12 19.5 C9.5 17 9.5 7 12 4.5 Z" />
+				<path d="M4.5 12 H19.5" />
+			</>
+		),
+		clock: (
+			<>
+				<circle cx="12" cy="12" r="7.5" />
+				<path d="M12 8 V12 L15 14" />
+			</>
+		),
+		"check-circle": (
+			<>
+				<circle cx="12" cy="12" r="7.5" />
+				<path d="M8.5 12.2 L11 14.7 L15.5 9.8" />
+			</>
+		),
+		"x-circle": (
+			<>
+				<circle cx="12" cy="12" r="7.5" />
+				<path d="M9.5 9.5 L14.5 14.5" />
+				<path d="M14.5 9.5 L9.5 14.5" />
+			</>
+		),
+		shield: (
+			<>
+				<path d="M12 3.5 L18.5 6 V11.5 C18.5 15.5 15.5 18.5 12 20.5 C8.5 18.5 5.5 15.5 5.5 11.5 V6 Z" />
+				<path d="M9.5 11.8 L11.3 13.6 L14.8 10" />
 			</>
 		),
 	};

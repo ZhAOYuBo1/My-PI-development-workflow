@@ -382,6 +382,13 @@ button { color: inherit; }
 .tool-block.error { border-color: #e2b8b2; background: #fff7f5; }
 .tool-summary { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 .tool-summary span { color: #979792; font-size: 11px; }
+.tool-title { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.tool-glyph { color: #6f6f6a; flex: 0 0 auto; }
+.tool-block.error .tool-glyph { color: #a44a41; }
+.tool-status { display: flex; align-items: center; gap: 5px; }
+.tool-status.running .tool-glyph { color: #8a7a3a; }
+.tool-status.done .tool-glyph { color: #4c7a57; }
+.tool-status.failed .tool-glyph { color: #a44a41; }
 .tool-details { margin-top: 9px; padding-top: 8px; border-top: 1px solid #e7e7e3; }
 .tool-details small { display: block; margin: 6px 0 3px; color: #92928d; }
 .tool-details pre { max-height: 280px; overflow: auto; margin: 0; white-space: pre-wrap; }

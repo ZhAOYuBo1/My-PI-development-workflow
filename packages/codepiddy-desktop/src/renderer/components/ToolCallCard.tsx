@@ -1,5 +1,6 @@
 import { memo, useState } from "react";
 import { classifyToolFailure, toolFailureGuidance, toolFailureLabel } from "./tool-failure-utils.ts";
+import { ToolIcon, toolIconForTool } from "./tool-icons.tsx";
 
 export interface ToolCallCardItem {
 	id: string;
@@ -55,8 +56,15 @@ export const ToolCallCard = memo(function ToolCallCard({ item }: { item: ToolCal
 	return (
 		<div className={`tool-block ${item.isError ? "error" : ""}`}>
 			<button className="tool-summary" type="button" onClick={() => setExpanded((current) => !current)}>
-				<strong>› {item.name}</strong>
-				<span>
+				<strong className="tool-title">
+					<ToolIcon name={toolIconForTool(item.name)} size={14} />
+					<span>{item.name}</span>
+				</strong>
+				<span className={`tool-status ${item.status === "running" ? "running" : item.isError ? "failed" : "done"}`}>
+					<ToolIcon
+						name={item.status === "running" ? "clock" : item.isError ? "x-circle" : "check-circle"}
+						size={12}
+					/>
 					{item.status === "running" ? "运行中" : failureKind ? toolFailureLabel(failureKind) : "完成"}{" "}
 					{expanded ? "⌃" : "⌄"}
 				</span>
