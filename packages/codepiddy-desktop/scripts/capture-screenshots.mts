@@ -93,8 +93,19 @@ async function main(): Promise<void> {
 		await page.getByRole("button", { name: "创建", exact: true }).click();
 		const workItem = page.locator(".work-item-row").filter({ hasText: "FEAT-001" });
 		await workItem.waitFor();
-		await workItem.locator(".chevron-button").click();
-		await page.getByRole("button", { name: /需求分析 Agent/ }).click();
+		// 两条 lane 都放一个工作项，侧栏才不会只有一条需求。
+		await page.getByRole("button", { name: "创建修漏洞" }).click();
+		await page.getByLabel("标题", { exact: true }).fill("项目切换后白屏");
+		await page.getByLabel("初始描述").fill("从大型项目切换到空项目时界面偶发白屏。");
+		await page.getByRole("button", { name: "创建", exact: true }).click();
+		await page.locator(".work-item-row").filter({ hasText: "BUG-001" }).waitFor();
+		// 新建工作项会自动展开并选中它，所以回到 FEAT-001 前要先确认它还展开着。
+		const requirementRow = page.getByRole("button", { name: /需求分析 Agent/ });
+		if (!(await requirementRow.isVisible())) {
+			await workItem.locator(".chevron-button").click();
+			await requirementRow.waitFor();
+		}
+		await requirementRow.click();
 		const createRequirementAgent = page.getByRole("button", { name: "创建 Agent" });
 		if (await createRequirementAgent.isVisible()) await createRequirementAgent.click();
 		await page.locator(".content-header").getByRole("button", { name: "批准需求" }).click();

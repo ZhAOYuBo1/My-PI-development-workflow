@@ -86,20 +86,26 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/codepiddy-agent.png" alt="Agent 对话、上下文与模型控制" /></td>
+    <td width="50%"><img src="docs/images/codepiddy-agent.png" alt="Agent 对话、按轮折叠与右侧文件管理器" /></td>
     <td width="50%"><img src="docs/images/codepiddy-settings.png" alt="Pi 运行时更新、版本回退与全局权限" /></td>
   </tr>
   <tr>
-    <td align="center"><strong>长期 Agent 会话、上下文、模型与工具状态</strong></td>
+    <td align="center"><strong>对话按轮折叠 + 文件管理器跟随读写</strong></td>
     <td align="center"><strong>Pi 版本管理与全局权限</strong></td>
   </tr>
 </table>
 
-以上截图来自隔离的演示项目，不包含真实项目文件、API Key 或私人会话。运行 `node --import tsx packages/codepiddy-desktop/scripts/capture-screenshots.mts` 可以重新生成：脚本自己造项目目录和会话历史，不依赖本机任何项目。
+以上截图来自隔离的演示项目，不包含真实项目文件、API Key 或私人会话。重新生成见[本地开发](#本地开发)。
 
 界面使用原有中性色调，并通过半透明、背景模糊、内高光和多层阴影增加层次。目标是保持长时间编程时的低干扰，同时让项目、工作项、Agent、权限和运行状态清晰可见。
 
-对话流按轮组织：用户消息和该轮最终结果常显，中间的工具调用与中间回复收在一行 `N 条过程` 里，点击展开。右侧文件管理器跟随 Agent 的读写自动打开对应文件，可手动锁定或恢复跟随。
+对话流按轮组织：一条用户消息和它之后的记录构成一轮，轮内最后一条 AI 回复是该轮结果。
+
+- 用户消息与最终结果常显，不折叠；
+- 中间的工具调用和中间回复收在一行 `N 条过程 · 用时 X` 里，点击展开；
+- 整轮耗时直接跟在折叠行上，历史轮默认收起。
+
+右侧文件管理器在 Agent 读写文件时自动打开对应文件；手动切换后暂停跟随，可一键恢复。
 
 ## 内置 Skill
 
@@ -142,6 +148,10 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 - 用户控制的需求批准门；
 - Grill + OpenSpec 动态交接；
 - Pi RPC 流式消息、Thinking、Tool Card 和错误恢复；
+- 右侧文件管理器：工作区文件树、文件名搜索、md/代码/图片预览，跟随 Agent 读写自动打开并可锁定；
+- 对话按轮折叠：用户消息与该轮最终结果常显，中间过程收在一行，可展开回看；
+- 流式速率与耗时统计，回复结束时定格为终值；
+- 工具卡片运行展开、完成后收起，耗时单独成行；
 - 中断、Retry、Compaction、Steering；
 - Session Tree、Fork、Clone、Reset、Resume、Import；
 - 模型、Thinking Level 和 Scoped Models；
@@ -149,6 +159,7 @@ CodePIddy 不再要求固定的 `requirement.md`、`implementation.md`、`fix.md
 - 动态 Slash Commands 和 Skill Commands；
 - OAuth Provider 登录与退出；
 - 默认允许项目内文件读写，并可以在设置中调整；
+- 可以在设置中指定 Agent 的 `bash` 路径，留空则自动探测；
 - 项目级单写入 Lease；
 - Tavily Search-only Web Search；
 - Pi 进程崩溃检测和自动重连；
@@ -223,6 +234,16 @@ npm test --workspace=@codepiddy/desktop
 npm run test:e2e --workspace=@codepiddy/desktop
 ```
 
+### 重新生成界面截图
+
+README 顶图和「客户端界面」一节的图片由脚本生成，脚本自己造项目目录、工作项和会话历史，不依赖本机任何项目：
+
+```powershell
+node --import tsx packages/codepiddy-desktop/scripts/capture-screenshots.mts
+```
+
+它会重建 `dist/renderer` 并在结束时删掉，所以**不要在客户端运行时执行**；执行完需要重新 `npm run build:codepiddy`。产物写入 `docs/images/`。
+
 ### 构建 Windows Release
 
 ```powershell
@@ -248,6 +269,7 @@ packages/codepiddy-tavily-search-mcp/    Tavily Search MCP
 packages/codepiddy-tavily-tool-extension Pi Search Tool 包装
 packages/coding-agent/                   Pi Coding Agent Runtime
 docs/codepiddy/                          产品决策、架构与工作流文档
+docs/images/                             README 界面截图（由 capture-screenshots.mts 生成）
 ```
 
 ## 安全说明
@@ -257,6 +279,7 @@ docs/codepiddy/                          产品决策、架构与工作流文档
 - IPC 输入进行运行时校验；
 - Tavily Key 使用 Electron `safeStorage`；
 - 默认只直接允许项目内文件读取和修改；
+- 文件管理器只能列出和读取项目根目录内的路径，越界请求被拒绝；
 - Bash、MCP、Skill 和项目外路径仍可以配置审批策略；
 - 当前 Windows MVP 尚未提供强执行沙箱，Agent 进程仍使用当前操作系统用户权限。
 
