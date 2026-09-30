@@ -22,11 +22,49 @@ describe("permission settings", () => {
 		});
 		expect(createPermissionPolicy(DEFAULT_PERMISSION_DEFAULTS)).toMatchObject({
 			defaultPolicy: { tools: "allow", bash: "allow", mcp: "allow", skills: "allow" },
-			tools: { read: "allow", grep: "allow", find: "allow", ls: "allow", write: "allow", edit: "allow" },
+			tools: {
+				read: "allow",
+				grep: "allow",
+				find: "allow",
+				ls: "allow",
+				write: "allow",
+				edit: "allow",
+				powershell: "allow",
+			},
 			bash: { "*": "allow" },
 			skills: { "*": "allow" },
 			special: { external_directory: "allow" },
 		});
+	});
+
+	test("powershell follows the bash category, not otherTools", () => {
+		const directory = mkdtempSync(path.join(tmpdir(), "codepiddy-powershell-"));
+		const configPath = path.join(directory, "policy.jsonc");
+		try {
+			const manager = new PermissionManager({ globalConfigPath: configPath, agentsDir: directory });
+			let mtime = Date.now() / 1000;
+			const writePolicy = (defaults: Parameters<typeof createPermissionPolicy>[0]) => {
+				writeFileSync(configPath, JSON.stringify(createPermissionPolicy(defaults)));
+				utimesSync(configPath, mtime, mtime);
+				mtime += 1;
+			};
+			const check = (tool: string) => manager.checkPermission(tool, { command: "npm run check" }, "FEAT-002 Coding Agent").state;
+
+			// 「命令执行」拒绝时，PowerShell 必须一起拒绝，不能落到「其他工具」。
+			writePolicy({ ...DEFAULT_PERMISSION_DEFAULTS, bash: "deny" });
+			expect(check("powershell")).toBe("deny");
+			expect(check("bash")).toBe("deny");
+
+			writePolicy({ ...DEFAULT_PERMISSION_DEFAULTS, bash: "ask" });
+			expect(check("powershell")).toBe("ask");
+			expect(check("bash")).toBe("ask");
+
+			// 「其他工具」收紧不应误伤 PowerShell，它归 bash 管。
+			writePolicy({ ...DEFAULT_PERMISSION_DEFAULTS, otherTools: "deny" });
+			expect(check("powershell")).toBe("allow");
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
 	});
 
 	test("migrates older read/write settings without broadening command permissions", () => {

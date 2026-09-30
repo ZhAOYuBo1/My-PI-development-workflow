@@ -55,6 +55,10 @@ export function createPermissionPolicy(defaults: PermissionDefaults): Record<str
 			ls: defaults.read,
 			write: defaults.write,
 			edit: defaults.write,
+			// powershell 是 Windows 上的命令执行工具，必须跟 bash 同进同退。
+			// 不写这一条它会落到 defaultPolicy.tools（其他工具），
+			// 于是「命令执行」设成 deny 时 PowerShell 仍能跑任意命令。
+			powershell: defaults.bash,
 		},
 		bash: {
 			...(defaults.bash === "ask"
