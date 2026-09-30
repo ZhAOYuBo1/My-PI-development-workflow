@@ -5,10 +5,15 @@ import path from "node:path";
 import type { PiRuntimeStatus } from "@codepiddy/shared";
 
 const PACKAGE_NAME = "@earendil-works/pi-coding-agent";
-const REGISTRY_URL = "https://registry.npmjs.org/@earendil-works%2Fpi-coding-agent/latest";
+// 查版本和装版本必须用同一个源。之前查版本硬编码 registry.npmjs.org，而子 npm 会读到
+// 用户 .npmrc 的 registry（npmmirror），两个源有同步延迟，迟早出现「查到最新版
+// 但镜像还没同步」而失败。
+const REGISTRY_URL = "https://registry.npmjs.org";
+const REGISTRY_API_URL = "https://registry.npmjs.org/@earendil-works%2Fpi-coding-agent/latest";
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const INSTALL_ID_PATTERN = /^v\d+\.\d+\.\d+-[0-9a-f-]{36}$/;
 const INSTALL_TIMEOUT_MS = 5 * 60_000;
+const STDERR_LIMIT = 8192;
 
 export interface InstalledPiRuntime {
 	version: string;
@@ -50,7 +55,7 @@ function compareVersions(left: string, right: string): number {
 }
 
 async function requestRegistryLatest(): Promise<string> {
-	const response = await fetch(REGISTRY_URL, {
+	const response = await fetch(REGISTRY_API_URL, {
 		signal: AbortSignal.timeout(15_000),
 		headers: { accept: "application/json" },
 	});
@@ -82,6 +87,29 @@ async function findNpmCli(): Promise<string | null> {
 	return null;
 }
 
+/**
+ * 剥掉继承自父进程 npm 的 `npm_config_*` / `npm_*` 环境变量。
+ *
+ * 应用通常由 `npm start` 启动，npm 会把项目 `.npmrc` 的设置转成环境变量注入子进程
+ * （`min-release-age=2` → `npm_config_min_release_age=2`，`registry=...` → `npm_config_registry`）。
+ * 这些是**项目依赖策略**，不是运行时更新该继承的东西：仓库里为了供应链安全设了
+ * `min-release-age=2`，结果「安装刚发布的最新版 Pi」被子 npm 自己拒绝，报 ETARGET。
+ *
+ * 同时 `npm_config_prefix` 会把安装目标劫持到全局 prefix，所以一并清掉。
+ */
+function buildInstallEnv(): NodeJS.ProcessEnv {
+	const env: NodeJS.ProcessEnv = {};
+	for (const [key, value] of Object.entries(process.env)) {
+		const lower = key.toLowerCase();
+		// npm_config_* 是 CLI flag 的环境变量形式；npm_* 是 npm 自己的运行时变量。
+		// 两者都会影响安装行为，必须让子 npm 只认我们显式传的 CLI 参数。
+		if (lower.startsWith("npm_config_") || lower.startsWith("npm_")) continue;
+		env[key] = value;
+	}
+	env.ELECTRON_RUN_AS_NODE = "1";
+	return env;
+}
+
 async function runNpmInstall(
 	nodeExecutable: string,
 	npmCliPath: string,
@@ -99,17 +127,27 @@ async function runNpmInstall(
 		"--no-fund",
 		"--no-package-lock",
 		"--no-save",
+		// 与 requestRegistryLatest 同一个源，避免镜像同步延迟导致 ETARGET。
+		`--registry=${REGISTRY_URL}`,
+		// Pi 自身的自更新也带这个（packages/coding-agent/src/config.ts）：
+		// 更新运行时就是在装刚发布的版本，不该被依赖年龄策略拦下。
+		"--min-release-age=0",
 		`${PACKAGE_NAME}@${version}`,
 	];
 	await new Promise<void>((resolve, reject) => {
 		const child = spawn(nodeExecutable, args, {
 			cwd: stagingRoot,
-			env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+			env: buildInstallEnv(),
 			stdio: ["ignore", "pipe", "pipe"],
 		});
-		// Drain npm output without surfacing registry credentials or local npm configuration in the UI.
+		// npm 的原始输出可能带 registry 凭据与本机 npm 配置，不直接进 UI。
+		// 但完全丢弃会让失败无法诊断（曾把一个 ETARGET 报成「请检查 npm 网络与配置」），
+		// 所以只提取 npm 的错误码，它不含凭据。
+		let stderr = "";
 		child.stdout.resume();
-		child.stderr.resume();
+		child.stderr.on("data", (chunk: Buffer) => {
+			if (stderr.length < STDERR_LIMIT) stderr = `${stderr}${chunk.toString("utf8")}`.slice(-STDERR_LIMIT);
+		});
 		const timer = setTimeout(() => {
 			child.kill();
 			reject(new Error("Pi 安装超时，原版本保持不变"));
@@ -121,7 +159,16 @@ async function runNpmInstall(
 		child.once("exit", (code) => {
 			clearTimeout(timer);
 			if (code === 0) resolve();
-			else reject(new Error(`Pi 安装失败（退出码 ${code}），请检查 npm 网络与配置。原版本未变更。`));
+			else {
+				const npmError = /^npm error code ([A-Z0-9_]+)$/m.exec(stderr)?.[1];
+				reject(
+					new Error(
+						`Pi 安装失败（退出码 ${code}${npmError ? `，${npmError}` : ""}），原版本未变更。${
+							npmError ? "" : "请检查 npm 网络与配置。"
+						}`,
+					),
+				);
+			}
 		});
 	});
 }
