@@ -4,7 +4,6 @@ import path from "node:path";
 import type {
 	AgentRole,
 	AgentSlotSummary,
-	ApproveRequirementInput,
 	ArchiveWorkItemInput,
 	CreateWorkItemInput,
 	LaneKind,
@@ -20,7 +19,6 @@ const CODEPIDDY_DIRECTORY_NAME = ".codepiddy";
 const PROJECT_MANIFEST_NAME = "manifest.json";
 const WORK_ITEM_MANIFEST_NAME = "work-item.json";
 const WORK_ITEM_DOCUMENT_NAME = "work-item.md";
-const PERMISSIONS_FILE_NAME = "permissions.jsonc";
 
 interface ProjectManifest {
 	schemaVersion: 1;
@@ -38,7 +36,6 @@ interface WorkItemManifest {
 	status: WorkItemStatus;
 	createdAt: string;
 	archivedAt?: string;
-	requirementApprovedAt?: string;
 }
 
 const roleDisplayNames: Record<AgentRole, string> = {
@@ -52,20 +49,14 @@ function rolesForLane(lane: LaneKind): AgentRole[] {
 	return lane === "requirements" ? ["requirement-analysis", "coding", "review"] : ["bug-fix", "review"];
 }
 
-function createAgentSlots(lane: LaneKind, manifest: WorkItemManifest, workItemDirectory: string): AgentSlotSummary[] {
-	return rolesForLane(lane).map((role) => {
-		let blockedReason: string | undefined;
-		if (role === "coding" && !manifest.requirementApprovedAt) {
-			blockedReason = "需求尚未由用户批准";
-		}
-		return {
-			role,
-			displayName: roleDisplayNames[role],
-			status: "not-created" as const,
-			kickoffPrompt: `${DEFAULT_KICKOFF_PROMPTS[role]}\n当前工作项目录：${workItemDirectory}`,
-			...(blockedReason ? { blockedReason } : {}),
-		};
-	});
+/** 角色槽位只表达"有哪些 Agent 可创建"，不设前置门控：创建与否完全由用户在客户端决定。 */
+function createAgentSlots(lane: LaneKind, workItemDirectory: string): AgentSlotSummary[] {
+	return rolesForLane(lane).map((role) => ({
+		role,
+		displayName: roleDisplayNames[role],
+		status: "not-created" as const,
+		kickoffPrompt: `${DEFAULT_KICKOFF_PROMPTS[role]}\n当前工作项目录：${workItemDirectory}`,
+	}));
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -101,10 +92,6 @@ function parseWorkItemManifest(value: unknown): WorkItemManifest {
 	if (!isObject(value) || value.schemaVersion !== 1) throw new Error("Invalid CodePIddy work item manifest");
 	const archivedAt = value.archivedAt;
 	if (archivedAt !== undefined && typeof archivedAt !== "string") throw new Error("Invalid archivedAt");
-	const requirementApprovedAt = value.requirementApprovedAt;
-	if (requirementApprovedAt !== undefined && typeof requirementApprovedAt !== "string") {
-		throw new Error("Invalid requirementApprovedAt");
-	}
 	return {
 		schemaVersion: 1,
 		id: requireString(value.id, "id"),
@@ -114,7 +101,6 @@ function parseWorkItemManifest(value: unknown): WorkItemManifest {
 		status: parseStatus(value.status),
 		createdAt: requireString(value.createdAt, "createdAt"),
 		...(archivedAt === undefined ? {} : { archivedAt }),
-		...(requirementApprovedAt === undefined ? {} : { requirementApprovedAt }),
 	};
 }
 
@@ -136,23 +122,6 @@ function lanePath(projectRoot: string, lane: LaneKind): string {
 	return path.join(codepiddyPath(projectRoot), lane);
 }
 
-async function ensureDefaultPermissions(dataPath: string): Promise<void> {
-	const filePath = path.join(dataPath, PERMISSIONS_FILE_NAME);
-	const content = {
-		defaultPolicy: { tools: "ask", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
-		tools: { read: "allow", grep: "allow", find: "allow", ls: "allow", write: "allow", edit: "allow" },
-		bash: { "git status*": "allow", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "*": "ask" },
-		mcp: {},
-		skills: { "*": "ask" },
-		special: { external_directory: "ask" },
-	};
-	try {
-		await writeFile(filePath, `${JSON.stringify(content, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-	} catch (error) {
-		if (!isObject(error) || error.code !== "EEXIST") throw error;
-	}
-}
-
 async function ensureProjectManifest(projectRoot: string): Promise<ProjectManifest> {
 	const rootPath = path.resolve(projectRoot);
 	const dataPath = codepiddyPath(rootPath);
@@ -161,7 +130,6 @@ async function ensureProjectManifest(projectRoot: string): Promise<ProjectManife
 	await mkdir(path.join(dataPath, "bugs"), { recursive: true });
 	await mkdir(path.join(dataPath, "agents"), { recursive: true });
 	await mkdir(path.join(dataPath, ".pi", "skills"), { recursive: true });
-	await ensureDefaultPermissions(dataPath);
 	await ensureDefaultRoleProfiles(dataPath);
 	try {
 		return parseProjectManifest(await readJson(manifestPath));
@@ -202,11 +170,8 @@ async function listWorkItems(projectRoot: string, lane: LaneKind): Promise<WorkI
 				status: manifest.status,
 				createdAt: manifest.createdAt,
 				...(manifest.archivedAt === undefined ? {} : { archivedAt: manifest.archivedAt }),
-				...(manifest.requirementApprovedAt === undefined
-					? {}
-					: { requirementApprovedAt: manifest.requirementApprovedAt }),
 				directoryPath: itemDirectory,
-				agentSlots: createAgentSlots(lane, manifest, itemDirectory),
+				agentSlots: createAgentSlots(lane, itemDirectory),
 			});
 		} catch {
 			// Ignore directories that are not valid CodePIddy work items.
@@ -274,23 +239,6 @@ export async function createWorkItem(input: CreateWorkItemInput): Promise<Projec
 	};
 	await writeJsonAtomic(path.join(directory, WORK_ITEM_MANIFEST_NAME), manifest);
 	await writeFile(path.join(directory, WORK_ITEM_DOCUMENT_NAME), workItemMarkdown(manifest), "utf8");
-	return openProject(projectRoot);
-}
-
-export async function approveRequirement(input: ApproveRequirementInput): Promise<ProjectSummary> {
-	const projectRoot = path.resolve(input.projectRoot);
-	const directory = path.join(lanePath(projectRoot, "requirements"), input.workItemId);
-	const manifestPath = path.join(directory, WORK_ITEM_MANIFEST_NAME);
-	const manifest = parseWorkItemManifest(await readJson(manifestPath));
-	if (manifest.id !== input.workItemId || manifest.lane !== "requirements") {
-		throw new Error("Work item identity mismatch");
-	}
-	const next: WorkItemManifest = {
-		...manifest,
-		requirementApprovedAt: new Date().toISOString(),
-	};
-	await writeJsonAtomic(manifestPath, next);
-	await writeFile(path.join(directory, WORK_ITEM_DOCUMENT_NAME), workItemMarkdown(next), "utf8");
 	return openProject(projectRoot);
 }
 

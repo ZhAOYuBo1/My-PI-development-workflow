@@ -5,7 +5,7 @@ import type { AgentRole } from "@codepiddy/shared";
 
 export const DEFAULT_KICKOFF_PROMPTS: Record<AgentRole, string> = {
 	"requirement-analysis":
-		"请从当前 Work Item 的标题、描述和运行时提供的工作目录开始，用 Grill With Docs 澄清需求，并使用合适的 Skill 在实际位置生成交接材料。完成后停止，等待用户在客户端批准需求。",
+		"请从当前 Work Item 的标题、描述和运行时提供的工作目录开始，用 Grill With Docs 澄清需求，并使用合适的 Skill 在实际位置生成交接材料。完成后停止，汇报产物位置和仍需用户决策的点。",
 	coding:
 		"请查看运行时提供的当前 Work Item 工作目录及项目中与本项相关的实际交接材料，确认存在的内容和待办后实现代码；不要假设某个文档必然存在。完成后说明代码、测试与交接材料的变化。",
 	"bug-fix":
@@ -26,8 +26,8 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 - 由 Skill 实际生成且与当前 Work Item 相关的材料就是交接依据，不预设产物种类或名称；
 - 不要求固定文件名，也不为缺失的文档编造内容；
 - 不修改生产代码、测试代码和构建配置；
-- 不自行批准需求，不自动进入 Coding Agent；
-- 产物就绪后停止，等待用户在客户端点击批准需求。
+- 产物就绪后停止并汇报，不自行推进到实现阶段；
+- 不自动创建其他 Agent，是否进入实现由用户在客户端决定。
 
 ## 输入
 
@@ -103,12 +103,12 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 `,
 };
 
-// Migrate only the exact bundled profiles from the previous release. User-edited profiles stay untouched.
-const PREVIOUS_DEFAULT_PROFILE_HASHES: Record<AgentRole, string> = {
-	"requirement-analysis": "73b68012273c734b107af8779451f159d37c18e111ec0656338cd3fd8e5a5fee",
-	coding: "4531881fa002aad126a37a035c29502a2e31f9397c21d505cb1257e655e50518",
-	"bug-fix": "6592195ff0e247614b2ade6740854e45396d044ecbf5ab8dd69178680b03673e",
-	review: "033aee631357aabe12272f1487829bc4b6602aabb171bc09252ca70f08b40027",
+// Migrate only the exact bundled profiles from previous releases. User-edited profiles stay untouched.
+const PREVIOUS_DEFAULT_PROFILE_HASHES: Record<AgentRole, string[]> = {
+	"requirement-analysis": ["73b68012273c734b107af8779451f159d37c18e111ec0656338cd3fd8e5a5fee", "a44baff3cb38404d7e2be2f9bd2d0673f847fdc69bacdffa273854c002af6115"],
+	coding: ["4531881fa002aad126a37a035c29502a2e31f9397c21d505cb1257e655e50518"],
+	"bug-fix": ["6592195ff0e247614b2ade6740854e45396d044ecbf5ab8dd69178680b03673e"],
+	review: ["033aee631357aabe12272f1487829bc4b6602aabb171bc09252ca70f08b40027"],
 };
 
 function isLegacyFixedHandoffProfile(content: string): boolean {
@@ -123,7 +123,7 @@ export async function ensureDefaultRoleProfiles(codepiddyDirectory: string): Pro
 		try {
 			const existing = await readFile(filePath, "utf8");
 			const previousDefaultHash = createHash("sha256").update(existing).digest("hex");
-			if (isLegacyFixedHandoffProfile(existing) || previousDefaultHash === PREVIOUS_DEFAULT_PROFILE_HASHES[role]) {
+			if (isLegacyFixedHandoffProfile(existing) || PREVIOUS_DEFAULT_PROFILE_HASHES[role].includes(previousDefaultHash)) {
 				await writeFile(filePath, content, "utf8");
 			}
 		} catch (error) {

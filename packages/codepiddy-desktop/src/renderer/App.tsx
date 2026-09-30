@@ -2498,24 +2498,6 @@ export function App() {
 		}
 	}
 
-	async function approveSelectedRequirement(): Promise<void> {
-		if (!project || !selectedWorkItem || selectedWorkItem.lane !== "requirements") return;
-		setBusy(true);
-		setError(null);
-		try {
-			setProject(
-				await window.codepiddy.approveRequirement({
-					projectRoot: project.rootPath,
-					workItemId: selectedWorkItem.id,
-				}),
-			);
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "批准需求失败");
-		} finally {
-			setBusy(false);
-		}
-	}
-
 	async function archiveWorkItem(lane: LaneKind, item: WorkItemSummary): Promise<void> {
 		if (!project) return;
 		setBusy(true);
@@ -2643,12 +2625,10 @@ export function App() {
 								key={slot.role}
 								onClick={() => setSelection({ type: "agent", lane, workItemId: item.id, role: slot.role })}
 							>
-								<span className="truncate" title={slot.blockedReason}>
-									{slot.displayName}
-								</span>
-								<span className={`agent-create status-${slot.blockedReason ? "waiting" : slot.status}`}>
-									{slot.blockedReason ? "等待" : statusLabels[slot.status]}
-								</span>
+							<span className="truncate" title={slot.displayName}>
+								{slot.displayName}
+							</span>
+							<span className={`agent-create status-${slot.status}`}>{statusLabels[slot.status]}</span>
 								{slot.currentInstanceId && (unreadCounts[slot.currentInstanceId] ?? 0) > 0 ? (
 									<span className="agent-unread">
 										{Math.min(99, unreadCounts[slot.currentInstanceId] ?? 0)}
@@ -2755,10 +2735,6 @@ export function App() {
 
 	async function createAgent(slot: AgentSlotSummary): Promise<void> {
 		if (!project || !selectedWorkItem || !("codepiddy" in window)) return;
-		if (slot.blockedReason) {
-			setError(slot.blockedReason);
-			return;
-		}
 		setBusy(true);
 		setError(null);
 		try {
@@ -4039,32 +4015,17 @@ export function App() {
 			const toolRecoveryOffer = agentId ? toolRecoveryOffers[agentId] : undefined;
 			const sessionSnapshot = agentId ? agentSessionSnapshots[agentId] : undefined;
 			const canAbort = Boolean(agentId && (activity || slot.status === "running" || slot.status === "waiting"));
-			const approveButton =
-				selectedWorkItem.lane === "requirements" &&
-				!selectedWorkItem.requirementApprovedAt &&
-				(selection.role === "requirement-analysis" || selection.role === "coding") ? (
-					<button
-						className="secondary-button"
-						type="button"
-						disabled={busy || !("codepiddy" in window)}
-						onClick={() => void approveSelectedRequirement()}
-					>
-						批准需求
-					</button>
-				) : null;
 			return (
 				<div className="agent-pane">
 					<header className="content-header">
 						<div>
 							<strong>{slot.displayName}</strong>
 							<span>
-								{selectedWorkItem.id} · {selectedWorkItem.title} ·{" "}
-								{slot.blockedReason ?? statusLabels[slot.status]}
+								{selectedWorkItem.id} · {selectedWorkItem.title} · {statusLabels[slot.status]}
 							</span>
 						</div>
 						{agentId ? (
 							<div className="agent-header-actions">
-								{approveButton}
 								<IconButton
 									label={workPanelVisible ? "隐藏文件管理器" : "显示文件管理器"}
 									active={workPanelVisible}
@@ -4132,18 +4093,16 @@ export function App() {
 								</div>
 							</div>
 						) : (
-							<div className="agent-header-actions">
-								{approveButton}
-								<button
-									className="secondary-button"
-									type="button"
-									onClick={() => void createAgent(slot)}
-									disabled={busy || !("codepiddy" in window) || Boolean(slot.blockedReason)}
-									title={slot.blockedReason}
-								>
-									{slot.blockedReason ? "等待用户批准" : "创建 Agent"}
-								</button>
-							</div>
+						<div className="agent-header-actions">
+							<button
+								className="secondary-button"
+								type="button"
+								onClick={() => void createAgent(slot)}
+								disabled={busy || !("codepiddy" in window)}
+							>
+								创建 Agent
+							</button>
+						</div>
 						)}
 					</header>
 					{agentId ? (
@@ -4350,10 +4309,10 @@ export function App() {
 						<>
 							<div className="transcript-placeholder">
 								<h2>{slot.displayName}</h2>
-								<p>{slot.blockedReason || "这个 Slot 尚未创建 Agent Instance。"}</p>
+								<p>这个 Slot 尚未创建 Agent Instance。</p>
 							</div>
 							<div className="composer disabled-composer">
-								<span>{slot.blockedReason || "创建 Agent 后即可开始对话"}</span>
+								<span>创建 Agent 后即可开始对话</span>
 								<button type="button" disabled>
 									<AppIcon name="arrow-up" />
 								</button>
@@ -4372,22 +4331,8 @@ export function App() {
 							<h1>{selectedWorkItem.title}</h1>
 							<p>{selectedWorkItem.description || "暂无描述"}</p>
 						</div>
-						<div className="work-item-actions">
-							{selectedWorkItem.lane === "requirements" ? (
-								selectedWorkItem.requirementApprovedAt ? (
-									<span className="approval-badge">需求已批准</span>
-								) : (
-									<button
-										className="primary-button"
-										type="button"
-										disabled={busy}
-										onClick={() => void approveSelectedRequirement()}
-									>
-										批准需求
-									</button>
-								)
-							) : null}
-							<button
+					<div className="work-item-actions">
+						<button
 								className="secondary-button"
 								type="button"
 								onClick={() =>
@@ -4418,10 +4363,9 @@ export function App() {
 							>
 								<span>
 									<strong>{slot.displayName}</strong>
-									<small>{slot.blockedReason || statusLabels[slot.status]}</small>
+									<small>{statusLabels[slot.status]}</small>
 								</span>
-								<span className={`agent-create status-${slot.blockedReason ? "waiting" : slot.status}`}>
-									{slot.blockedReason ? "等待" : statusLabels[slot.status]}
+								<span className={`agent-create status-${slot.status}`}>{statusLabels[slot.status]}
 								</span>
 							</button>
 						))}

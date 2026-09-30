@@ -3,7 +3,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
 	AgentRegistry,
-	approveRequirement,
 	archiveWorkItem,
 	createWorkItem,
 	deleteWorkItem,
@@ -50,7 +49,6 @@ import {
 	parseAgentLocator,
 	parseAgentRole,
 	parseAgentUiState,
-	parseApproveRequirementInput,
 	parseArchiveWorkItemInput,
 	parseBoundedText,
 	parseCreateAgentInput,
@@ -89,7 +87,6 @@ const channels = {
 	resetAgent: "codepiddy:agent:reset",
 	activateAgent: "codepiddy:agent:activate",
 	agentEvent: "codepiddy:agent:event",
-	approveRequirement: "codepiddy:work-item:approve-requirement",
 	archiveWorkItem: "codepiddy:work-item:archive",
 	createAgent: "codepiddy:agent:create",
 	createWorkItem: "codepiddy:work-item:create",
@@ -405,7 +402,6 @@ class AgentManager {
 			realpath(workItem.directoryPath),
 		]);
 		assertPathInside(realCodepiddyPath, realWorkItemPath, "Work Item 真实路径");
-		if (slot.blockedReason) throw new Error(slot.blockedReason);
 		await this.registry.create(input);
 		return this.decorate(await openProject(input.projectRoot));
 	}
@@ -1333,11 +1329,6 @@ function registerIpcHandlers(
 		const input = parseCreateWorkItemInput(raw);
 		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
 		return agentManager.decorate(await createWorkItem(input));
-	});
-	ipcMain.handle(channels.approveRequirement, async (_event, raw: unknown) => {
-		const input = parseApproveRequirementInput(raw);
-		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
-		return agentManager.decorate(await approveRequirement(input));
 	});
 	ipcMain.handle(channels.archiveWorkItem, async (_event, raw: unknown) =>
 		agentManager.decorate(await archiveWorkItem(validateWorkItemInput(raw))),

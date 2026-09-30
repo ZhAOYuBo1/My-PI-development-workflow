@@ -15,7 +15,10 @@ Upstream:
 - Adapted `getApiProvider` to `@earendil-works/pi-ai/compat`;
 - Added the current `resources_discover` event type locally because Pi does not re-export it from the package root;
 - Replaced dynamic imports with top-level imports;
-- Changed project policy location from `.pi/agent/pi-permissions.jsonc` to `.codepiddy/permissions.jsonc`;
 - Uses CodePIddy local runtime directories for extension settings, logs, and global policy.
+
+The project-local policy file is never read: CodePIddy exposes a single global
+policy under `<userData>/permissions/policy/`, driven by the settings page. The
+`project` and `projectAgent` layers of the upstream engine stay unused.
 
 The original upstream license is preserved in `LICENSE` and the original README is preserved in `README.upstream.md`.

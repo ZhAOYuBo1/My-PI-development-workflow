@@ -16,7 +16,6 @@ export interface AgentSlotSummary {
 	status: AgentStatus;
 	currentInstanceId?: string;
 	kickoffPrompt?: string;
-	blockedReason?: string;
 }
 
 export interface WorkItemSummary {
@@ -27,7 +26,6 @@ export interface WorkItemSummary {
 	status: WorkItemStatus;
 	createdAt: string;
 	archivedAt?: string;
-	requirementApprovedAt?: string;
 	directoryPath: string;
 	agentSlots: AgentSlotSummary[];
 }
@@ -51,11 +49,6 @@ export interface CreateWorkItemInput {
 	lane: LaneKind;
 	title: string;
 	description: string;
-}
-
-export interface ApproveRequirementInput {
-	projectRoot: string;
-	workItemId: string;
 }
 
 export interface ArchiveWorkItemInput {
@@ -92,7 +85,6 @@ export interface ProjectClientApi {
 	closeProject(projectRoot: string): Promise<RecentProject[]>;
 	refreshProject(projectRoot: string): Promise<ProjectSummary>;
 	createWorkItem(input: CreateWorkItemInput): Promise<ProjectSummary>;
-	approveRequirement(input: ApproveRequirementInput): Promise<ProjectSummary>;
 	archiveWorkItem(input: ArchiveWorkItemInput): Promise<ProjectSummary>;
 	restoreWorkItem(input: ArchiveWorkItemInput): Promise<ProjectSummary>;
 	renameWorkItem(input: RenameWorkItemInput): Promise<ProjectSummary>;

@@ -1009,18 +1009,6 @@ button { color: inherit; }
 }
 .modal-backdrop > .modal { position: relative; z-index: 1; }
 .work-item-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
-.approval-badge {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  padding: 0 10px;
-  border: 1px solid #c8d7ca;
-  border-radius: 8px;
-  background: #edf3ee;
-  color: #45604b !important;
-  font-size: 11px !important;
-  font-weight: 650;
-}
 .agent-choice-list small { max-width: 520px; }
 .agent-choice-list .status-waiting { color: #9a6a2f; }
 @media (max-width: 760px) {

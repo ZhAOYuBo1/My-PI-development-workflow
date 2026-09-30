@@ -5,7 +5,6 @@ import type {
 	AgentRole,
 	AgentScopedModel,
 	AgentUiState,
-	ApproveRequirementInput,
 	ArchiveWorkItemInput,
 	CreateAgentInput,
 	CreateWorkItemInput,
@@ -102,11 +101,6 @@ export function parseArchiveWorkItemInput(value: unknown): ArchiveWorkItemInput 
 		lane: lane(input.lane),
 		workItemId: workItemId(input.workItemId),
 	};
-}
-
-export function parseApproveRequirementInput(value: unknown): ApproveRequirementInput {
-	const input = record(value, "Approve Requirement");
-	return { projectRoot: projectRoot(input.projectRoot), workItemId: workItemId(input.workItemId) };
 }
 
 export function parseRenameWorkItemInput(value: unknown): RenameWorkItemInput {

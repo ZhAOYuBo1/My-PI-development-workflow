@@ -1,8 +1,8 @@
 import type { PermissionDefaults, PermissionState } from "@codepiddy/shared";
 
 /**
- * 出厂全 allow：多 Agent 交接靠共享工作树和 OpenSpec 文档，创建控制由
- * blockedReason 把关，不需要靠弹窗兜流程。设置页仍可逐项收紧。
+ * 出厂全 allow：多 Agent 交接靠共享工作树和 OpenSpec 文档，创建与否完全由用户在
+ * 客户端决定，不需要靠弹窗兜流程。设置页仍可逐项收紧。
  *
  * 注意 skills 必须是 allow —— 扩展会把非 allow 的 Skill 从 system prompt 的
  * <available_skills> 里删掉（skill-prompt-sanitizer.ts），ask 等于让模型看不见 Skill。

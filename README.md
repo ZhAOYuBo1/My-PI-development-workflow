@@ -44,7 +44,7 @@
 1. **两种固定工作方式**：每个项目默认包含“新需求”和“修漏洞”；
 2. **职责明确的长期 Agent**：需求分析、Coding、Bug Fix、Review 各自负责不同工作；
 3. **文档与代码交接**：Agent 之间不共享短期记忆，而是通过 OpenSpec、Git diff、测试和项目文档协作；
-4. **用户掌握推进权**：是否批准需求、何时编码、何时审核、是否返工和归档，都由人决定；
+4. **用户掌握推进权**：创建哪些 Agent、何时编码、何时审核、是否返工和归档，都由人决定，没有前置审批门；
 5. **Pi 仍是底层事实源**：模型、Session、Tool、Skill、Slash Command 和 Provider 都来自 Pi，CodePIddy 负责工作流和客户端体验。
 
 > CodePIddy 不是 Pi 的 UI 换皮，也不是自动运行的 Agent 流水线。它是面向程序员日常开发过程的桌面工作台。
@@ -58,7 +58,6 @@
   -> Requirement Analysis Agent
        -> Grill With Docs：逐项澄清需求
        -> OpenSpec：proposal / specs / design / tasks
-  -> 用户批准需求
   -> Coding Agent
        -> openspec-apply-change
        -> 代码、测试、任务状态与 Git diff
@@ -67,6 +66,8 @@
        -> 测试、Findings 与 Verdict
   -> 用户决定继续修正或归档
 ```
+
+Agent 之间不做进程内编排，交接完全靠共享工作树和工作项文档。是否创建哪个 Agent、什么时候创建，都由用户在客户端决定，没有前置审批门。
 
 ### 修漏洞
 

@@ -4,7 +4,6 @@ import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import {
 	AgentRegistry,
-	approveRequirement,
 	archiveWorkItem,
 	createWorkItem,
 	deleteWorkItem,
@@ -39,10 +38,10 @@ describe("project service", () => {
 			"不修改生产代码",
 		);
 		await expect(readdir(path.join(projectRoot, ".codepiddy", ".pi", "skills"))).resolves.toEqual([]);
-		const permissions = JSON.parse(
-			await readFile(path.join(projectRoot, ".codepiddy", "permissions.jsonc"), "utf8"),
-		) as { tools: Record<string, string> };
-		expect(permissions.tools).toMatchObject({ read: "allow", grep: "allow", write: "allow", edit: "allow" });
+		// 审批策略是全局的（设置中心 -> <userData>/permissions/policy/），项目内不再生成副本
+		await expect(
+			readFile(path.join(projectRoot, ".codepiddy", "permissions.jsonc"), "utf8"),
+		).rejects.toMatchObject({ code: "ENOENT" });
 	});
 
 	test("creates and archives an isolated feature work item", async () => {
@@ -90,9 +89,9 @@ describe("project service", () => {
 		await expect(readFile(artifactPath, "utf8")).resolves.toContain("OpenSpec");
 	});
 
-	test("uses user approval without validating fixed handoff filenames", async () => {
+	test("exposes every role slot as immediately creatable", async () => {
 		const projectRoot = await createTemporaryProject();
-		let project = await createWorkItem({
+		const project = await createWorkItem({
 			projectRoot,
 			lane: "requirements",
 			title: "增加登录功能",
@@ -100,14 +99,10 @@ describe("project service", () => {
 		});
 		const workItem = project.lanes[0]?.workItems[0];
 		if (!workItem) throw new Error("Expected feature work item");
-		expect(workItem.agentSlots.find((slot) => slot.role === "coding")?.blockedReason).toContain("尚未由用户批准");
-		expect(workItem.agentSlots.find((slot) => slot.role === "review")?.blockedReason).toBeUndefined();
-
-		project = await approveRequirement({ projectRoot, workItemId: workItem.id });
-		const approved = project.lanes[0]?.workItems[0];
-		expect(approved?.requirementApprovedAt).toBeDefined();
-		expect(approved?.agentSlots.find((slot) => slot.role === "coding")?.blockedReason).toBeUndefined();
-		expect(approved?.agentSlots.find((slot) => slot.role === "review")?.blockedReason).toBeUndefined();
+		for (const slot of workItem.agentSlots) {
+			expect(slot.status).toBe("not-created");
+			expect("blockedReason" in slot).toBe(false);
+		}
 	});
 
 	test("renames and permanently deletes a work item", async () => {
@@ -118,9 +113,7 @@ describe("project service", () => {
 			title: "旧标题",
 			description: "复现步骤",
 		});
-		expect(
-			project.lanes[1]?.workItems[0]?.agentSlots.find((slot) => slot.role === "review")?.blockedReason,
-		).toBeUndefined();
+		expect(project.lanes[1]?.workItems[0]?.agentSlots.map((slot) => slot.role)).toEqual(["bug-fix", "review"]);
 
 		project = await renameWorkItem({
 			projectRoot,

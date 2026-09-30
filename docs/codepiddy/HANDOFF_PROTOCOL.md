@@ -1,6 +1,6 @@
 # CodePIddy 交接协议
 
-更新日期：2026-09-20
+更新日期：2026-09-30
 
 ## 核心原则
 
@@ -23,18 +23,18 @@ CodePIddy 不再规定 `requirement.md`、`implementation.md`、`fix.md`、`revi
   -> Requirement Analysis Agent
        -> grill-with-docs：逐项澄清与领域建模
        -> openspec-explore / propose / update-change
-       -> OpenSpec Change artifacts
-  -> 用户在客户端批准需求
-  -> Coding Agent
-       -> openspec-apply-change / sync-specs
-       -> 代码、测试、任务状态与 Git diff
-  -> Review Agent
-       -> open-code-review
-       -> 测试、Findings、Verdict
-  -> 用户决定继续修正或归档
+        -> OpenSpec Change artifacts
+   -> 用户在客户端决定何时创建下一个 Agent
+   -> Coding Agent
+        -> openspec-apply-change / sync-specs
+        -> 代码、测试、任务状态与 Git diff
+   -> Review Agent
+        -> open-code-review
+        -> 测试、Findings、Verdict
+   -> 用户决定继续修正或归档
 ```
 
-Coding Agent 仍受“用户批准需求”门控制，但批准动作由用户判断，不再检查固定文档结构。
+Coding Agent 没有前置门控。角色槽位只表达“有哪些 Agent 可创建”，创建时机和顺序完全由用户决定，Host 不检查固定文档结构。
 
 ## 修漏洞工作方式
 
@@ -73,8 +73,8 @@ Agent 必须通过 Work Item 标题、描述、用户明确给出的 Change 名�
 
 ## 人工控制
 
-- Agent 不自动串联；
-- 用户决定何时批准需求；
+- Agent 不自动串联，也不会互相请求批准；
+- 每个角色槽位随时可创建，包括在需求分析产出之前；
 - 用户决定何时进入 Coding、Bug Fix 或 Review；
 - 用户决定 Review 不通过后回到哪一个 Agent；
 - 用户决定何时归档或删除 Work Item。

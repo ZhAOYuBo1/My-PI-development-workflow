@@ -49,7 +49,7 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 	await expect(modelButton).toContainText("Model Two");
 });
 
-test("requires an explicit work item approval to unlock Coding", async () => {
+test("lets the user create any role slot directly, with no approval gate", async () => {
 	const { page } = client;
 	await createFeatureWorkItem(page);
 	await openRequirementAgent(page);
@@ -57,18 +57,8 @@ test("requires an explicit work item approval to unlock Coding", async () => {
 	if (!(await codingRow.isVisible())) {
 		await page.locator(".work-item-row").filter({ hasText: "FEAT-001" }).locator(".chevron-button").click();
 	}
-	await expect(codingRow).toContainText("等待");
-	await expect(page.getByText("对 Agent 说“批准”只是聊天消息。")).toHaveCount(0);
-	await expect(page.locator(".content-header").getByRole("button", { name: "批准需求" })).toBeVisible();
-
-	const composer = page.locator(".composer textarea");
-	await composer.fill("我批准这个需求");
-	await composer.press("Enter");
-	await expect(page.locator(".message-assistant").last()).toContainText("Fake Pi 已完成当前请求。");
-	await expect(codingRow).toContainText("等待");
-
-	await page.locator(".content-header").getByRole("button", { name: "批准需求" }).click();
 	await expect(codingRow).toContainText("创建");
+	await expect(page.getByRole("button", { name: "批准需求" })).toHaveCount(0);
 	await codingRow.click();
 	await expect(page.getByRole("button", { name: "创建 Agent" })).toBeEnabled();
 });
@@ -173,7 +163,7 @@ test("defaults file reads and writes to allow and persists permission changes", 
 	const savedDefaults = JSON.parse(
 		await readFile(path.join(userDataRoot, "settings", "permission-defaults.json"), "utf8"),
 	) as Record<string, unknown>;
-	expect(savedDefaults).toMatchObject({ read: "allow", write: "ask", bash: "ask" });
+	expect(savedDefaults).toMatchObject({ read: "allow", write: "ask", bash: "allow" });
 });
 
 test("restores a pending permission request after switching away from the agent", async () => {
