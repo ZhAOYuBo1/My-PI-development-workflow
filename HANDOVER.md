@@ -1,9 +1,10 @@
 # 交接文档（HANDOVER）
 
 > 日期：2026-09-30｜分支：`main`｜远端 `origin/main` = `db4b6e2`
-> 本地领先远端 **4 个提交**（未 push）：`4051b61`、`e591860`、`4db2049`、`2d5336d`
-> ⚠️ **工作区有 16 个文件已验证但未提交**（见「三」全部 ✅ 项），提交前请先读「三.0」
-> ⚠️ **当前跑的是 stock Pi 0.99.1，4 个功能已失效**，详见「三.5」与「四.3」
+> 本地领先远端 **9 个提交**（未 push）：`4051b61`、`e591860`、`4db2049`、`2d5336d`、`0d3f25b`、`5a9014f`、`647cf1b`、`5315fd4`、`357bece`、`bda227b`
+> ✅ **上一轮 16 个未提交文件已按 5 个 commit 落地**（见「二」）
+> 🔶 **工作区有 `pi-update-resilience` 的实现未提交**（见「三.5」），typecheck / build / 单测 / e2e 均已跑过
+> ✅ **Pi 已回滚到内置 0.85.1**（`active.json` 已删除），验证环境的干扰已排除
 
 ---
 
@@ -24,7 +25,27 @@ npm start --workspace=@codepiddy/desktop
 
 ---
 
-## 二、本次会话的 4 个提交
+## 二、已落地的提交
+
+### 上一轮遗留的 16 个未提交文件（已拆成 5 个 commit）
+
+`0d3f25b` 之后的那批改动本轮按「三.1–三.4」拆开落地，每一项都做过「回退实现后对应测试必须失败」的反向验证。
+
+| commit | 内容 | 文件 |
+| --- | --- | --- |
+| `5a9014f` | powershell 归入 bash 权限类别 | 2 |
+| `647cf1b` | 撤掉 `PI_SHELL_PATH` 私有补丁 | 4 |
+| `5315fd4` | 修 `npm_config_*` 泄漏导致 Pi 更新报「退出码 1」 | 2（1 新） |
+| `357bece` | 转录定位条不再压正文 | 5（含 3 个 openspec 文档） |
+| `bda227b` | 代码块默认换行 + 真折叠 | 4（1 新 e2e） |
+
+`git diff 0d3f25b..bda227b --stat` = 16 文件 536 插入 / 72 删除，与拆分前的工作区逐字节一致。
+
+`styles.css` 被 `357bece` 和 `bda227b` 同时改，所以拆的时候按 hunk 切：定位条那一个 hunk 归前者，代码块其余全部归后者。`git apply --cached --recount` 单 hunk patch，非交互。
+
+### 之前那一轮（本节内容未变，仅补 `0d3f25b`）
+
+`0d3f25b docs: plan the Pi patch reduction and refresh handover` —— 写了 `pi-update-resilience` 的 proposal / design / spec / tasks，并删掉只测 `PI_SHELL_PATH` 补丁的 `packages/coding-agent/test/settings-shell-path.test.ts`。
 
 ### `4db2049` refactor: drop the requirement approval gate between agents
 
@@ -64,14 +85,16 @@ npm start --workspace=@codepiddy/desktop
 
 ## 三、本轮改动与待办
 
-### 3.0 ⚠️ 先回滚 Pi
+### 3.0 ✅ Pi 已回滚到内置 0.85.1
 
-`active.json` 指向 stock Pi 0.99.1，4 个功能已失效。**动代码前先回滚到 0.85.1**，
-否则验证期间会一直踩坑。设置页点「回滚」，或直接改
-`%APPDATA%\@codepiddy\desktop\pi-updates\active.json`。回滚后确认进程命令行回到
-`packages\coding-agent\src\cli.ts`。
+`active.json` 已不存在 —— `rollback()` 的 bundled 分支就是 `rm(this.activeFile)`，
+`pi-updates/versions/` 下只剩一个没人引用的 `v0.99.1-5d8b3dd1-*`。
+`initialize()` 拿到 ENOENT → `selected = null` → 跑 `packages/coding-agent/src/cli.ts`。
 
-### 3.1 ✅ powershell 归入 bash 类别 —— 已修，且原结论是错的
+**验证环境的干扰已排除。** `pi-updates/versions/v0.99.1-*` 那个目录是死数据，
+`loadHistory()` 会因为它不是合法回退目标而跳过，不会被误选。
+
+### 3.1 ✅ powershell 归入 bash 类别 —— 已修，且原结论是错的（`5a9014f`）
 
 > ⚠️ **本节上一版结论有误，已实测推翻。** 原文说「powershell 会绕过审批」——
 > 实际相反：它不绕过，只是**归错了类**。真 bug 更严重。
@@ -167,25 +190,51 @@ align-self: stretch; margin: 20px 0`），横向不重叠由布局保证。保�
 - 删除死 CSS `.message-code-language`（全仓库只有它自己引用，组件实际用 `.message-code-toolbar > span`）
 - 按钮文案由 `自动换行`/`不换行` 改为固定 `换行` + active 态高亮（原来切换时标签变长度，导致工具栏宽度跳动）
 
-### 3.5 降低 Pi 私有补丁面 —— OpenSpec 已写，未实现
+### 3.5 ✅ Pi 私有补丁已清零 —— 「更新 Pi」恢复可用
 
-`openspec/changes/pi-update-resilience/`，`validate --strict` 通过。**这是下一件事。**
+`openspec/changes/pi-update-resilience/`。代码在工作区（见「六」）。
 
-**背景**：用户已把 Pi 更新到 stock 0.99.1，4 个功能失效（详见「四.3」）。私有补丁从 7 个
-降到 5 个的方案：
+**结论：`packages/coding-agent/src/modes/rpc/` 与上游逐字节一致，私有命令 7 → 0。**
+`git diff 9cf21c8 -- packages/coding-agent/src/modes/rpc/` 输出 0 行。
 
-| 动作 | 代价 | 净收益 |
+| 动作 | 状态 |
+| --- | --- |
+| 删「循环模型范围」+ `get/set_scoped_models` | ✅ 零行为效果，删除无代价 |
+| 删「设为 X Agent 默认」+ 设置页角色默认模型区块 | ✅ 彻底移除，不保留读取兼容 |
+| 删剩余 5 个私有命令 | ✅ 用户拍板：取舍「保留更新」 |
+| 删 `get_commands` 补丁（第 6 处） | ✅ 随 RPC 层整体回退 |
+| 删私有命令清单 / 探针钩子 / UI 降级 | ✅ 清单已空，整套机制无对象可探 |
+
+**为什么必须走到清零。** 上一轮把探针加严到「缺私有命令就拒绝激活」，结果 stock Pi
+必然缺 —— 于是「更新 Pi」按钮**永远失败**。探针挡住了静默失效，但把更新本身也挡住了。
+取舍只能是二选一：要么保留 5 个命令并且不能更新，要么删掉它们并且能更新。用户选了后者。
+
+**删除的 5 个命令与实际损失**（`design.md` 第七节有「无原生替代」的证据）：
+
+| 命令 | 原入口 | 删除后 |
 | --- | --- | --- |
-| 删「循环模型范围」+ `get/set_scoped_models` | **零**（该功能在外壳里本就无行为效果） | -2 个补丁 |
-| 探针加严 + UI 降级 | 低 | 覆盖全部 5 个，把静默失效变成明确提示 |
-| 删「设为 X Agent 默认」 | 去掉一个外壳功能（非补丁） | 界面更简 |
+| `get_auth_providers` / `login_provider` / `logout_provider` | `/login` `/logout` | **OAuth 登录没了**。改用环境变量或手写 `~/.pi/agent/auth.json` |
+| `import_jsonl` | `/import` | 导入外部 jsonl 没了。`/resume` 走原生 `switch_session`，**不受影响** |
+| `reload` | `/reload` | 改为重启 Pi 进程实现，**功能保留**（见下） |
 
-**关键论证**：「循环模型范围」对应 Pi 的 `scopedModels`，而它只影响 `cycleModel()`（Ctrl+P）
-与启动默认模型（仅 `--models` 驱动）。**外壳从不发 `cycle_model`**，所以删掉零代价——
-与「用 `--models` 替换」有本质区别，后者要付出「改范围必须重启 Agent」的代价。
+**`/login` 的替代路径不存在，这是本次唯一实质损失。** Pi 的扩展 API 只能*注册*
+OAuth provider，不能*发起*登录（`ExtensionContextActions` 无对应动作，`/login` 仅
+终端 UI 层可执行）。手动输入 `/login` 会得到明确说明，不再是 `Unknown command`。
+若要恢复，只能向上游提 issue（`tasks.md` 6.1，**本轮未做**）。
 
-**剩下 5 个确认无原生替代**（`design.md` 第七节有证据）：`reload`、认证 3 个、`import_jsonl`。
-需向上游提 issue，不自行替换。`reload` 换重启进程会让用户敲 `/reload` 丢当前回复，也不划算。
+**`/reload` 用重启实现，不是删掉。** Pi 以 `--session-dir <agent.sessions> --continue`
+启动，`agent-registry.ts:125` 给每个 Agent 建独立 `sessions/` 目录，所以重启后
+`--continue` 恢复的正是当前会话。代价是进行中的流式回复会中断 —— 原地重载没有了，
+但功能本身保住了。
+
+**斜杠菜单不依赖任何补丁。** `loadPiBuiltinCommands` 直接读当前运行那份 Pi 的
+`dist/core/slash-commands.js` 并自己过滤 `DESKTOP_BUILTINS`，不碰 Pi 源码。所以
+stock Pi 下菜单依然是全的，`DESKTOP_BUILTINS` 里删掉的 `import` / `login` / `logout`
+不会露出「点了报错」的入口。
+
+**`settings-manager.ts` 的重试默认值补丁保留**（`maxRetries` 3→5 等）。它不是协议
+命令，不参与探针，升级后丢失也只是回到上游默认值，不影响功能 —— 属于有意调优，
+按「删除前先问」保留。
 
 ### 3.6 权限出厂默认值要不要收回来（待用户拍板）
 
@@ -221,9 +270,9 @@ align-self: stretch; margin: 20px 0`），横向不重叠由布局保证。保�
 
 所以「用户点更新 Pi 导致外壳破坏」这类问题在 CI 里 100% 不可见。
 
-### 4.3 用户已把 Pi 更新到 stock 0.99.1，4 个功能失效（已实测确认）
+### 4.3 stock Pi 0.99.1 下 4 个功能失效（历史事实，Pi 已回滚）
 
-**这不是待推测的风险，是已发生的事实。** 三层证据：
+**这不是待推测的风险，是已发生并已实测确认过的事实。** 当时的证据：
 
 1. `active.json` = `{"version":"0.99.1","installId":"v0.99.1-5d8b3dd1-..."}`
 2. 进程命令行确认外壳在跑它：
@@ -239,26 +288,30 @@ align-self: stretch; margin: 20px 0`），横向不重叠由布局保证。保�
 
 **失效清单**（用户已独立确认 `/reload` 失效）：
 
-| 功能 | 入口 | 状态 |
-| --- | --- | --- |
-| 选择模型（一级弹窗） | 模型选择器 | ✅ 全原生命令，正常 |
-| 循环模型范围（二级） | 一级弹窗内「循环模型范围」按钮 | ❌ |
-| `/reload` | 斜杠命令 | ❌ 用户已确认 |
-| `/import` | 斜杠命令（**无独立按钮**，`importSession` 只在 `index.ts:770` 被调用） | ❌ |
-| `/login` `/logout` | 斜杠命令 + provider id | ❌ |
+| 功能 | 入口 | 当时状态 | 现在 |
+| --- | --- | --- | --- |
+| 选择模型（一级弹窗） | 模型选择器 | ✅ 全原生命令，正常 | ✅ 不变 |
+| 循环模型范围（二级） | 一级弹窗内按钮 | ❌ | **已删除**（见「三.5」） |
+| 设为 X Agent 默认 | 一级弹窗内按钮 | ✅ | **已删除**（见「三.5」） |
+| `/reload` | 斜杠命令 | ❌ 用户已确认 | 探针拦截 + 菜单摘除 |
+| `/import` | 斜杠命令（**无独立按钮**，`importSession` 只在 `index.ts` 一处被调用） | ❌ | 探针拦截 + 菜单摘除 |
+| `/login` `/logout` | 斜杠命令 + provider id | ❌ | 探针拦截 + 菜单摘除 |
 
 **主流程完全不受影响**：建项目 → 建需求 → 建 Agent → 聊天 → 工具调用，一条都不碰这 4 个功能。
 这就是为什么「更新完看着没失效」。
 
-**两个容易误判的点**：
+**三个容易误判的点**：
 
-- 「选择模型」弹窗是**两级**的。一级用 `getState` / `getAvailableModels` /
+- 「选择模型」弹窗当时是**两级**的。一级用 `getState` / `getAvailableModels` /
   `getAvailableThinkingLevels`（全原生），二级「循环模型范围」才踩 `get_scoped_models`。
-  只测一级会误判为「没坏」。
-- 探针放行的原因：`probePiUpdate`（`index.ts:341-345`）只验 4 个原生命令，stock Pi
-  必然通过；回滚只在启动失败时触发，而握手永远正常。
+  只测一级会误判为「没坏」。二级现已删除。
+- 探针放行的原因：`probePiUpdate` 原来只验 4 个原生命令，stock Pi
+  必然通过；回滚只在启动失败时触发，而握手永远正常。**已修**，见「三.5」。
+- **`get_commands` 也不一样。** stock Pi 返回 `[]`，而桌面端另外直接读那份 Pi 的
+  `slash-commands.js` 重建菜单 —— 所以菜单**照常显示** `/login`，点了才报错。
+  这是第三类私有补丁，之前的分析漏了。**已修**，见「三.5」。
 
-**处置见「三.5」的 OpenSpec change `pi-update-resilience`。** 动手前先按「三.0」回滚。
+**处置已完成，见「三.5」。** Pi 已按「三.0」回滚。
 
 ### 4.4 两种扩展 Pi 的机制寿命完全不同
 
@@ -267,9 +320,16 @@ align-self: stretch; margin: 20px 0`），横向不重叠由布局保证。保�
 | 扩展注入 | 外壳传 JS 文件，Pi 自己 `load`（`--extension`） | ✅ 活 |
 | 改源码 | 编辑 Pi 的 `.ts`，加 `case` | ❌ 死 |
 
-`permission.js`、`tavily-tool.js` 走前者；7 个 RPC 命令走后者。
+`permission.js`、`tavily-tool.js` 走前者；RPC 协议补丁走后者 —— 原来 7 个私有命令，
+**现为 0 个**（`pi-update-resilience` 已把整个 `modes/rpc/` 回退到与上游逐字节一致）。
 **以后要扩展 Pi，优先用扩展注入。** `settings-manager.ts` 的 `PI_SHELL_PATH` 也已按这个
 思路改成写 Pi 原生 `settings.json`，`getShellPath()` 现与上游逐字节一致。
+
+**第三类补丁不是「新命令」而是「改已有命令」。** `get_commands` 在 stock Pi 里返回
+`[]`（只有扩展与 Skill），我们的版本改成读 `BUILTIN_SLASH_COMMANDS`。
+这类改动在 `git diff` 里看起来只是几行 `map`/`filter`，但它决定了**斜杠菜单里有什么**，
+而 `pi-builtin-commands.ts` 还会绕开 `get_commands` 直接读那份 Pi 的
+`slash-commands.js` 重建一次菜单 —— 两条通路必须一起看，只查一条会得出错误结论。
 
 剩余 5 个私有补丁确认无原生替代（证据见 `pi-update-resilience/design.md` 第七节）：
 `BUILTIN_SLASH_COMMANDS` 只被 `interactive-mode.ts` 消费，`rpc-mode.ts:808` 只用于列举；
@@ -307,6 +367,7 @@ align-self: stretch; margin: 20px 0`），横向不重叠由布局保证。保�
 | Node | v24.14.1 |
 | 全局 Pi | `@earendil-works/pi-coding-agent@0.85.1` |
 | 内置 Pi 版本 | 0.85.1（`packages/coding-agent/package.json:3`） |
+| 当前实际运行的 Pi | **内置 0.85.1**（`active.json` 已删，0.99.1 已回滚） |
 | Git Bash | `D:\git\Git\bin\bash.exe`（非标准路径，这正是 Shell 设置存在的原因） |
 | Electron | `node_modules/electron/dist/electron.exe` 已装 |
 | `gh` CLI | **未安装**，无法本地查 Actions 状态 |
@@ -344,9 +405,17 @@ cd packages/codepiddy-desktop && npx playwright test e2e/workflow.e2e.ts --repor
 npx openspec validate <change-name> --strict
 ```
 
-**当前基线**：core 23 passed / 5 files；desktop 71 passed / 15 files（本轮 +7：powershell 1、
-shellPath 4、npm install 3 —— 减去删掉的 `settings-shell-path.test.ts`）；e2e 16 passed / 1
-failed（失败项即 4.1 的既有 flake，新增的 `code-block.e2e.ts` 稳定 3/3）。三个包 typecheck 全干净。
+**当前基线**（本轮实现后）：core **23** passed / 5 files；desktop **81** passed / 16 files；
+e2e **16** passed / 1 failed（失败项即 4.1 的既有 flake，`--repeat-each=3` 三次都挂在
+`workflow.e2e.ts:86` 或 `:146`，每次恰好少一条回复，轮次随机 —— 竞态而非确定性断裂，
+且 `pi-rpc-process.ts` 的 `prompt()` / `send()` / `handleLine()` 本轮一字未动）。
+
+`npx tsgo --noEmit` 全仓干净。`biome check` 的诊断集与 HEAD **完全一致**
+（12 条，全部来自 `desktop-work-panel` 那轮的 `WorkPanel.tsx` / `StreamStats.tsx` /
+`ToolCallCard.tsx` / `work-panel.test.ts` / `workspace-fs.test.ts`，
+本轮**没新增任何一条**）。注意 `npm run check` 会跑 `biome check --write`，
+它会顺手改写这些历史遗留文件 —— 想确认自己有没有引入新问题，用 `git worktree add --detach`
+拉一份 HEAD 出来对比诊断列表，别在主工作区跑 `--write`。
 
 **三个 OpenSpec change 全部 `validate --strict` 通过**：
 `desktop-work-panel`、`transcript-minimap-gutter`、`pi-update-resilience`。
@@ -355,15 +424,16 @@ failed（失败项即 4.1 的既有 flake，新增的 `code-block.e2e.ts` 稳定
 
 ## 七、压缩 / 合并前提醒
 
-1. **四个提交未 push**：`4051b61`、`e591860`、`4db2049`、`2d5336d`。压缩前先决定是否 push，避免丢。
-2. **先回滚 Pi**（见「三.0」）。当前 0.99.1 有 4 个功能是坏的，验证任何东西都会受干扰。
-3. **本轮 16 个文件已验证但未提交**，建议拆成 5 个 commit（每项都做过「stash 回退后测试必须失败」的反向验证）：
-   - `fix: govern powershell with the bash permission category`（3.1，2 文件）
-   - `refactor: drop the PI_SHELL_PATH Pi patch`（3.2，3 文件 + 删 1 个 Pi 测试）
-   - `fix: stop leaking npm_config_* into the Pi runtime install`（3.3，1 文件 + 1 新测试）
-   - `fix: keep the transcript minimap out of the message text`（3.4 定位条，CSS + e2e）
-   - `fix: make code blocks wrap by default and fold by truncating`（3.4 代码块，组件 + CSS + 新 e2e + fake Pi）
-4. `4db2049` 改了 19 个文件、跨 5 个包，压缩成一个提交时 commit message 建议保留「删了什么」和「为什么删死文件」这两段，否则以后没人知道 `.codepiddy/permissions.jsonc` 为什么消失。
-5. `e591860`、`4db2049`、本轮的 3.1 都改了同一片权限相关代码。若要 squash，注意 `permission-settings.ts` 的默认值、`tools.powershell` 映射与 `permission-settings.test.ts` 的断言必须一致。
-6. **下一件事是 `pi-update-resilience`**（见「三.5」）。别把 3.2 当成「Pi 补丁问题已解决」——RPC 协议层还有 5 个命令依赖 Pi 私有补丁，其中 4 个已确认失效。
-7. **改 Pi 源码前先想清楚**：优先用扩展注入（`--extension`）或 Pi 原生配置，不要再编辑 `packages/coding-agent/src`。见「四.4」。
+1. **十个提交未 push**：`4051b61`、`e591860`、`4db2049`、`2d5336d`、`0d3f25b`、`5a9014f`、`647cf1b`、`5315fd4`、`357bece`、`bda227b`。压缩前先决定是否 push，避免丢。
+2. **工作区有 `pi-update-resilience` 的实现未提交**（16 个文件）。建议拆成 3 个 commit：
+   - `refactor: drop the scoped model configuration`（任务组 1，10 文件）
+   - `refactor: drop the role default model setting`（任务组 2，8 文件）
+   - `fix: refuse to activate a Pi without the private protocol`（任务组 3+4，6 文件 + 2 新测试）
+   验证都已做过：typecheck / build / 单测 / e2e / `openspec validate --strict`，
+   探针逻辑做过「把哨兵探针改成永远返回可用 → 3 个测试失败」的反向验证。
+3. `4db2049` 改了 19 个文件、跨 5 个包，压缩成一个提交时 commit message 建议保留「删了什么」和「为什么删死文件」这两段，否则以后没人知道 `.codepiddy/permissions.jsonc` 为什么消失。
+4. `e591860`、`4db2049`、`5a9014f` 都改了同一片权限相关代码。若要 squash，注意 `permission-settings.ts` 的默认值、`tools.powershell` 映射与 `permission-settings.test.ts` 的断言必须一致。
+5. **Pi 私有补丁已清零，但代价是丢了 OAuth 登录。** 「更新 Pi」恢复可用，代价是 `/login` `/logout` `/import` 已移除（`/reload` 改走重启保住）。恢复 OAuth 登录只能向上游提 issue（`tasks.md` 6.1，**本轮未做**）。
+6. **改 Pi 源码前先想清楚**：优先用扩展注入（`--extension`）或 Pi 原生配置，不要再编辑 `packages/coding-agent/src`。见「四.4」。
+7. **别再往 `modes/rpc/` 加 `case`。** 私有命令清单与探针机制已随补丁一起删除 —— 现在「外壳私有协议」为空，这是刻意的：清单机制只在还有私有命令时才有意义，而它唯一的用途（挡住不兼容版本）恰恰会把「更新 Pi」挡死。以后要扩展 Pi，走 `--extension` 或 Pi 原生配置（见「四.4」）。若将来不得不重新引入私有命令，探针要一并重建，否则又会回到「点更新 → 静默失效」。
+8. **人工核对还欠两项**（`tasks.md` 5.6 / 6.1）：手动验 `/reload` 重启后能恢复当前会话；向上游提 issue（`login_provider` / `logout_provider` / `get_auth_providers` / `import_jsonl` 在 headless/RPC 模式缺失）。

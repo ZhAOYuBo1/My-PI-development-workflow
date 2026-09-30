@@ -26,10 +26,7 @@ function resolveInside(projectRoot: string, relativePath: string): string {
 }
 
 /** 列单层目录：目录优先、名称不区分大小写排序，附文件大小。 */
-export async function listWorkspaceDir(
-	projectRoot: string,
-	relativeDir: string,
-): Promise<WorkspaceDirEntry[]> {
+export async function listWorkspaceDir(projectRoot: string, relativeDir: string): Promise<WorkspaceDirEntry[]> {
 	const directory = resolveInside(projectRoot, relativeDir);
 	const dirents = await readdir(directory, { withFileTypes: true });
 	const entries: WorkspaceDirEntry[] = [];
@@ -56,10 +53,7 @@ export async function listWorkspaceDir(
  * 读单个文件：图片转 dataUrl，大文件与二进制只报 kind 不给内容
  * （调用方展示空态，避免渲染进程载入乱码与巨内容）。
  */
-export async function readWorkspaceFile(
-	projectRoot: string,
-	relativePath: string,
-): Promise<WorkspaceFileContent> {
+export async function readWorkspaceFile(projectRoot: string, relativePath: string): Promise<WorkspaceFileContent> {
 	const absolute = resolveInside(projectRoot, relativePath);
 	const fileStat = await stat(absolute);
 	if (!fileStat.isFile()) throw new Error(`不是文件：${relativePath}`);

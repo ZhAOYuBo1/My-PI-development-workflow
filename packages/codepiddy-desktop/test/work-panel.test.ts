@@ -4,9 +4,9 @@ import {
 	extractPanelTitle,
 	formatPanelSize,
 	normalizePanelPath,
+	type ProjectableToolItem,
 	parseToolArgs,
 	projectToolToPanel,
-	type ProjectableToolItem,
 } from "../src/renderer/components/work-panel.ts";
 
 function tool(overrides: Partial<ProjectableToolItem> = {}): ProjectableToolItem {
@@ -53,9 +53,7 @@ describe("tool event projection", () => {
 	});
 
 	test("edit projects review from result text", () => {
-		const entry = projectToolToPanel(
-			tool({ name: "edit", args: '{"filePath":"a.ts"}', text: "+new line" }),
-		);
+		const entry = projectToolToPanel(tool({ name: "edit", args: '{"filePath":"a.ts"}', text: "+new line" }));
 		expect(entry?.view).toBe("review");
 		expect(entry?.renderName).toBe("edit");
 	});
@@ -63,9 +61,7 @@ describe("tool event projection", () => {
 	test("read projects text and bash projects terminal output", () => {
 		const read = projectToolToPanel(tool({ name: "read", args: '{"path":"a.md"}', text: "body" }));
 		expect(read?.view).toBe("file");
-		const bash = projectToolToPanel(
-			tool({ name: "bash", args: '{"command":"ls"}', text: "a.md" }),
-		);
+		const bash = projectToolToPanel(tool({ name: "bash", args: '{"command":"ls"}', text: "a.md" }));
 		expect(bash?.view).toBe("terminal");
 		expect(bash?.title).toBe("ls");
 	});

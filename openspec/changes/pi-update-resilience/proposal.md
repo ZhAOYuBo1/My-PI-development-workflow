@@ -38,10 +38,17 @@ FAIL  import_jsonl                 Unknown command
 
 ## What Changes
 
-- **删除「循环模型范围」功能**：UI 弹窗、preload 桥、IPC 通道、`AgentManager` 方法、Pi 补丁 `get_scoped_models` / `set_scoped_models` 两个 case、`rpc-types.ts` 的类型声明一并移除。私有命令从 7 减到 5。
+> **决策修订（第二轮）**：本 change 最初打算「删 2 个、留 5 个、探针加严」。实测发现
+> **探针加严会把「更新 Pi」彻底挡死** —— stock Pi 必然缺那 5 个命令，于是探针 100% 拒绝
+> 激活。挡住了静默失效，但把更新本身也挡住了。用户拍板取舍「保留更新」，因此改为
+> **把私有补丁清零**。下面是最终交付的范围。
+
+- **删除「循环模型范围」功能**：UI 弹窗、preload 桥、IPC 通道、`AgentManager` 方法、Pi 补丁 `get_scoped_models` / `set_scoped_models` 两个 case、`rpc-types.ts` 的类型声明一并移除。私有命令 7 → 5。
 - **删除「设为 X Agent 默认」按钮**及设置页只读的角色默认模型区块。角色默认模型因此不再可设置，所有 Agent 跟随 Pi 当前模型配置。
-- **探针加严**：`probePiUpdate` 额外探测外壳依赖的私有命令；stock Pi 返回 `Unknown command` 时**拒绝激活**并明确报告缺失项，而不是装上再静默失效。
-- **激活后退化**：运行时若某私有命令不可用，相关 UI 入口（`/login` `/logout` `/import` `/reload`）置灰并说明原因，从「点了报未知命令」变为「不可用且有解释」。
+- **删除剩余 5 个私有命令**（`reload`、`get_auth_providers`、`login_provider`、`logout_provider`、`import_jsonl`），连同 `get_commands` 补丁一起，`modes/rpc/` 整体回退到与上游逐字节一致。私有命令 5 → **0**。
+- **删除随之失去对象的机制**：私有命令清单（`pi-private-commands.ts`）、探针的私有能力校验、运行时 UI 降级。清单为空时这些机制没有作用对象。
+- **`/reload` 不删功能，改为重启实现**：Pi 以 `--session-dir <agent.sessions> --continue` 启动且每个 Agent 会话目录独立，重启后恢复的正是当前会话。
+- **`/login` `/logout` `/import` 从斜杠菜单移除**，手动输入时给出明确的替代路径说明，而不是 `Unknown command`。
 
 不改动：`/reload` 的原地重载语义（不换成重启进程）；主流程（建项目 → 建需求 → 建 Agent → 聊天 → 工具调用）完全不受影响。
 
@@ -58,6 +65,10 @@ FAIL  import_jsonl                 Unknown command
 
 ## Impact
 
-- 删除后 `packages/coding-agent/src/modes/rpc/` 的私有补丁从 215 行降到约 130 行，`settings-manager.ts` 已在上一个提交恢复成与上游逐字节一致。
-- **仍然保留 5 个私有命令**（`reload` + 认证 3 个 + `import_jsonl`）。这 5 个确认无原生替代：Pi 的 `/login` `/import` 只在终端 UI 层执行（`BUILTIN_SLASH_COMMANDS` 仅被 `interactive-mode.ts` 消费，`rpc-mode.ts:808` 只用于列举），扩展 API 不暴露 `modelRuntime`，只有只读的 `ctx.getScopedModels()`。这部分需向上游提 issue，不在本 change 解决。
-- 不新增依赖，不改协议格式，不改 `pi-runtime-updater` 的安装与回滚机制。
+- **`packages/coding-agent/src/modes/rpc/` 与上游逐字节一致**：`git diff 9cf21c8 -- packages/coding-agent/src/modes/rpc/` 输出 0 行（起点是 4 文件 215 插入）。
+- **唯一实质损失是 OAuth 登录**。Pi 的 `/login` 只在终端 UI 层可执行（`BUILTIN_SLASH_COMMANDS` 仅被 `interactive-mode.ts` 消费），扩展 API 不暴露 `modelRuntime`，只能*注册* OAuth provider 而不能*发起*登录。恢复需向上游提 issue（`tasks.md` 6.1，**未做**）。替代路径：环境变量或手写 `~/.pi/agent/auth.json`。
+- `/import` 移除，但 `/resume` 走原生 `switch_session`，**不受影响**。
+- `/reload` 保留功能，代价从「原地重载」变成「重启进程」，进行中的流式回复会中断。
+- **斜杠菜单不依赖任何补丁**：`loadPiBuiltinCommands` 直接读当前运行那份 Pi 的 `dist/core/slash-commands.js` 并自行过滤，所以 stock Pi 下菜单依然完整。
+- `settings-manager.ts` 的重试默认值补丁**保留**（`maxRetries` 3→5 等）：不是协议命令、不参与探针，升级后丢失仅回到上游默认值，属有意调优。
+- 不新增依赖，不改 `pi-runtime-updater` 的安装与回滚机制。「拒绝激活即不落盘」这条不变量仍由 `pi-runtime-updater.test.ts` 锁住。

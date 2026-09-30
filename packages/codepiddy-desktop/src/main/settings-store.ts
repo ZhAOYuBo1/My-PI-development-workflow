@@ -5,8 +5,6 @@ import path from "node:path";
 import type {
 	AgentRole,
 	PermissionDefaults,
-	RoleModelDefault,
-	RoleModelDefaults,
 	RoleSkillAssignments,
 	SetRoleSkillAssignmentsInput,
 	SettingsStatus,
@@ -41,10 +39,6 @@ function resolvePiAgentDir(): string {
 	return configured ? path.resolve(configured) : path.join(homedir(), ".pi", "agent");
 }
 
-function isAgentRole(value: string): value is AgentRole {
-	return agentRoles.includes(value as AgentRole);
-}
-
 function normalizeRoleSkillAssignments(value: unknown): RoleSkillAssignments {
 	const record =
 		typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -73,7 +67,6 @@ function addNewBuiltinDefaults(assignments: RoleSkillAssignments): RoleSkillAssi
 
 export class AppSettingsStore {
 	private readonly secretsPath: string;
-	private readonly roleDefaultsPath: string;
 	private readonly roleSkillsPath: string;
 	private readonly permissionDefaultsPath: string;
 	private readonly permissionPolicyPath: string;
@@ -83,7 +76,6 @@ export class AppSettingsStore {
 	constructor(userDataPath: string) {
 		const settingsDirectory = path.join(userDataPath, "settings");
 		this.secretsPath = path.join(settingsDirectory, "secrets.json");
-		this.roleDefaultsPath = path.join(settingsDirectory, "role-model-defaults.json");
 		this.roleSkillsPath = path.join(settingsDirectory, "role-skills.json");
 		this.permissionDefaultsPath = path.join(settingsDirectory, "permission-defaults.json");
 		this.permissionPolicyPath = path.join(userDataPath, "permissions", "policy", "pi-permissions.jsonc");
@@ -226,72 +218,6 @@ export class AppSettingsStore {
 	private encrypt(value: string): string {
 		if (!safeStorage.isEncryptionAvailable()) throw new Error("当前系统无法使用 Electron safeStorage");
 		return safeStorage.encryptString(value).toString("base64");
-	}
-
-	async getRoleModelDefaults(): Promise<RoleModelDefaults> {
-		try {
-			const parsed = JSON.parse(await readFile(this.roleDefaultsPath, "utf8")) as unknown;
-			if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
-			const result: RoleModelDefaults = {};
-			for (const [role, value] of Object.entries(parsed)) {
-				if (!isAgentRole(role) || typeof value !== "object" || value === null || Array.isArray(value)) continue;
-				const item = value as Record<string, unknown>;
-				if (
-					typeof item.provider !== "string" ||
-					typeof item.modelId !== "string" ||
-					typeof item.modelName !== "string" ||
-					typeof item.thinkingLevel !== "string"
-				)
-					continue;
-				result[role] = {
-					role,
-					provider: item.provider,
-					modelId: item.modelId,
-					modelName: item.modelName,
-					thinkingLevel: item.thinkingLevel,
-				};
-			}
-			return result;
-		} catch (error) {
-			if (isNotFound(error)) return {};
-			throw error;
-		}
-	}
-
-	private async writeRoleModelDefaults(defaults: RoleModelDefaults): Promise<void> {
-		if (Object.keys(defaults).length === 0) {
-			try {
-				await unlink(this.roleDefaultsPath);
-			} catch (error) {
-				if (!isNotFound(error)) throw error;
-			}
-			return;
-		}
-		await mkdir(path.dirname(this.roleDefaultsPath), { recursive: true });
-		await writeFile(this.roleDefaultsPath, `${JSON.stringify(defaults, null, 2)}\n`, "utf8");
-	}
-
-	async getRoleModelDefault(role: AgentRole): Promise<RoleModelDefault | null> {
-		return (await this.getRoleModelDefaults())[role] ?? null;
-	}
-
-	async setRoleModelDefault(input: RoleModelDefault): Promise<RoleModelDefaults> {
-		const provider = input.provider.trim();
-		const modelId = input.modelId.trim();
-		const modelName = input.modelName.trim();
-		const thinkingLevel = input.thinkingLevel.trim();
-		if (!provider || !modelId || !modelName || !thinkingLevel) throw new Error("角色默认模型配置不完整");
-		const defaults = await this.getRoleModelDefaults();
-		defaults[input.role] = { role: input.role, provider, modelId, modelName, thinkingLevel };
-		await this.writeRoleModelDefaults(defaults);
-		return defaults;
-	}
-
-	async clearRoleModelDefault(role: AgentRole): Promise<RoleModelDefaults> {
-		const defaults = await this.getRoleModelDefaults();
-		delete defaults[role];
-		await this.writeRoleModelDefaults(defaults);
-		return defaults;
 	}
 
 	async getRoleSkillAssignments(): Promise<RoleSkillAssignments> {

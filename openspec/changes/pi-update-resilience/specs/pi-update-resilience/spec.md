@@ -2,51 +2,61 @@
 
 ## Purpose
 
-规定 CodePIddy 与 Pi 之间的能力边界：外壳不得依赖超出 stock Pi 的私有协议而不做校验；「更新 Pi」SHALL 在激活前判定兼容性，SHALL NOT 静默激活一个外壳功能缺失的运行时。
+规定 CodePIddy 与 Pi 之间的能力边界：外壳 SHALL NOT 修改 Pi 源码来获得 stock Pi 没有的
+能力。「更新 Pi」SHALL 保持可用，这是外壳唯一不能牺牲的属性。
+
+> 本节曾要求「登记私有命令 + 探针加严 + UI 降级」。实测证明该方案会让「更新 Pi」100% 失败
+> （stock Pi 必然缺全部私有命令），因此改为要求**私有命令为空**。见 `design.md` 第五节。
 
 ## ADDED Requirements
 
-### Requirement: 私有协议命令的依赖必须被显式登记
+### Requirement: 外壳不得依赖 Pi 私有协议
 
-外壳与 Pi 之间的自定义 RPC 命令 SHALL 集中登记在单一清单中，供更新探针与 UI 降级共同使用。清单 SHALL NOT 包含只读性无法保证的探测命令（如会改变会话状态的 `import_jsonl`）。
+外壳 SHALL NOT 通过编辑 `packages/coding-agent/src/`（Pi 的 vendored 副本）来获得功能。
+`packages/coding-agent/src/modes/rpc/` SHALL 与上游基线逐字节一致。扩展 Pi SHALL 走
+`--extension` 注入或 Pi 原生配置。
 
-#### Scenario: 清单与实现一致
+#### Scenario: 补丁面为零
 
-- **WHEN** 审查私有命令清单
-- **THEN** 每一项都能在 `packages/coding-agent/src/modes/rpc/rpc-mode.ts` 找到对应 `case`，且该命令在 stock Pi 中不存在
+- **WHEN** 审查 `git diff` 中 `packages/coding-agent/src/modes/rpc/` 的改动
+- **THEN** 输出为空，即无任何私有 RPC 命令
 
-### Requirement: 更新前判定运行时兼容性
+#### Scenario: 更新不被私有能力挡死
 
-`probePiUpdate` SHALL 在现有握手与原生命令校验之外，探测清单中的私有命令。任一私有命令返回 `Unknown command` 时，SHALL 拒绝激活该版本、SHALL 保留原版本，并 SHALL 报告缺失的命令名与版本号。
+- **WHEN** 用户对 stock Pi 执行「更新 Pi」
+- **THEN** 探针只校验握手与原生命令，SHALL 通过并正常激活，SHALL NOT 因缺少私有命令而拒绝
 
-#### Scenario: stock Pi 被拒绝激活
+### Requirement: 拒绝激活时不得改动已激活版本
 
-- **WHEN** 用户在 stock Pi 0.99.1 上执行更新
-- **THEN** 更新失败，提示「缺少外壳依赖的命令：reload、import_jsonl、login_provider、logout_provider、get_auth_providers」，`active.json` 保持指向原版本
+`probePiUpdate` 失败时 SHALL 保留原版本，SHALL NOT 写入 `active.json`，SHALL 清理 staging 目录。此不变量与失败原因无关。
 
-#### Scenario: 兼容版本正常激活
+#### Scenario: 探针失败不污染 active.json
 
-- **WHEN** 目标 Pi 支持清单中的全部私有命令
-- **THEN** 探针通过，版本按现有流程激活并可在下次启动生效
+- **WHEN** 探针抛出校验失败
+- **THEN** 更新失败，`active.json` 保持指向原版本，staging 目录被清空，下次启动仍用原版本
 
-#### Scenario: 区分不兼容与安装损坏
+### Requirement: 失去的能力不得静默消失
 
-- **WHEN** 探针因 Pi 进程无法启动而失败
-- **THEN** 按现有「安装损坏」错误路径处理，SHALL NOT 报告为命令不兼容
+因删除私有命令而移除的功能 SHALL NOT 继续出现在斜杠菜单中。用户手动输入这些命令名时，SHALL 得到说明替代路径的明确提示，SHALL NOT 抛出 `Unknown command`。
 
-### Requirement: 功能不可用时降级而非报错
+#### Scenario: 菜单不露出失效入口
 
-外壳 SHALL 在渲染功能入口前按实际可用能力判定。不可用的功能 SHALL 置灰并说明原因，SHALL NOT 呈现为可点击后在调用时才抛出 `Unknown command`。
+- **WHEN** 用户打开斜杠菜单
+- **THEN** `/login` `/logout` `/import` 不出现（`DESKTOP_BUILTINS` 已移除），`/reload` 正常出现
 
-#### Scenario: 私有命令缺失时入口置灰
+#### Scenario: 手动输入已移除的命令
 
-- **WHEN** 当前运行的 Pi 不支持 `login_provider`
-- **THEN** 斜杠菜单中 `/login` `/logout` 置灰，悬停说明「当前 Pi 版本不支持该命令」
+- **WHEN** 用户手动输入 `/login`
+- **THEN** 返回说明「改用环境变量或 `~/.pi/agent/auth.json`」的消息，SHALL NOT 出现 `Unknown command`
 
-#### Scenario: 兼容运行时入口正常
+### Requirement: 斜杠菜单不依赖 Pi 源码补丁
 
-- **WHEN** 当前运行的 Pi 支持全部私有命令
-- **THEN** 全部入口可用，行为与现状一致
+内置斜杠命令 SHALL 由外壳直接读取当前运行那份 Pi 的 `dist/core/slash-commands.js` 并自行过滤，SHALL NOT 依赖对 `get_commands` 的修改。
+
+#### Scenario: stock Pi 下菜单完整
+
+- **WHEN** 当前运行的是 stock Pi（`get_commands` 只返回扩展与 Skill）
+- **THEN** 斜杠菜单仍列出全部 `DESKTOP_BUILTINS`，因为清单来自文件读取而非 RPC 响应
 
 ## REMOVED Requirements
 
@@ -84,6 +94,7 @@
 
 ## 明确不做的事
 
-- **SHALL NOT** 把 `reload` 替换为「重启 Pi 进程」。`session.reload()` 原地重载不打断会话；重启会让用户敲 `/reload` 时丢失当前回复，收益不抵代价。保留补丁 + 降级提示。
 - **SHALL NOT** 把「循环模型范围」改用 `--models` 启动参数实现。删除零代价，改用启动参数需付出「改范围必须重启 Agent」的代价。
-- **SHALL NOT** 在本 change 内为 `login_provider` / `logout_provider` / `get_auth_providers` / `import_jsonl` 寻找替代实现。这 4 个确认无原生通路（Pi 的 `/login` `/import` 仅终端 UI 可执行，扩展 API 不暴露 `modelRuntime`），需向上游提 issue 解决。
+- **（已反转）** 原写「SHALL NOT 把 `reload` 替换为重启」。私有补丁清零后已改为重启实现 —— 每个 Agent 的 `sessions/` 目录独立，`--continue` 保证恢复的正是当前会话，功能得以保留，代价仅是进行中的流式回复会中断。
+- **SHALL NOT** 在本 change 内为 `login_provider` / `logout_provider` / `get_auth_providers` / `import_jsonl` 寻找替代实现。这 4 个确认无原生通路（Pi 的 `/login` `/import` 仅终端 UI 可执行，扩展 API 不暴露 `modelRuntime`），需向上游提 issue 解决。**这是本次唯一实质功能损失，用户已知悉并接受。**
+- **SHALL NOT** 回退 `settings-manager.ts` 的重试默认值补丁。它不是协议命令、不参与探针，升级后丢失仅回到上游默认值。

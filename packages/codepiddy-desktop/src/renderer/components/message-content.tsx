@@ -129,11 +129,7 @@ function MessageCodeBlock({ value, language }: { value: string; language?: strin
 					<button type="button" className={copied ? "is-active" : ""} onClick={() => void copyCode()}>
 						{copied ? "已复制" : "复制"}
 					</button>
-					<button
-						type="button"
-						aria-expanded={!collapsed}
-						onClick={() => setCollapsed((current) => !current)}
-					>
+					<button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((current) => !current)}>
 						{collapsed ? "展开" : "折叠"}
 					</button>
 				</div>

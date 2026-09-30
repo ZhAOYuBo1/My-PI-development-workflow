@@ -1,7 +1,6 @@
 import type {
 	AgentClientEvent,
 	AgentInstanceLocator,
-	AgentRole,
 	ArchiveWorkItemInput,
 	CodePIddyClientApi,
 	CreateAgentInput,
@@ -12,10 +11,8 @@ import type {
 	PermissionDefaults,
 	RenameWorkItemInput,
 	ResetAgentInput,
-	RoleModelDefault,
 	SendAgentPromptInput,
 	SetAgentModelInput,
-	SetAgentScopedModelsInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
 } from "@codepiddy/shared";
@@ -38,12 +35,10 @@ const channels = {
 	renameWorkItem: "codepiddy:work-item:rename",
 	deleteWorkItem: "codepiddy:work-item:delete",
 	getAgentModelSelection: "codepiddy:agent:model:get",
-	getAgentScopedModels: "codepiddy:agent:scoped-models:get",
 	getAgentCommands: "codepiddy:agent:commands:get",
 	getProjectWriteLeaseStatus: "codepiddy:write-lease:get",
 	clearStaleProjectWriteLease: "codepiddy:write-lease:clear-stale",
 	setAgentModel: "codepiddy:agent:model:set",
-	setAgentScopedModels: "codepiddy:agent:scoped-models:set",
 	setAgentThinking: "codepiddy:agent:thinking:set",
 	listRecentProjects: "codepiddy:project:recent:list",
 	getStartupProject: "codepiddy:project:startup",
@@ -67,11 +62,8 @@ const channels = {
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
 	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
 	settingsOpenBuiltinSkills: "codepiddy:settings:builtin-skills:open",
-	settingsGetRoleDefaults: "codepiddy:settings:role-models:get",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
-	settingsSetRoleDefault: "codepiddy:settings:role-models:set",
 	settingsSetPermissions: "codepiddy:settings:permissions:set",
-	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
 	settingsSaveShell: "codepiddy:settings:shell:save",
 	settingsStatus: "codepiddy:settings:status",
@@ -106,14 +98,12 @@ const api: CodePIddyClientApi = {
 	getAgentUiState: (agentInstanceId: string) => ipcRenderer.invoke(channels.getAgentUiState, agentInstanceId),
 	saveAgentUiState: (state) => ipcRenderer.invoke(channels.saveAgentUiState, state),
 	getAgentModelSelection: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.getAgentModelSelection, input),
-	getAgentScopedModels: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.getAgentScopedModels, input),
 	getAgentCommands: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.getAgentCommands, input),
 	getProjectWriteLeaseStatus: (projectId: string) =>
 		ipcRenderer.invoke(channels.getProjectWriteLeaseStatus, projectId),
 	clearStaleProjectWriteLease: (projectId: string) =>
 		ipcRenderer.invoke(channels.clearStaleProjectWriteLease, projectId),
 	setAgentModel: (input: SetAgentModelInput) => ipcRenderer.invoke(channels.setAgentModel, input),
-	setAgentScopedModels: (input: SetAgentScopedModelsInput) => ipcRenderer.invoke(channels.setAgentScopedModels, input),
 	setAgentThinking: (input: SetAgentThinkingInput) => ipcRenderer.invoke(channels.setAgentThinking, input),
 	createAgent: (input: CreateAgentInput) => ipcRenderer.invoke(channels.createAgent, input),
 	activateAgent: (input: AgentInstanceLocator) => ipcRenderer.invoke(channels.activateAgent, input),
@@ -156,9 +146,6 @@ const api: CodePIddyClientApi = {
 	openProjectSkillsFolder: (projectRoot: string) =>
 		ipcRenderer.invoke(channels.settingsOpenProjectSkills, projectRoot),
 	openBuiltinSkillsFolder: () => ipcRenderer.invoke(channels.settingsOpenBuiltinSkills),
-	getRoleModelDefaults: () => ipcRenderer.invoke(channels.settingsGetRoleDefaults),
-	setRoleModelDefault: (input: RoleModelDefault) => ipcRenderer.invoke(channels.settingsSetRoleDefault, input),
-	clearRoleModelDefault: (role: AgentRole) => ipcRenderer.invoke(channels.settingsClearRoleDefault, role),
 	onAgentEvent: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, event: AgentClientEvent) => listener(event);
 		ipcRenderer.on(channels.agentEvent, handler);

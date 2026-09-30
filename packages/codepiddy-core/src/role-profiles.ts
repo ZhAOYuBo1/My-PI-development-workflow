@@ -105,7 +105,10 @@ export const DEFAULT_ROLE_PROFILES: Record<AgentRole, string> = {
 
 // Migrate only the exact bundled profiles from previous releases. User-edited profiles stay untouched.
 const PREVIOUS_DEFAULT_PROFILE_HASHES: Record<AgentRole, string[]> = {
-	"requirement-analysis": ["73b68012273c734b107af8779451f159d37c18e111ec0656338cd3fd8e5a5fee", "a44baff3cb38404d7e2be2f9bd2d0673f847fdc69bacdffa273854c002af6115"],
+	"requirement-analysis": [
+		"73b68012273c734b107af8779451f159d37c18e111ec0656338cd3fd8e5a5fee",
+		"a44baff3cb38404d7e2be2f9bd2d0673f847fdc69bacdffa273854c002af6115",
+	],
 	coding: ["4531881fa002aad126a37a035c29502a2e31f9397c21d505cb1257e655e50518"],
 	"bug-fix": ["6592195ff0e247614b2ade6740854e45396d044ecbf5ab8dd69178680b03673e"],
 	review: ["033aee631357aabe12272f1487829bc4b6602aabb171bc09252ca70f08b40027"],
@@ -123,7 +126,10 @@ export async function ensureDefaultRoleProfiles(codepiddyDirectory: string): Pro
 		try {
 			const existing = await readFile(filePath, "utf8");
 			const previousDefaultHash = createHash("sha256").update(existing).digest("hex");
-			if (isLegacyFixedHandoffProfile(existing) || PREVIOUS_DEFAULT_PROFILE_HASHES[role].includes(previousDefaultHash)) {
+			if (
+				isLegacyFixedHandoffProfile(existing) ||
+				PREVIOUS_DEFAULT_PROFILE_HASHES[role].includes(previousDefaultHash)
+			) {
 				await writeFile(filePath, content, "utf8");
 			}
 		} catch (error) {

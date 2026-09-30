@@ -237,14 +237,9 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	openPiConfigFolder(): Promise<void>;
 	openProjectSkillsFolder(projectRoot: string): Promise<void>;
 	openBuiltinSkillsFolder(): Promise<void>;
-	getRoleModelDefaults(): Promise<RoleModelDefaults>;
-	setRoleModelDefault(input: RoleModelDefault): Promise<RoleModelDefaults>;
-	clearRoleModelDefault(role: AgentRole): Promise<RoleModelDefaults>;
 	getAgentModelSelection(input: AgentInstanceLocator): Promise<AgentModelSelection>;
-	getAgentScopedModels(input: AgentInstanceLocator): Promise<AgentScopedModel[]>;
 	getAgentCommands(input: AgentInstanceLocator): Promise<AgentCommandOption[]>;
 	setAgentModel(input: SetAgentModelInput): Promise<AgentModelSelection>;
-	setAgentScopedModels(input: SetAgentScopedModelsInput): Promise<AgentScopedModel[]>;
 	setAgentThinking(input: SetAgentThinkingInput): Promise<AgentModelSelection>;
 	listRecentProjects(): Promise<RecentProject[]>;
 	openRecentProject(projectRoot: string): Promise<ProjectSummary>;
@@ -398,16 +393,6 @@ export interface ProjectWriteLeaseStatus {
 	stale: boolean;
 }
 
-export interface RoleModelDefault {
-	role: AgentRole;
-	provider: string;
-	modelId: string;
-	modelName: string;
-	thinkingLevel: string;
-}
-
-export type RoleModelDefaults = Partial<Record<AgentRole, RoleModelDefault>>;
-
 export interface AgentCommandOption {
 	name: string;
 	command: string;
@@ -433,16 +418,6 @@ export interface AgentModelSelection {
 export interface SetAgentModelInput extends AgentInstanceLocator {
 	provider: string;
 	modelId: string;
-}
-
-export interface AgentScopedModel {
-	provider: string;
-	modelId: string;
-	thinkingLevel?: string;
-}
-
-export interface SetAgentScopedModelsInput extends AgentInstanceLocator {
-	models: AgentScopedModel[];
 }
 
 export interface SetAgentThinkingInput extends AgentInstanceLocator {

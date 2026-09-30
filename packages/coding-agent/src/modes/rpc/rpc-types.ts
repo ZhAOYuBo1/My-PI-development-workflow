@@ -33,8 +33,6 @@ export type RpcCommand =
 	| { id?: string; type: "set_model"; provider: string; modelId: string }
 	| { id?: string; type: "cycle_model" }
 	| { id?: string; type: "get_available_models" }
-	| { id?: string; type: "get_scoped_models" }
-	| { id?: string; type: "set_scoped_models"; models: RpcScopedModel[] }
 
 	// Thinking
 	| { id?: string; type: "set_thinking_level"; level: ThinkingLevel }
@@ -61,7 +59,6 @@ export type RpcCommand =
 	| { id?: string; type: "get_session_stats" }
 	| { id?: string; type: "export_html"; outputPath?: string }
 	| { id?: string; type: "switch_session"; sessionPath: string }
-	| { id?: string; type: "import_jsonl"; inputPath: string; cwdOverride?: string }
 	| { id?: string; type: "fork"; entryId: string }
 	| { id?: string; type: "clone" }
 	| { id?: string; type: "get_fork_messages" }
@@ -69,12 +66,6 @@ export type RpcCommand =
 	| { id?: string; type: "get_tree" }
 	| { id?: string; type: "get_last_assistant_text" }
 	| { id?: string; type: "set_session_name"; name: string }
-	| { id?: string; type: "reload" }
-
-	// Authentication
-	| { id?: string; type: "get_auth_providers" }
-	| { id?: string; type: "login_provider"; providerId: string; authType: "oauth" }
-	| { id?: string; type: "logout_provider"; providerId: string }
 
 	// Messages
 	| { id?: string; type: "get_messages" }
@@ -92,17 +83,10 @@ export interface RpcSlashCommand {
 	name: string;
 	/** Human-readable description */
 	description?: string;
-	argumentHint?: string;
 	/** What kind of command this is */
-	source: "builtin" | "extension" | "prompt" | "skill";
-	/** Source metadata for the owning resource. Built-in commands have no source file. */
-	sourceInfo?: SourceInfo;
-}
-
-export interface RpcScopedModel {
-	provider: string;
-	modelId: string;
-	thinkingLevel?: ThinkingLevel;
+	source: "extension" | "prompt" | "skill";
+	/** Source metadata for the owning resource */
+	sourceInfo: SourceInfo;
 }
 
 // ============================================================================
@@ -169,20 +153,6 @@ export type RpcResponse =
 			success: true;
 			data: { models: Model<any>[] };
 	  }
-	| {
-			id?: string;
-			type: "response";
-			command: "get_scoped_models";
-			success: true;
-			data: { models: RpcScopedModel[] };
-	  }
-	| {
-			id?: string;
-			type: "response";
-			command: "set_scoped_models";
-			success: true;
-			data: { models: RpcScopedModel[] };
-	  }
 
 	// Thinking
 	| { id?: string; type: "response"; command: "set_thinking_level"; success: true }
@@ -221,7 +191,6 @@ export type RpcResponse =
 	| { id?: string; type: "response"; command: "get_session_stats"; success: true; data: SessionStats }
 	| { id?: string; type: "response"; command: "export_html"; success: true; data: { path: string } }
 	| { id?: string; type: "response"; command: "switch_session"; success: true; data: { cancelled: boolean } }
-	| { id?: string; type: "response"; command: "import_jsonl"; success: true; data: { cancelled: boolean } }
 	| { id?: string; type: "response"; command: "fork"; success: true; data: { text: string; cancelled: boolean } }
 	| { id?: string; type: "response"; command: "clone"; success: true; data: { cancelled: boolean } }
 	| {
@@ -253,27 +222,6 @@ export type RpcResponse =
 			data: { text: string | null };
 	  }
 	| { id?: string; type: "response"; command: "set_session_name"; success: true }
-	| { id?: string; type: "response"; command: "reload"; success: true }
-
-	// Authentication
-	| {
-			id?: string;
-			type: "response";
-			command: "get_auth_providers";
-			success: true;
-			data: {
-				providers: Array<{
-					id: string;
-					name: string;
-					oauth: boolean;
-					apiKey: boolean;
-					configured: boolean;
-					source?: string;
-				}>;
-			};
-	  }
-	| { id?: string; type: "response"; command: "login_provider"; success: true }
-	| { id?: string; type: "response"; command: "logout_provider"; success: true }
 
 	// Messages
 	| { id?: string; type: "response"; command: "get_messages"; success: true; data: { messages: AgentMessage[] } }

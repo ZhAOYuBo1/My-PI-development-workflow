@@ -1,6 +1,5 @@
 export { AgentRegistry, type StoredAgentInstance } from "./agent-registry.ts";
 export { searchProjectFiles } from "./file-search.ts";
-export { listWorkspaceDir, readWorkspaceFile } from "./workspace-fs.ts";
 export { PiRpcProcess, type PiRpcProcessOptions } from "./pi-rpc-process.ts";
 export {
 	archiveWorkItem,
@@ -21,3 +20,4 @@ export {
 	ensureDefaultRoleProfiles,
 	readRoleProfile,
 } from "./role-profiles.ts";
+export { listWorkspaceDir, readWorkspaceFile } from "./workspace-fs.ts";

@@ -98,32 +98,61 @@ grep cycle_model codepiddy-core codepiddy-desktop  →  空
 - `coding-agent`：`rpc-mode.ts` 两个 case、`rpc-types.ts` 命令与响应类型、`rpc-client.ts` 两个方法
 - `styles.css`：`.scoped-model-*` 规则
 
-## 五、探针怎么加严
+## 五、探针加严是个陷阱（已放弃）
 
-在 `probePiUpdate` 现有四项之后，追加对**外壳实际依赖的私有命令**的探测。任一返回 `Unknown command` 即判定不兼容。
+第一轮方案：在 `probePiUpdate` 现有四项之后，追加对私有命令的探测，任一 `Unknown command` 即拒绝激活。
 
-设计要点：
+**它确实挡住了静默失效，但把「更新 Pi」也挡死了。** stock Pi 必然缺全部 5 个私有命令，
+所以探针 100% 拒绝 —— 用户点更新只会看到「缺少外壳依赖的命令：reload、import_jsonl、
+login_provider、logout_provider、get_auth_providers」，永远换不了新版本。
 
-- **只探测，不修复。** 探测失败的处理是拒绝激活 + 报错，不尝试运行时降级到别的通路（认证与导入本来就没有替代通路）。
-- **探测命令要选副作用最小的。** `get_scoped_models` / `get_auth_providers` 是只读的；`import_jsonl` 会真的导入会话，**不能用于探测**，改用 `reload`（幂等）或只探测前两个 + 依赖 `rpc-types` 的存在性。推荐顺序：优先只读命令，失败即中止。
-- **区分「命令不存在」与「Pi 启动失败」。** 前者是版本不兼容（可提示、可回滚），后者是安装损坏（现有错误路径已覆盖）。
-- **错误信息要具体。** 直接把缺失的命令名列表给用户，例如「Pi 0.99.1 缺少外壳依赖的命令：reload、import_jsonl、login_provider。该版本的部分功能不可用，已保留原版本。」
+这暴露了一个前提错误：**我们默认了「私有命令必须保住」**。但真正的取舍是二选一：
 
-先例：`e956516 fix: restore Pi slash commands and stabilize picker scrolling` 当年就是用外壳侧动态读实际安装 Pi 的能力表 + 兜底解决的，不改 Pi 源码。
+| | 保留 5 个命令 | 删掉 5 个命令 |
+| --- | --- | --- |
+| 更新 Pi | ❌ 永远失败 | ✅ 正常 |
+| `/reload` | ✅ 原地重载 | ⚠️ 重启（功能在） |
+| `/login` | ✅ OAuth | ❌ 只能手改 auth.json |
 
-## 六、激活后的降级
+用户选了「保留更新」。理由：一个不能更新核心的客户端是比少个 OAuth 登录更大的负债 ——
+补丁每次上游改版都可能悄悄失效，而 OAuth 登录有可用的手工替代路径。
 
-探针是安装时的一次性检查，挡不住「命令存在但语义变了」这类情况。因此 UI 侧仍需降级：
+## 六、清零后哪些机制一并消失
 
-- 斜杠菜单渲染时按实际可用能力过滤 `DESKTOP_BUILTINS`（`pi-builtin-commands.ts` 已经在动态读安装版本的能力表，沿用该机制）
-- 不可用的命令置灰并给出原因，而不是点击后才抛 `Unknown command`
+私有命令清零后，下列机制**失去作用对象**，全部删除而非留空壳：
 
-## 七、剩下的 5 个命令怎么办
+- `pi-private-commands.ts`（清单、哨兵、`PI_BUILTIN_REQUIREMENTS`）与配套测试
+- `PiRpcProcess.supportsCommand()` —— 只为探针存在
+- 探针里的 `findMissingPiCapabilities()` 调用与 `describeIncompatiblePi()`
+- 运行时降级：`unavailablePiCommands()`、`unavailablePiCommandsCache`、`describeUnavailableBuiltin()`
 
-| 命令 | 结论 |
-| --- | --- |
-| `reload` | 保留。换重启进程会让用户敲 `/reload` 丢当前回复，收益不抵代价 |
-| `get_auth_providers` / `login_provider` / `logout_provider` | 保留 + 向上游提 issue |
-| `import_jsonl` | 保留 + 向上游提 issue |
+探针回到只验原生命令的 4 项。**「拒绝激活即不落盘」这条不变量仍然重要**（探针也可能因
+安装损坏而失败），所以 `pi-runtime-updater.test.ts` 里那条用例保留，只把措辞从
+「协议不兼容」改成通用的校验失败信息。
 
-上游缺口的证据：`BUILTIN_SLASH_COMMANDS` 只被 `interactive-mode.ts` 消费（执行），`rpc-mode.ts:808` 只用于列举；扩展 API 的 `ProviderConfig.oauth` 注释写明「OAuth provider for /login support」，即扩展只能*注册* OAuth provider，不能*发起*登录；`ExtensionContextActions` 只有只读的 `getScopedModels`，无 setter。
+## 七、`/reload` 怎么保住
+
+唯一有外壳侧替代实现的命令。Pi 的启动参数是
+`--session-dir <agent.sessions> --continue`（`main/index.ts:909-911`），而
+`agent-registry.ts:125` 给每个 Agent 建**独立**的 `sessions/` 目录 —— 所以重启后
+`--continue` 恢复的正是当前这个 Agent 的会话，不会串。
+
+因此 `/reload` 改为调用既有的 `AgentManager.reconnect()`：重启 Pi 进程即重新加载
+Extensions / Skills / Prompts / Context，会话由 `--continue` 恢复。
+
+**代价**：进行中的流式回复会中断（原地重载时不会）。相比「功能消失」，这个代价可接受。
+
+## 八、菜单可见性不依赖补丁
+
+这是能放心清零的关键前提。`loadPiBuiltinCommands` 直接读**当前运行那份** Pi 的
+`dist/core/slash-commands.js`，自己过滤 `DESKTOP_BUILTINS` —— 全程不碰 Pi 源码。
+
+所以即使 `get_commands` 回退成 stock 的「只返回扩展与 Skill」，斜杠菜单依然是全的。
+把 `import` / `login` / `logout` 从 `DESKTOP_BUILTINS` 删掉，菜单就不会露出
+「点了报错」的入口。手动输入这三条时，`invokeBuiltinCommand` 返回明确的替代路径说明
+（环境变量 / `~/.pi/agent/auth.json`），而不是 `Unknown command`。
+
+上游缺口的证据（用于 `tasks.md` 6.1 的 issue）：`BUILTIN_SLASH_COMMANDS` 只被
+`interactive-mode.ts` 消费（执行），`rpc-mode.ts` 只用于列举；扩展 API 的
+`ProviderConfig.oauth` 注释写明「OAuth provider for /login support」，即扩展只能
+*注册* OAuth provider，不能*发起*登录。

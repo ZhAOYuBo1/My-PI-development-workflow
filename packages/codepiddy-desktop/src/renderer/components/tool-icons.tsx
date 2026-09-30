@@ -148,7 +148,11 @@ export const ToolIcon = memo(function ToolIcon({
 				<>
 					<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
 					<path d="M4.7 12h14.6M12 4.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5m0-15c-2 2-3 4.5-3 7.5s1 5.5 3 7.5" />
-					<path d="M16 6.5a2.1 2.1 0 0 0-2.1 2.1c0 1.5 2.1 3.8 2.1 3.8s2.1-2.3 2.1-3.8A2.1 2.1 0 0 0 16 6.5z" fill="currentColor" stroke="none" />
+					<path
+						d="M16 6.5a2.1 2.1 0 0 0-2.1 2.1c0 1.5 2.1 3.8 2.1 3.8s2.1-2.3 2.1-3.8A2.1 2.1 0 0 0 16 6.5z"
+						fill="currentColor"
+						stroke="none"
+					/>
 				</>
 			) : null}
 			{name === "clock" ? (
@@ -167,7 +171,11 @@ export const ToolIcon = memo(function ToolIcon({
 			{name === "x-circle" ? (
 				<>
 					<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-					<path d="M9.1 7.8 12 10.7l2.9-2.9 1.3 1.3-2.9 2.9 2.9 2.9-1.3 1.3-2.9-2.9-2.9 2.9-1.3-1.3 2.9-2.9-2.9-2.9z" fill="currentColor" stroke="none" />
+					<path
+						d="M9.1 7.8 12 10.7l2.9-2.9 1.3 1.3-2.9 2.9 2.9 2.9-1.3 1.3-2.9-2.9-2.9 2.9-1.3-1.3 2.9-2.9-2.9-2.9z"
+						fill="currentColor"
+						stroke="none"
+					/>
 				</>
 			) : null}
 			{name === "caret" ? <path d="M9.5 5.5 16.5 12l-7 6.5" /> : null}

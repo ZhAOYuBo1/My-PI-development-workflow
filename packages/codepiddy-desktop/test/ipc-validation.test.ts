@@ -8,7 +8,6 @@ import {
 	parsePermissionDefaults,
 	parseRoleSkillAssignmentsInput,
 	parseSendAgentPromptInput,
-	parseSetAgentScopedModelsInput,
 } from "../src/main/ipc-validation.ts";
 
 describe("IPC runtime validation", () => {
@@ -75,20 +74,6 @@ describe("IPC runtime validation", () => {
 				images: [{ id: "image-1", name: "bad.svg", mimeType: "image/svg+xml", data: "aA==" }],
 			}),
 		).toThrow(/不支持的图片格式/);
-	});
-
-	test("validates and de-duplicates scoped model configuration", () => {
-		const input = {
-			agentInstanceId: "agent-1",
-			projectId: "project-1",
-			workItemId: "FEAT-001",
-			role: "coding",
-			models: [{ provider: "openai", modelId: "gpt-5", thinkingLevel: "high" }],
-		};
-		expect(parseSetAgentScopedModelsInput(input).models).toEqual(input.models);
-		expect(() => parseSetAgentScopedModelsInput({ ...input, models: [...input.models, ...input.models] })).toThrow(
-			/重复/,
-		);
 	});
 
 	test("validates global permission settings for common tool categories", () => {

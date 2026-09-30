@@ -16,7 +16,7 @@ test.beforeEach(async () => {
 			await mkdir(path.join(packageDir, "dist", "bundle"), { recursive: true });
 			await writeFile(path.join(packageDir, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent", version: "0.87.0", type: "module" }));
 			await writeFile(path.join(packageDir, "dist", "bundle", "cli.js"), "// fixture");
-			const names = ["settings", "model", "tree", "thinking", "scoped-models", "export", "import", "copy", "name", "session", "changelog", "hotkeys", "fork", "clone", "trust", "login", "logout", "new", "compact", "resume", "reload", "quit"];
+			const names = ["settings", "model", "tree", "thinking", "export", "copy", "name", "session", "changelog", "hotkeys", "fork", "clone", "trust", "new", "compact", "resume", "reload", "quit"];
 			await writeFile(path.join(packageDir, "dist", "core", "slash-commands.js"), `export const BUILTIN_SLASH_COMMANDS = ${JSON.stringify(names.map((name) => ({ name, description: `Pi ${name}` })))};`);
 			await writeFile(path.join(root, "active.json"), JSON.stringify({ installId, version: "0.87.0" }));
 		},

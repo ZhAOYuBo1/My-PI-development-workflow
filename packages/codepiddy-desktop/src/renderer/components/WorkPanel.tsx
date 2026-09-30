@@ -1,11 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceDirEntry, WorkspaceFileContent } from "@codepiddy/shared";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageContent } from "./message-content.tsx";
-import {
-	extractPanelPath,
-	formatPanelSize,
-	type ProjectableToolItem,
-} from "./work-panel.ts";
+import { extractPanelPath, formatPanelSize, type ProjectableToolItem } from "./work-panel.ts";
 
 const PANEL_MIN_WIDTH = 280;
 const PANEL_MAX_WIDTH = 720;
@@ -58,10 +54,7 @@ interface DirState {
 	error?: boolean;
 }
 
-type FileState =
-	| { status: "loading" }
-	| { status: "ready"; content: WorkspaceFileContent }
-	| { status: "error" };
+type FileState = { status: "loading" } | { status: "ready"; content: WorkspaceFileContent } | { status: "error" };
 
 export const WorkPanel = memo(function WorkPanel({
 	projectRoot,
@@ -258,8 +251,7 @@ export const WorkPanel = memo(function WorkPanel({
 	};
 
 	const renderPreview = (): React.ReactNode => {
-		if (!fileState || fileState.status === "loading")
-			return <div className="file-tree-note">加载中…</div>;
+		if (!fileState || fileState.status === "loading") return <div className="file-tree-note">加载中…</div>;
 		if (fileState.status === "error")
 			return (
 				<div className="work-panel-empty">

@@ -39,9 +39,9 @@ describe("project service", () => {
 		);
 		await expect(readdir(path.join(projectRoot, ".codepiddy", ".pi", "skills"))).resolves.toEqual([]);
 		// 审批策略是全局的（设置中心 -> <userData>/permissions/policy/），项目内不再生成副本
-		await expect(
-			readFile(path.join(projectRoot, ".codepiddy", "permissions.jsonc"), "utf8"),
-		).rejects.toMatchObject({ code: "ENOENT" });
+		await expect(readFile(path.join(projectRoot, ".codepiddy", "permissions.jsonc"), "utf8")).rejects.toMatchObject({
+			code: "ENOENT",
+		});
 	});
 
 	test("creates and archives an isolated feature work item", async () => {

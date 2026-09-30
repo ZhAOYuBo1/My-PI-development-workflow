@@ -71,11 +71,7 @@ describe("splitTurnEntries", () => {
 	});
 
 	test("keeps records after the final result with the tail", () => {
-		const turns = groupTranscriptIntoTurns([
-			item("u1", "user"),
-			item("a1", "assistant"),
-			item("t1", "tool"),
-		]);
+		const turns = groupTranscriptIntoTurns([item("u1", "user"), item("a1", "assistant"), item("t1", "tool")]);
 		const { head, middle, tail } = splitTurnEntries(turns[0]!);
 		expect(head.map((entry) => entry.item.id)).toEqual(["u1"]);
 		expect(middle).toEqual([]);

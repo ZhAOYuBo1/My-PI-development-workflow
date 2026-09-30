@@ -48,7 +48,8 @@ describe("permission settings", () => {
 				utimesSync(configPath, mtime, mtime);
 				mtime += 1;
 			};
-			const check = (tool: string) => manager.checkPermission(tool, { command: "npm run check" }, "FEAT-002 Coding Agent").state;
+			const check = (tool: string) =>
+				manager.checkPermission(tool, { command: "npm run check" }, "FEAT-002 Coding Agent").state;
 
 			// 「命令执行」拒绝时，PowerShell 必须一起拒绝，不能落到「其他工具」。
 			writePolicy({ ...DEFAULT_PERMISSION_DEFAULTS, bash: "deny" });
@@ -102,7 +103,9 @@ describe("permission settings", () => {
 				expect(manager.checkPermission("skill", { name: "openspec" }, agent).state).toBe("ask");
 			}
 			writePolicy({ ...narrowed, bash: "allow" });
-			expect(manager.checkPermission("bash", { command: "git status" }, "FEAT-002 Coding Agent").state).toBe("allow");
+			expect(manager.checkPermission("bash", { command: "git status" }, "FEAT-002 Coding Agent").state).toBe(
+				"allow",
+			);
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

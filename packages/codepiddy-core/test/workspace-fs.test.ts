@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -30,14 +30,7 @@ afterAll(() => {
 describe("listWorkspaceDir", () => {
 	test("lists dirs first, case-insensitive, with file sizes", async () => {
 		const entries = await listWorkspaceDir(root, "");
-		expect(entries.map((entry) => entry.name)).toEqual([
-			"empty",
-			"src",
-			"a.ts",
-			"app.exe",
-			"b.md",
-			"dot.png",
-		]);
+		expect(entries.map((entry) => entry.name)).toEqual(["empty", "src", "a.ts", "app.exe", "b.md", "dot.png"]);
 		expect(entries[0]).toMatchObject({ kind: "dir", size: 0 });
 		expect(entries.find((entry) => entry.name === "b.md")?.size).toBeGreaterThan(0);
 	});

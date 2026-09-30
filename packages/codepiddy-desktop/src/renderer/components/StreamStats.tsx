@@ -1,9 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import {
-	formatFinalStats,
-	formatStreamingStats,
-	type FinalStreamStats,
-} from "./stream-stats.ts";
+import { type FinalStreamStats, formatFinalStats, formatStreamingStats } from "./stream-stats.ts";
 
 export const StreamStats = memo(function StreamStats({
 	status,

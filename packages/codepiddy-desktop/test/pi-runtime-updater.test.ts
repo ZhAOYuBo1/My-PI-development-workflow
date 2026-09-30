@@ -131,6 +131,35 @@ describe("Pi runtime update", () => {
 		expect(await readdir(path.join(userDataPath, "pi-updates"))).toEqual([]);
 	});
 
+	// 探针拒绝激活时最容易出的错是「顺手把 active.json 也改了」，
+	// 那样下次启动就换到了一个起不来的 Pi。探针现在只校验握手与原生命令，
+	// 但「拒绝即不落盘」这条不变量与拒绝原因无关，仍然要锁住。
+	test("a rejected update leaves the previously activated version in place", async () => {
+		const { updater, options, userDataPath } = await fixture({ latest: "0.86.0" });
+		await updater.installLatest();
+		const activePath = path.join(userDataPath, "pi-updates", "active.json");
+		const before = await readFile(activePath, "utf8");
+
+		const incompatible = new PiRuntimeUpdater({
+			...options,
+			requestLatest: async () => "0.87.0",
+			probe: async () => {
+				throw new Error("Pi 更新校验失败：RPC 命令列表为空");
+			},
+		});
+		await incompatible.initialize();
+		await expect(incompatible.installLatest()).rejects.toThrow("Pi 更新校验失败");
+		expect(await readFile(activePath, "utf8")).toBe(before);
+		expect(incompatible.status().currentVersion).toBe("0.86.0");
+
+		const nextLaunch = new PiRuntimeUpdater(options);
+		await nextLaunch.initialize();
+		expect(nextLaunch.getLaunchRuntime()?.version).toBe("0.86.0");
+		expect(
+			(await readdir(path.join(userDataPath, "pi-updates"))).filter((name) => name.startsWith("staging-")),
+		).toEqual([]);
+	});
+
 	test("startup failure automatically rolls back to the previous installed version", async () => {
 		const { updater, options } = await fixture({ latest: "0.86.0" });
 		await updater.installLatest();

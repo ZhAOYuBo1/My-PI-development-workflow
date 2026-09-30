@@ -66,7 +66,9 @@ export function formatTurnElapsed(ms: number): string {
  * 把一轮切成三段：用户消息（永展）、中间过程（可折）、最终结果（永展）。
  * 一轮内最后一条 AI 回复即最终结果；它之后的记录（若有）同属永展段。
  */
-export function splitTurnEntries<T extends { type: string }>(turn: TranscriptTurn<T>): {
+export function splitTurnEntries<T extends { type: string }>(
+	turn: TranscriptTurn<T>,
+): {
 	head: TurnEntry<T>[];
 	middle: TurnEntry<T>[];
 	tail: TurnEntry<T>[];

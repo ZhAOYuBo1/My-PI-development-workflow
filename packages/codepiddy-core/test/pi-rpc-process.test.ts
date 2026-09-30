@@ -34,30 +34,6 @@ describe("PiRpcProcess prompting", () => {
 			images: [{ type: "image", mimeType: "image/png", data: "aA==" }],
 		});
 	});
-	test("gets and replaces the Pi scoped model list", async () => {
-		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
-		const models = [{ provider: "openai", modelId: "gpt-5", thinkingLevel: "high" }];
-		const send = vi
-			.fn()
-			.mockResolvedValueOnce({
-				type: "response",
-				command: "get_scoped_models",
-				success: true,
-				data: { models },
-			})
-			.mockResolvedValueOnce({
-				type: "response",
-				command: "set_scoped_models",
-				success: true,
-				data: { models },
-			});
-		(rpc as unknown as PiRpcPrivate).send = send;
-
-		expect(await rpc.getScopedModels()).toEqual(models);
-		expect(await rpc.setScopedModels(models)).toEqual(models);
-		expect(send).toHaveBeenNthCalledWith(1, { type: "get_scoped_models" });
-		expect(send).toHaveBeenNthCalledWith(2, { type: "set_scoped_models", models });
-	});
 	test("requests Pi session statistics for context usage", async () => {
 		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
 		const send = vi.fn(async () => ({
@@ -79,27 +55,17 @@ describe("PiRpcProcess prompting", () => {
 		expect(rpcRequestTimeoutMs("abort")).toBe(120_000);
 		expect(rpcRequestTimeoutMs("compact")).toBe(600_000);
 	});
-	test("forwards session resume and import commands", async () => {
+	test("forwards session resume", async () => {
 		const rpc = new PiRpcProcess({ command: "node", args: [], cwd: process.cwd() });
-		const send = vi
-			.fn()
-			.mockResolvedValueOnce({
-				type: "response",
-				command: "switch_session",
-				success: true,
-				data: { cancelled: false },
-			})
-			.mockResolvedValueOnce({
-				type: "response",
-				command: "import_jsonl",
-				success: true,
-				data: { cancelled: false },
-			});
+		const send = vi.fn().mockResolvedValueOnce({
+			type: "response",
+			command: "switch_session",
+			success: true,
+			data: { cancelled: false },
+		});
 		(rpc as unknown as PiRpcPrivate).send = send;
 
 		expect(await rpc.switchSession("session.jsonl")).toEqual({ cancelled: false });
-		expect(await rpc.importSession("import.jsonl")).toEqual({ cancelled: false });
 		expect(send).toHaveBeenNthCalledWith(1, { type: "switch_session", sessionPath: "session.jsonl" });
-		expect(send).toHaveBeenNthCalledWith(2, { type: "import_jsonl", inputPath: "import.jsonl" });
 	});
 });

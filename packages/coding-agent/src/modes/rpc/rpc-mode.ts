@@ -25,7 +25,6 @@ import {
 	waitForRawStdoutBackpressure,
 	writeRawStdout,
 } from "../../core/output-guard.ts";
-import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { type Theme, theme } from "../interactive/theme/theme.ts";
 import { toJsonEvent } from "../json-event.ts";
@@ -493,41 +492,6 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "get_available_models", { models });
 			}
 
-			case "get_scoped_models": {
-				const models = session.scopedModels.map((scoped) => ({
-					provider: scoped.model.provider,
-					modelId: scoped.model.id,
-					...(scoped.thinkingLevel ? { thinkingLevel: scoped.thinkingLevel } : {}),
-				}));
-				return success(id, "get_scoped_models", { models });
-			}
-
-			case "set_scoped_models": {
-				const availableModels = session.modelRuntime.getAvailableSnapshot();
-				const availableById = new Map<string, (typeof availableModels)[number]>(
-					availableModels.map((model) => [`${model.provider}\0${model.id}`, model] as const),
-				);
-				const seen = new Set<string>();
-				const scopedModels = command.models.map((requested) => {
-					const key = `${requested.provider}\0${requested.modelId}`;
-					if (seen.has(key)) throw new Error(`Duplicate scoped model: ${requested.provider}/${requested.modelId}`);
-					seen.add(key);
-					const model = availableById.get(key);
-					if (!model) throw new Error(`Model not found: ${requested.provider}/${requested.modelId}`);
-					return { model, ...(requested.thinkingLevel ? { thinkingLevel: requested.thinkingLevel } : {}) };
-				});
-				const allModelsSelected =
-					scopedModels.length === availableModels.length &&
-					availableModels.every((model) => seen.has(`${model.provider}\0${model.id}`));
-				session.setScopedModels(allModelsSelected ? [] : scopedModels);
-				const models = session.scopedModels.map((scoped) => ({
-					provider: scoped.model.provider,
-					modelId: scoped.model.id,
-					...(scoped.thinkingLevel ? { thinkingLevel: scoped.thinkingLevel } : {}),
-				}));
-				return success(id, "set_scoped_models", { models });
-			}
-
 			// =================================================================
 			// Thinking
 			// =================================================================
@@ -646,12 +610,6 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "switch_session", result);
 			}
 
-			case "import_jsonl": {
-				const result = await runtimeHost.importFromJsonl(command.inputPath, command.cwdOverride);
-				if (!result.cancelled) await rebindSession();
-				return success(id, "import_jsonl", result);
-			}
-
 			case "fork": {
 				const result = await runtimeHost.fork(command.entryId);
 				if (!result.cancelled) {
@@ -709,66 +667,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "set_session_name");
 			}
 
-			case "reload": {
-				await session.reload();
-				return success(id, "reload");
-			}
-
 			// =================================================================
-			// Authentication
-			// =================================================================
-
-			case "get_auth_providers": {
-				const providers = session.modelRuntime.getProviders().map((provider) => {
-					const status = session.modelRuntime.getProviderAuthStatus(provider.id);
-					return {
-						id: provider.id,
-						name: provider.name,
-						oauth: Boolean(provider.auth.oauth),
-						apiKey: Boolean(provider.auth.apiKey),
-						configured: status.configured,
-						...(status.label || status.source ? { source: status.label ?? status.source } : {}),
-					};
-				});
-				return success(id, "get_auth_providers", { providers });
-			}
-
-			case "login_provider": {
-				const provider = session.modelRuntime
-					.getProviders()
-					.find((candidate) => candidate.id === command.providerId);
-				if (!provider?.auth.oauth)
-					return error(id, "login_provider", `OAuth login is unavailable for ${command.providerId}`);
-				const ui = createExtensionUIContext();
-				await session.modelRuntime.login(command.providerId, "oauth", {
-					prompt: async (prompt) => {
-						if (prompt.type === "select") {
-							const labels = prompt.options.map((option) => option.label);
-							const selected = await ui.select(prompt.message, labels, { signal: prompt.signal });
-							const option = prompt.options.find((candidate) => candidate.label === selected);
-							if (!option) throw new Error("Login cancelled");
-							return option.id;
-						}
-						const value = await ui.input(prompt.message, prompt.placeholder, { signal: prompt.signal });
-						if (value === undefined) throw new Error("Login cancelled");
-						return value;
-					},
-					notify: (event) => {
-						if (event.type === "auth_url")
-							ui.notify(`${event.instructions ?? "Open this URL to authenticate:"}\n${event.url}`, "info");
-						else if (event.type === "device_code")
-							ui.notify(`Open ${event.verificationUri} and enter code: ${event.userCode}`, "info");
-						else ui.notify(event.message, "info");
-					},
-				});
-				return success(id, "login_provider");
-			}
-
-			case "logout_provider": {
-				await session.modelRuntime.logout(command.providerId);
-				return success(id, "logout_provider");
-			}
-
 			// Messages
 			// =================================================================
 
@@ -781,38 +680,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// =================================================================
 
 			case "get_commands": {
-				const desktopSupportedBuiltins = new Set([
-					"settings",
-					"scoped-models",
-					"model",
-					"tree",
-					"thinking",
-					"export",
-					"import",
-					"copy",
-					"name",
-					"session",
-					"changelog",
-					"hotkeys",
-					"fork",
-					"clone",
-					"new",
-					"compact",
-					"resume",
-					"trust",
-					"login",
-					"logout",
-					"quit",
-					"reload",
-				]);
-				const commands: RpcSlashCommand[] = BUILTIN_SLASH_COMMANDS.filter((command) =>
-					desktopSupportedBuiltins.has(command.name),
-				).map((command) => ({
-					name: command.name,
-					description: command.description,
-					...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
-					source: "builtin" as const,
-				}));
+				const commands: RpcSlashCommand[] = [];
 
 				for (const command of session.extensionRunner.getRegisteredCommands()) {
 					commands.push({
@@ -834,7 +702,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 
 				for (const skill of session.resourceLoader.getSkills().skills) {
 					commands.push({
-						name: skill.name.startsWith("skill:") ? skill.name : `skill:${skill.name}`,
+						name: `skill:${skill.name}`,
 						description: skill.description,
 						source: "skill",
 						sourceInfo: skill.sourceInfo,

@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
-import { classifyToolFailure, toolFailureGuidance, toolFailureLabel } from "./tool-failure-utils.ts";
 import { formatElapsed } from "./stream-stats.ts";
-import { resolveToolExpanded, toggleToolPin, type ToolPinMode } from "./tool-collapse.ts";
+import { resolveToolExpanded, type ToolPinMode, toggleToolPin } from "./tool-collapse.ts";
+import { classifyToolFailure, toolFailureGuidance, toolFailureLabel } from "./tool-failure-utils.ts";
 import { ToolIcon, toolIconForTool } from "./tool-icons.tsx";
 
 export interface ToolCallCardItem {
@@ -89,8 +89,8 @@ export const ToolCallCard = memo(function ToolCallCard({ item }: { item: ToolCal
 					) : null}
 					{item.text ? (
 						<>
-					<small>结果</small>
-						<ToolCallOutput item={item} showAll={showAll} />
+							<small>结果</small>
+							<ToolCallOutput item={item} showAll={showAll} />
 							{truncated ? (
 								<button
 									className="tool-show-all"

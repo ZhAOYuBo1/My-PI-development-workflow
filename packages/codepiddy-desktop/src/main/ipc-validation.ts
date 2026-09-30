@@ -3,7 +3,6 @@ import type {
 	AgentImageAttachment,
 	AgentInstanceLocator,
 	AgentRole,
-	AgentScopedModel,
 	AgentUiState,
 	ArchiveWorkItemInput,
 	CreateAgentInput,
@@ -17,10 +16,8 @@ import type {
 	ProjectUiState,
 	RenameWorkItemInput,
 	ResetAgentInput,
-	RoleModelDefault,
 	SendAgentPromptInput,
 	SetAgentModelInput,
-	SetAgentScopedModelsInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
 } from "@codepiddy/shared";
@@ -189,29 +186,6 @@ export function parseSetAgentModelInput(value: unknown): SetAgentModelInput {
 	};
 }
 
-export function parseSetAgentScopedModelsInput(value: unknown): SetAgentScopedModelsInput {
-	const input = record(value, "Set Agent Scoped Models");
-	if (!Array.isArray(input.models)) throw new Error("Scoped Models 必须是数组");
-	if (input.models.length > 256) throw new Error("Scoped Models 数量过多");
-	const seen = new Set<string>();
-	const models = input.models.map((item): AgentScopedModel => {
-		const model = record(item, "Scoped Model");
-		const provider = text(model.provider, "Provider", 200);
-		const modelId = text(model.modelId, "Model ID", 300);
-		const key = `${provider}\0${modelId}`;
-		if (seen.has(key)) throw new Error(`Scoped Model 重复：${provider}/${modelId}`);
-		seen.add(key);
-		return {
-			provider,
-			modelId,
-			...(model.thinkingLevel === undefined
-				? {}
-				: { thinkingLevel: text(model.thinkingLevel, "Thinking Level", 32) }),
-		};
-	});
-	return { ...parseAgentLocator(input), models };
-}
-
 export function parseSetAgentThinkingInput(value: unknown): SetAgentThinkingInput {
 	const input = record(value, "Set Thinking");
 	return { ...parseAgentLocator(input), level: text(input.level, "Thinking Level", 32) };
@@ -282,17 +256,6 @@ export function parseInvokeAgentBuiltinCommandInput(value: unknown): InvokeAgent
 		...parseAgentLocator(input),
 		name: text(input.name, "命令名称", 200),
 		args: text(input.args, "命令参数", 20_000, true),
-	};
-}
-
-export function parseRoleModelDefault(value: unknown): RoleModelDefault {
-	const input = record(value, "Role Model Default");
-	return {
-		role: role(input.role),
-		provider: text(input.provider, "Provider", 200),
-		modelId: text(input.modelId, "Model ID", 300),
-		modelName: text(input.modelName, "Model Name", 300),
-		thinkingLevel: text(input.thinkingLevel, "Thinking Level", 32),
 	};
 }
 

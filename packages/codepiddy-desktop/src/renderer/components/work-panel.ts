@@ -30,8 +30,7 @@ export function parseToolArgs(args: string): Record<string, unknown> {
 	if (!args) return {};
 	try {
 		const value: unknown = JSON.parse(args);
-		if (typeof value === "object" && value !== null && !Array.isArray(value))
-			return value as Record<string, unknown>;
+		if (typeof value === "object" && value !== null && !Array.isArray(value)) return value as Record<string, unknown>;
 	} catch {}
 	return {};
 }

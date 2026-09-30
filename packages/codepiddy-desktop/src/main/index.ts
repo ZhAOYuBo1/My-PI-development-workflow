@@ -6,16 +6,16 @@ import {
 	archiveWorkItem,
 	createWorkItem,
 	deleteWorkItem,
+	listWorkspaceDir,
 	openProject,
 	PiRpcProcess,
 	ProjectWriteLeaseManager,
 	readRoleProfile,
+	readWorkspaceFile,
 	renameWorkItem,
 	restoreWorkItem,
 	type StoredAgentInstance,
 	searchProjectFiles,
-	listWorkspaceDir,
-	readWorkspaceFile,
 } from "@codepiddy/core";
 import type {
 	AgentBuiltinCommandResult,
@@ -26,7 +26,6 @@ import type {
 	AgentModelOption,
 	AgentModelSelection,
 	AgentRole,
-	AgentScopedModel,
 	AgentSessionNode,
 	AgentSessionSnapshot,
 	ArchiveWorkItemInput,
@@ -40,14 +39,12 @@ import type {
 	ResetAgentInput,
 	SendAgentPromptInput,
 	SetAgentModelInput,
-	SetAgentScopedModelsInput,
 	SetAgentThinkingInput,
 } from "@codepiddy/shared";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
 import {
 	assertPathInside,
 	parseAgentLocator,
-	parseAgentRole,
 	parseAgentUiState,
 	parseArchiveWorkItemInput,
 	parseBoundedText,
@@ -62,11 +59,9 @@ import {
 	parseProjectUiState,
 	parseRenameWorkItemInput,
 	parseResetAgentInput,
-	parseRoleModelDefault,
 	parseRoleSkillAssignmentsInput,
 	parseSendAgentPromptInput,
 	parseSetAgentModelInput,
-	parseSetAgentScopedModelsInput,
 	parseSetAgentThinkingInput,
 } from "./ipc-validation.ts";
 import { loadPiBuiltinCommands, mergePiCommands } from "./pi-builtin-commands.ts";
@@ -93,12 +88,10 @@ const channels = {
 	renameWorkItem: "codepiddy:work-item:rename",
 	deleteWorkItem: "codepiddy:work-item:delete",
 	getAgentModelSelection: "codepiddy:agent:model:get",
-	getAgentScopedModels: "codepiddy:agent:scoped-models:get",
 	getAgentCommands: "codepiddy:agent:commands:get",
 	getProjectWriteLeaseStatus: "codepiddy:write-lease:get",
 	clearStaleProjectWriteLease: "codepiddy:write-lease:clear-stale",
 	setAgentModel: "codepiddy:agent:model:set",
-	setAgentScopedModels: "codepiddy:agent:scoped-models:set",
 	setAgentThinking: "codepiddy:agent:thinking:set",
 	listRecentProjects: "codepiddy:project:recent:list",
 	getStartupProject: "codepiddy:project:startup",
@@ -122,11 +115,8 @@ const channels = {
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
 	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
 	settingsOpenBuiltinSkills: "codepiddy:settings:builtin-skills:open",
-	settingsGetRoleDefaults: "codepiddy:settings:role-models:get",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
-	settingsSetRoleDefault: "codepiddy:settings:role-models:set",
 	settingsSetPermissions: "codepiddy:settings:permissions:set",
-	settingsClearRoleDefault: "codepiddy:settings:role-models:clear",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
 	settingsSaveShell: "codepiddy:settings:shell:save",
 	settingsStatus: "codepiddy:settings:status",
@@ -454,12 +444,20 @@ class AgentManager {
 				source: command.source,
 			}),
 		);
-		if (remote.some((command) => command.source === "builtin")) return mergePiCommands(remote, []);
 		const packageDir =
 			this.piRuntimeUpdater.getLaunchRuntime()?.packageDir ??
 			(app.isPackaged
 				? path.join(this.repositoryRoot, "coding-agent-package")
 				: path.join(this.repositoryRoot, "packages", "coding-agent"));
+		// stock Pi 的 `get_commands` 只返回扩展与 Skill，不含内置命令，所以内置项
+		// 一律走 `loadPiBuiltinCommands` —— 它直接读当前运行的那份 Pi 的
+		// slash-commands.js，不碰 Pi 源码，因此用户从 npm 升级后菜单依然是全的。
+		return remote.some((command) => command.source === "builtin")
+			? mergePiCommands(remote, [])
+			: mergePiCommands(remote, await this.piBuiltinCommands(packageDir));
+	}
+
+	private async piBuiltinCommands(packageDir: string): Promise<AgentCommandOption[]> {
 		let builtins = this.builtinCommandsCache.get(packageDir);
 		if (!builtins) {
 			builtins = await loadPiBuiltinCommands(
@@ -468,7 +466,7 @@ class AgentManager {
 			);
 			this.builtinCommandsCache.set(packageDir, builtins);
 		}
-		return mergePiCommands(remote, builtins);
+		return builtins;
 	}
 
 	async getModelSelection(input: AgentInstanceLocator): Promise<AgentModelSelection> {
@@ -505,16 +503,6 @@ class AgentManager {
 		const process = await this.ensureProcess(await this.resolve(input));
 		await process.setModel(input.provider, input.modelId);
 		return this.getModelSelection(input);
-	}
-
-	async getScopedModels(input: AgentInstanceLocator): Promise<AgentScopedModel[]> {
-		const process = await this.ensureProcess(await this.resolve(input));
-		return process.getScopedModels();
-	}
-
-	async setScopedModels(input: SetAgentScopedModelsInput): Promise<AgentScopedModel[]> {
-		const process = await this.ensureProcess(await this.resolve(input));
-		return process.setScopedModels(input.models);
 	}
 
 	async setThinking(input: SetAgentThinkingInput): Promise<AgentModelSelection> {
@@ -752,26 +740,22 @@ class AgentManager {
 			await broadcastHistory();
 			return { message: "已创建新的 Pi Session。", sessionReset: true };
 		}
-		if (input.name === "resume" || input.name === "import") {
+		if (input.name === "resume") {
 			let sessionPath = args;
 			if (!sessionPath) {
 				const selected = await dialog.showOpenDialog({
-					title: input.name === "resume" ? "恢复 Pi Session" : "导入 Pi Session",
+					title: "恢复 Pi Session",
 					properties: ["openFile"],
 					filters: [{ name: "Pi Session", extensions: ["jsonl"] }],
 				});
 				sessionPath = selected.filePaths[0] ?? "";
-				if (selected.canceled || !sessionPath)
-					return { message: `${input.name === "resume" ? "恢复" : "导入"} Session 已取消。` };
+				if (selected.canceled || !sessionPath) return { message: "恢复 Session 已取消。" };
 			}
-			const result =
-				input.name === "resume"
-					? await process.switchSession(sessionPath)
-					: await process.importSession(sessionPath);
-			if (result.cancelled) return { message: `${input.name === "resume" ? "恢复" : "导入"} Session 已取消。` };
+			const result = await process.switchSession(sessionPath);
+			if (result.cancelled) return { message: "恢复 Session 已取消。" };
 			await broadcastHistory();
 			return {
-				message: `已${input.name === "resume" ? "恢复" : "导入"} Pi Session：${sessionPath}`,
+				message: `已恢复 Pi Session：${sessionPath}`,
 				sessionReset: true,
 			};
 		}
@@ -789,43 +773,14 @@ class AgentManager {
 			shell.showItemInFolder(exportedPath);
 			return { message: `Session 已导出：${exportedPath}` };
 		}
-		if (input.name === "login") {
-			const providers = await process.getAuthProviders();
-			if (!args) {
-				const lines = providers.map(
-					(provider) =>
-						`${provider.id} · ${provider.name} · ${provider.configured ? `已配置${provider.source ? ` (${provider.source})` : ""}` : provider.oauth ? "可 OAuth 登录" : "请配置 API Key"}`,
-				);
-				return { message: `可用 Provider：\n${lines.join("\n")}\n\n用法：/login <provider-id>` };
-			}
-			const provider = providers.find(
-				(candidate) => candidate.id === args || candidate.name.toLowerCase() === args.toLowerCase(),
-			);
-			if (!provider) throw new Error(`Provider 不存在：${args}`);
-			if (!provider.oauth)
-				throw new Error(
-					`${provider.name} 不支持 OAuth 登录；请在 ~/.pi/agent/auth.json 或环境变量中配置 API Key。`,
-				);
-			await process.loginProvider(provider.id);
-			return { message: `${provider.name} 登录成功。`, commandsChanged: true };
-		}
-		if (input.name === "logout") {
-			const providers = await process.getAuthProviders();
-			if (!args) {
-				const configured = providers.filter((provider) => provider.configured);
-				return {
-					message:
-						configured.length > 0
-							? `已配置 Provider：\n${configured.map((provider) => `${provider.id} · ${provider.name}`).join("\n")}\n\n用法：/logout <provider-id>`
-							: "当前没有已配置的 Provider。",
-				};
-			}
-			const provider = providers.find(
-				(candidate) => candidate.id === args || candidate.name.toLowerCase() === args.toLowerCase(),
-			);
-			if (!provider) throw new Error(`Provider 不存在：${args}`);
-			await process.logoutProvider(provider.id);
-			return { message: `${provider.name} 已登出。`, commandsChanged: true };
+		if (input.name === "login" || input.name === "logout") {
+			// 这两个命令原本依赖我们对 Pi 源码的私有补丁（`get_auth_providers` /
+			// `login_provider` / `logout_provider`）。补丁已整体删除，所以外壳不再
+			// 拥有发起 OAuth 登录的通路 —— 扩展 API 只能*注册* OAuth provider，
+			// 不能*发起*登录。菜单里不再列出这两个命令，这里只回答手动输入的情况。
+			return {
+				message: `/${input.name} 不可用：CodePIddy 不再修改 Pi 源码，因此无法代你发起 OAuth 登录。\n\n请改用以下方式配置 Provider：\n· API Key：写入环境变量，或放入 Pi 的 auth.json（~/.pi/agent/auth.json）\n· 恢复某个已登录的 Pi：重启 CodePIddy 后 Pi 会自行读取已有凭据`,
+			};
 		}
 		if (input.name === "trust") {
 			return { message: "CodePIddy 以 --approve 模式启动当前 Pi 项目；项目资源已在本次运行中允许加载。" };
@@ -859,8 +814,19 @@ class AgentManager {
 			return { message: "正在退出 CodePIddy。" };
 		}
 		if (input.name === "reload") {
-			await process.reload();
-			return { message: "Pi Extensions、Skills、Prompts 和 Context 已重新加载。", commandsChanged: true };
+			// 原本靠私有 `reload` 命令让 Pi 原地重载 Extensions/Skills/Prompts。
+			// 补丁删除后改走重启：Pi 以 `--session-dir <agent.sessions> --continue`
+			// 启动，每个 Agent 的会话目录独立，所以重启后 `--continue` 恢复的正是
+			// 当前这个会话。
+			//
+			// 代价是进行中的回复会随进程一起没了，所以先做空闲门禁：只在 Agent 空闲时重启。
+			// 这不是可有可无的体验优化 —— 即便用原生 `reload()`，它内部也会
+			// `emitSessionShutdownEvent` + `_buildRuntime` 拆掉重建运行时，中途调用一样不安全。
+			if (agent.status === "running" || agent.status === "waiting") {
+				throw new Error("Agent 正在输出或等待授权，此时重启会丢掉当前回复。请先停止它再执行 /reload。");
+			}
+			await this.reconnect(input);
+			return { message: "Pi 已重启，Extensions、Skills、Prompts 和 Context 已重新加载。", commandsChanged: true };
 		}
 		throw new Error(`当前桌面客户端不支持 Pi 内置命令：/${input.name}`);
 	}
@@ -895,9 +861,8 @@ class AgentManager {
 				? path.join(this.repositoryRoot, "coding-agent-package", "dist", "bundle", "cli.js")
 				: path.join(this.repositoryRoot, "packages", "coding-agent", "src", "cli.ts"));
 		const nodeExecutable = process.env.CODEPIDDY_NODE_EXECUTABLE ?? (packaged ? process.execPath : "node");
-		const [tavilyApiKey, roleModelDefault, roleSkillAssignments] = await Promise.all([
+		const [tavilyApiKey, roleSkillAssignments] = await Promise.all([
 			this.settingsStore.getTavilyApiKey(),
-			this.settingsStore.getRoleModelDefault(agent.role),
 			this.settingsStore.getRoleSkillAssignments(),
 		]);
 		const roleSkillPaths = await resolveRoleSkillPaths(
@@ -1035,26 +1000,6 @@ class AgentManager {
 			handshakeComplete = true;
 			this.processes.set(agent.id, rpc);
 			this.processAgents.set(agent.id, agent);
-			if (roleModelDefault) {
-				try {
-					await rpc.setModel(roleModelDefault.provider, roleModelDefault.modelId);
-					const levels = await rpc.getAvailableThinkingLevels();
-					if (levels.includes(roleModelDefault.thinkingLevel)) {
-						await rpc.setThinkingLevel(roleModelDefault.thinkingLevel);
-					}
-				} catch (error) {
-					this.broadcast({
-						agentInstanceId: agent.id,
-						projectId: agent.projectId,
-						workItemId: agent.workItemId,
-						role: agent.role,
-						event: {
-							type: "agent_configuration_warning",
-							error: `无法应用角色默认模型 ${roleModelDefault.provider}/${roleModelDefault.modelId}：${error instanceof Error ? error.message : String(error)}`,
-						},
-					});
-				}
-			}
 			const messages = await rpc.getMessages();
 			this.broadcast({
 				agentInstanceId: agent.id,
@@ -1355,9 +1300,6 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.getAgentModelSelection, (_event, raw: unknown) =>
 		agentManager.getModelSelection(parseAgentLocator(raw)),
 	);
-	ipcMain.handle(channels.getAgentScopedModels, (_event, raw: unknown) =>
-		agentManager.getScopedModels(parseAgentLocator(raw)),
-	);
 	ipcMain.handle(channels.getAgentCommands, (_event, raw: unknown) =>
 		agentManager.getCommands(parseAgentLocator(raw)),
 	);
@@ -1369,9 +1311,6 @@ function registerIpcHandlers(
 	);
 	ipcMain.handle(channels.setAgentModel, (_event, raw: unknown) =>
 		agentManager.setModel(parseSetAgentModelInput(raw)),
-	);
-	ipcMain.handle(channels.setAgentScopedModels, (_event, raw: unknown) =>
-		agentManager.setScopedModels(parseSetAgentScopedModelsInput(raw)),
 	);
 	ipcMain.handle(channels.setAgentThinking, (_event, raw: unknown) =>
 		agentManager.setThinking(parseSetAgentThinkingInput(raw)),
@@ -1417,10 +1356,7 @@ function registerIpcHandlers(
 		searchProjectFiles(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawQuery, "搜索内容", 500, true)),
 	);
 	ipcMain.handle(channels.listWorkspaceDir, (_event, rawProjectRoot: unknown, rawDir: unknown) =>
-		listWorkspaceDir(
-			requireOpenProjectRoot(rawProjectRoot),
-			parseBoundedText(rawDir, "目录", 1000, true),
-		),
+		listWorkspaceDir(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawDir, "目录", 1000, true)),
 	);
 	ipcMain.handle(channels.readWorkspaceFile, (_event, rawProjectRoot: unknown, rawPath: unknown) =>
 		readWorkspaceFile(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawPath, "文件路径", 1000)),
@@ -1480,13 +1416,6 @@ function registerIpcHandlers(
 		const error = await shell.openPath(directory);
 		if (error) throw new Error(error);
 	});
-	ipcMain.handle(channels.settingsGetRoleDefaults, () => settingsStore.getRoleModelDefaults());
-	ipcMain.handle(channels.settingsSetRoleDefault, (_event, raw: unknown) =>
-		settingsStore.setRoleModelDefault(parseRoleModelDefault(raw)),
-	);
-	ipcMain.handle(channels.settingsClearRoleDefault, (_event, rawRole: unknown) =>
-		settingsStore.clearRoleModelDefault(parseAgentRole(rawRole)),
-	);
 	ipcMain.handle(channels.openWorkItemFolder, async (_event, raw: unknown) => {
 		const input = validateWorkItemInput(raw);
 		const project = await openProject(input.projectRoot);

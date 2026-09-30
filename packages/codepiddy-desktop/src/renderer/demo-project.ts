@@ -16,8 +16,8 @@ export const demoProject: ProjectSummary = {
 					title: "增加登录功能",
 					description: "支持账号密码登录，并为后续第三方登录预留扩展点。",
 					status: "active",
-				createdAt: "2026-09-16T02:00:00.000Z",
-				directoryPath: "C:\\Projects\\CodePIddy\\.codepiddy\\requirements\\FEAT-001",
+					createdAt: "2026-09-16T02:00:00.000Z",
+					directoryPath: "C:\\Projects\\CodePIddy\\.codepiddy\\requirements\\FEAT-001",
 					agentSlots: [
 						{
 							role: "requirement-analysis",
@@ -44,7 +44,7 @@ export const demoProject: ProjectSummary = {
 							status: "idle",
 							currentInstanceId: "RA-002",
 						},
-					{ role: "coding", displayName: "Coding Agent", status: "not-created" },
+						{ role: "coding", displayName: "Coding Agent", status: "not-created" },
 						{ role: "review", displayName: "Review Agent", status: "not-created" },
 					],
 				},

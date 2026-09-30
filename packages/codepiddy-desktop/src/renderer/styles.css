@@ -853,38 +853,18 @@ button { color: inherit; }
 @media (pointer: coarse) {
   .message-copy { opacity: 1; }
 }
-.role-defaults {
-  display: grid;
-  gap: 12px;
-  padding: 16px 0;
-  border-top: 1px solid #e8e8e3;
-  border-bottom: 1px solid #e8e8e3;
-}
-.role-defaults h3 { margin: 0 0 4px; font-size: 15px; }
-.role-defaults p { margin: 0; color: #858580; font-size: 11px; }
-.role-default-list { display: grid; overflow: hidden; border: 1px solid #e1e1dc; border-radius: 10px; background: #fff; }
-.role-default-row {
-  display: grid;
-  grid-template-columns: minmax(130px, .7fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 38px;
-  padding: 7px 10px;
-  border-bottom: 1px solid #ededE9;
-}
-.role-default-row:last-child { border-bottom: 0; }
-.role-default-row span { color: #555551; font-size: 12px; }
-.role-default-row strong { min-width: 0; overflow: hidden; color: #777772; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.role-default-row button { padding: 4px 7px; border: 0; border-radius: 6px; background: transparent; color: #995149; font-size: 10px; cursor: pointer; }
-.role-default-row button:hover { background: #f6e9e6; }
+/* footer 是弹窗玻璃的一部分，不是一个独立面板。
+   之前这里写死了 background:#fff 加一条 border-top，而 .model-picker 本身是
+   76% 透明的玻璃（见下方 Layered neutral glass 一节），于是在半透明面板上切出
+   一条不透明的白色横带 + 一根实线，视觉上像是弹窗被切成了两半。
+   「关闭」是收尾动作，之前左边还有状态文字和两个按钮，space-between 把它顶到了
+   最右；那些按钮删掉后只剩它一个子元素，space-between 就把它甩到了左边。 */
 .model-picker-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
-  padding: 12px 22px 16px;
-  border-top: 1px solid #e5e5e1;
-  background: #fff;
+  padding: 10px 18px 14px;
 }
 .model-picker-footer .permission-cancel { margin: 0; padding: 8px 10px; }
 .message-image-grid {
@@ -901,70 +881,6 @@ button { color: inherit; }
   border-radius: 9px;
   object-fit: cover;
   background: #fff;
-}
-.scoped-model-picker { width: min(720px, 100%); }
-.scoped-model-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 20px 22px 0;
-}
-.scoped-model-heading h2 { margin: 0 0 5px; padding: 0; }
-.scoped-model-heading p { max-width: 62ch; margin: 0; color: #74746f; font-size: 11px; line-height: 1.5; }
-.scoped-model-heading > span {
-  flex: 0 0 auto;
-  padding: 5px 8px;
-  border: 1px solid #d9ddd8;
-  border-radius: 999px;
-  background: #eef1ed;
-  color: #536358;
-  font-size: 10px;
-  font-weight: 650;
-}
-.scoped-model-order { padding: 12px 22px 5px; }
-.scoped-model-order > strong { display: block; margin-bottom: 7px; color: #6d6d68; font-size: 10px; }
-.scoped-model-order > div { display: grid; max-height: 138px; overflow-y: auto; border: 1px solid #e0e0dc; border-radius: 9px; background: #fff; }
-.scoped-model-order > div > div {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) minmax(80px, .45fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 5px 8px;
-  border-bottom: 1px solid #efefec;
-}
-.scoped-model-order > div > div:last-child { border-bottom: 0; }
-.scoped-model-order span { color: #969691; font-size: 10px; font-variant-numeric: tabular-nums; }
-.scoped-model-order strong { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.scoped-model-order small { min-width: 0; overflow: hidden; color: #888883; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.scoped-model-order button { padding: 4px 6px; border: 0; border-radius: 5px; background: #f0f0ed; color: #60605c; font-size: 9px; cursor: pointer; }
-.scoped-model-order button:hover:not(:disabled) { background: #e6e6e2; color: #292928; }
-.scoped-model-order button:disabled { opacity: .35; cursor: default; }
-.scoped-model-list section > button { grid-template-columns: 20px minmax(0, 1fr) minmax(110px, .7fr); }
-.scope-check {
-  position: relative;
-  width: 15px;
-  height: 15px;
-  border: 1px solid #c9c9c4;
-  border-radius: 4px;
-  background: #fff;
-}
-.scoped-model-list button.selected .scope-check { border-color: #526958; background: #526958; }
-.scoped-model-list button.selected .scope-check::after {
-  position: absolute;
-  top: 2px;
-  left: 4px;
-  width: 4px;
-  height: 7px;
-  border: solid #fff;
-  border-width: 0 1.5px 1.5px 0;
-  content: "";
-  transform: rotate(45deg);
-}
-@media (max-width: 700px) {
-  .role-default-row { grid-template-columns: 1fr auto; }
-  .role-default-row strong { grid-column: 1 / -1; grid-row: 2; }
 }
 .slash-command-description {
   display: flex;
@@ -1798,7 +1714,6 @@ textarea:focus-visible,
 
 .settings-card,
 .role-skill-card,
-.role-default-list,
 .pi-config-paths {
   border-color: rgb(255 255 255 / 82%);
   background: rgb(255 255 255 / 52%);
@@ -1898,7 +1813,11 @@ textarea:focus-visible,
 .permission-settings-footer small { max-width: 68ch; line-height: 1.5; }
 .permission-settings-footer .primary-button { flex: 0 0 auto; }
 
-.modal-backdrop { background: rgb(35 38 35 / 25%); backdrop-filter: blur(9px) saturate(.9); }
+/* 25% 挡不住背景里的彩色强调控件：文件管理器表头那个绿色「刷新」按钮透过来
+   变成一个说不清来历的色块。压到 38% 后背景只读作「暗一层」，不再能辨认出
+   是什么东西，但仍然保留玻璃的通透感（面板自身是 76% 半透明，两层叠加后
+   正文对比度不变）。 */
+.modal-backdrop { background: rgb(35 38 35 / 38%); backdrop-filter: blur(9px) saturate(.9); }
 .modal,
 .model-picker,
 .slash-menu,

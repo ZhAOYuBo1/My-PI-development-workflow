@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
-import type { AgentImageAttachment, AgentScopedModel } from "@codepiddy/shared";
+import type { AgentImageAttachment } from "@codepiddy/shared";
 
 interface PendingRequest {
 	resolve(value: Record<string, unknown>): void;
@@ -14,20 +14,10 @@ export function rpcRequestTimeoutMs(commandType: string): number {
 	if (commandType === "compact") return 10 * 60_000;
 	if (commandType === "abort") return 2 * 60_000;
 	if (commandType === "prompt") return 90_000;
-	if (
-		commandType === "reload" ||
-		commandType === "new_session" ||
-		commandType === "clone" ||
-		commandType === "export_html"
-	) {
+	if (commandType === "new_session" || commandType === "clone" || commandType === "export_html") {
 		return 2 * 60_000;
 	}
-	if (
-		commandType.startsWith("get_") ||
-		commandType === "set_model" ||
-		commandType === "set_scoped_models" ||
-		commandType === "set_thinking_level"
-	) {
+	if (commandType.startsWith("get_") || commandType === "set_model" || commandType === "set_thinking_level") {
 		return 30_000;
 	}
 	return 60_000;
@@ -133,18 +123,6 @@ export class PiRpcProcess {
 		};
 	}
 
-	async importSession(inputPath: string): Promise<{ cancelled: boolean }> {
-		const response = await this.send({ type: "import_jsonl", inputPath });
-		const data = response.data;
-		return {
-			cancelled:
-				typeof data !== "object" ||
-				data === null ||
-				Array.isArray(data) ||
-				(data as Record<string, unknown>).cancelled !== false,
-		};
-	}
-
 	async getSessionTree(): Promise<{ tree: unknown[]; leafId: string | null }> {
 		const response = await this.send({ type: "get_tree" });
 		const data = response.data;
@@ -212,81 +190,10 @@ export class PiRpcProcess {
 		});
 	}
 
-	async getAuthProviders(): Promise<
-		Array<{ id: string; name: string; oauth: boolean; apiKey: boolean; configured: boolean; source?: string }>
-	> {
-		const response = await this.send({ type: "get_auth_providers" });
-		const data = response.data as Record<string, unknown> | undefined;
-		return Array.isArray(data?.providers)
-			? data.providers.filter(
-					(
-						provider,
-					): provider is {
-						id: string;
-						name: string;
-						oauth: boolean;
-						apiKey: boolean;
-						configured: boolean;
-						source?: string;
-					} =>
-						typeof provider === "object" &&
-						provider !== null &&
-						"id" in provider &&
-						typeof provider.id === "string" &&
-						"name" in provider &&
-						typeof provider.name === "string",
-				)
-			: [];
-	}
-
-	async loginProvider(providerId: string): Promise<void> {
-		await this.send({ type: "login_provider", providerId, authType: "oauth" }, 10 * 60_000);
-	}
-
-	async logoutProvider(providerId: string): Promise<void> {
-		await this.send({ type: "logout_provider", providerId });
-	}
-
 	async getAvailableModels(): Promise<unknown[]> {
 		const response = await this.send({ type: "get_available_models" });
 		const data = response.data as Record<string, unknown> | undefined;
 		return Array.isArray(data?.models) ? data.models : [];
-	}
-
-	async getScopedModels(): Promise<AgentScopedModel[]> {
-		const response = await this.send({ type: "get_scoped_models" });
-		const data = response.data as Record<string, unknown> | undefined;
-		if (!Array.isArray(data?.models)) return [];
-		return data.models.flatMap((value) => {
-			if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
-			const model = value as Record<string, unknown>;
-			if (typeof model.provider !== "string" || typeof model.modelId !== "string") return [];
-			return [
-				{
-					provider: model.provider,
-					modelId: model.modelId,
-					...(typeof model.thinkingLevel === "string" ? { thinkingLevel: model.thinkingLevel } : {}),
-				},
-			];
-		});
-	}
-
-	async setScopedModels(models: AgentScopedModel[]): Promise<AgentScopedModel[]> {
-		const response = await this.send({ type: "set_scoped_models", models });
-		const data = response.data as Record<string, unknown> | undefined;
-		if (!Array.isArray(data?.models)) return [];
-		return data.models.flatMap((value) => {
-			if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
-			const model = value as Record<string, unknown>;
-			if (typeof model.provider !== "string" || typeof model.modelId !== "string") return [];
-			return [
-				{
-					provider: model.provider,
-					modelId: model.modelId,
-					...(typeof model.thinkingLevel === "string" ? { thinkingLevel: model.thinkingLevel } : {}),
-				},
-			];
-		});
 	}
 
 	async getAvailableThinkingLevels(): Promise<string[]> {
@@ -388,10 +295,6 @@ export class PiRpcProcess {
 		const exportedPath = (data as Record<string, unknown>).path;
 		if (typeof exportedPath !== "string") throw new Error("Pi did not return an export path");
 		return exportedPath;
-	}
-
-	async reload(): Promise<void> {
-		await this.send({ type: "reload" });
 	}
 
 	async stop(): Promise<void> {

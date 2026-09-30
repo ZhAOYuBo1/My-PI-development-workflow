@@ -5,7 +5,6 @@ import type {
 	AgentInstanceLocator,
 	AgentModelSelection,
 	AgentRole,
-	AgentScopedModel,
 	AgentSessionSnapshot,
 	AgentSkillSummary,
 	AgentSlotSummary,
@@ -19,7 +18,6 @@ import type {
 	ProjectUiState,
 	ProjectWriteLeaseStatus,
 	RecentProject,
-	RoleModelDefaults,
 	RoleSkillAssignments,
 	SettingsStatus,
 	WorkItemSummary,
@@ -29,6 +27,7 @@ import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
 import { MessageContent } from "./components/message-content.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { StreamStats } from "./components/StreamStats.tsx";
+import { estimateTokens, extractUsageOutput, type FinalStreamStats, formatElapsed } from "./components/stream-stats.ts";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
 import {
 	formatTurnElapsed,
@@ -38,12 +37,6 @@ import {
 } from "./components/turn-group.ts";
 import { WorkPanel } from "./components/WorkPanel.tsx";
 import { demoProject } from "./demo-project.ts";
-import {
-	estimateTokens,
-	extractUsageOutput,
-	formatElapsed,
-	type FinalStreamStats,
-} from "./components/stream-stats.ts";
 
 type Selection =
 	| { type: "welcome" }
@@ -356,9 +349,7 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 				...(thinking ? { thinking } : {}),
 				status: assistantMessageStatus(message),
 				...(createdAt ? { createdAt } : {}),
-				...(historyTokens > 0
-					? { streamStats: { tokens: historyTokens, estimated: historyUsage === null } }
-					: {}),
+				...(historyTokens > 0 ? { streamStats: { tokens: historyTokens, estimated: historyUsage === null } } : {}),
 			});
 		} else {
 			items.push({
@@ -604,7 +595,11 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 			<>
 				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
 				<path d="M4.7 12h14.6M12 4.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5m0-15c-2 2-3 4.5-3 7.5s1 5.5 3 7.5" />
-				<path d="M16 6.5a2.1 2.1 0 0 0-2.1 2.1c0 1.5 2.1 3.8 2.1 3.8s2.1-2.3 2.1-3.8A2.1 2.1 0 0 0 16 6.5z" fill="currentColor" stroke="none" />
+				<path
+					d="M16 6.5a2.1 2.1 0 0 0-2.1 2.1c0 1.5 2.1 3.8 2.1 3.8s2.1-2.3 2.1-3.8A2.1 2.1 0 0 0 16 6.5z"
+					fill="currentColor"
+					stroke="none"
+				/>
 			</>
 		),
 		clock: (
@@ -623,7 +618,11 @@ function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?
 		"x-circle": (
 			<>
 				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<path d="M9.1 7.8 12 10.7l2.9-2.9 1.3 1.3-2.9 2.9 2.9 2.9-1.3 1.3-2.9-2.9-2.9 2.9-1.3-1.3 2.9-2.9-2.9-2.9z" fill="currentColor" stroke="none" />
+				<path
+					d="M9.1 7.8 12 10.7l2.9-2.9 1.3 1.3-2.9 2.9 2.9 2.9-1.3 1.3-2.9-2.9-2.9 2.9-1.3-1.3 2.9-2.9-2.9-2.9z"
+					fill="currentColor"
+					stroke="none"
+				/>
 			</>
 		),
 		caret: <path d="M9.5 5.5 16.5 12l-7 6.5" />,
@@ -809,20 +808,14 @@ const TranscriptTurns = memo(function TranscriptTurns({
 				const collapsed = collapsedRounds[key] ?? turn.id !== turns[turns.length - 1]!.id;
 				const elapsed = turnElapsedMs(turn);
 				const renderEntry = (entry: TranscriptItem, index: number) => (
-					<div
-						className={`transcript-entry entry-${entry.type}`}
-						data-transcript-index={index}
-						key={entry.id}
-					>
+					<div className={`transcript-entry entry-${entry.type}`} data-transcript-index={index} key={entry.id}>
 						{entry.type === "tool" ? (
 							<ToolCallCard item={entry} />
 						) : (
 							<TranscriptMessage
 								item={entry}
 								assistantModel={assistantModel}
-								showStats={
-									entry.type === "assistant" && !hasLaterAssistant(items, index)
-								}
+								showStats={entry.type === "assistant" && !hasLaterAssistant(items, index)}
 							/>
 						)}
 					</div>
@@ -844,9 +837,7 @@ const TranscriptTurns = memo(function TranscriptTurns({
 										<span className="turn-elapsed">用时 {formatTurnElapsed(elapsed)}</span>
 									) : null}
 								</button>
-								{collapsed
-									? null
-									: middle.map((entry) => renderEntry(entry.item, entry.index))}
+								{collapsed ? null : middle.map((entry) => renderEntry(entry.item, entry.index))}
 							</>
 						) : null}
 						{tail.map((entry) => renderEntry(entry.item, entry.index))}
@@ -1244,12 +1235,6 @@ const demoSessionSnapshot: AgentSessionSnapshot = {
 const demoAgentCommands: AgentCommandOption[] = [
 	{ name: "settings", command: "/settings", description: "Open settings menu", source: "builtin" },
 	{
-		name: "scoped-models",
-		command: "/scoped-models",
-		description: "Enable or disable models for cycling",
-		source: "builtin",
-	},
-	{
 		name: "model",
 		command: "/model",
 		description: "Select model (opens selector UI)",
@@ -1354,7 +1339,6 @@ export function App() {
 		review: [],
 	});
 	const [roleSkillSaving, setRoleSkillSaving] = useState<AgentRole | null>(null);
-	const [roleModelDefaults, setRoleModelDefaults] = useState<RoleModelDefaults>({});
 	const [transcripts, setTranscripts] = useState<Record<string, TranscriptItem[]>>(
 		demoMode
 			? {
@@ -1421,10 +1405,6 @@ export function App() {
 	const [modelPickerBusy, setModelPickerBusy] = useState(false);
 	const [modelSearch, setModelSearch] = useState("");
 	const [modelPickerSelectedIndex, setModelPickerSelectedIndex] = useState(0);
-	const [scopedModelPickerAgentId, setScopedModelPickerAgentId] = useState<string | null>(null);
-	const [scopedModelDraft, setScopedModelDraft] = useState<AgentScopedModel[]>([]);
-	const [scopedModelSearch, setScopedModelSearch] = useState("");
-	const [scopedModelPickerBusy, setScopedModelPickerBusy] = useState(false);
 	const [fileMatches, setFileMatches] = useState<string[]>([]);
 	const activeAssistantIds = useRef(new Map<string, string>());
 	const pendingToolFailures = useRef(new Map<string, ToolRecoveryOffer>());
@@ -1617,16 +1597,6 @@ export function App() {
 			`${model.provider} ${model.name} ${model.id}`.toLowerCase().includes(normalizedSearch),
 		);
 	}, [modelPickerAgentId, modelSearch, modelSelections]);
-
-	const scopedModelPickerOptions = useMemo(() => {
-		if (!scopedModelPickerAgentId) return [];
-		const selection = modelSelections[scopedModelPickerAgentId];
-		if (!selection) return [];
-		const normalizedSearch = scopedModelSearch.trim().toLowerCase();
-		return selection.availableModels.filter((model) =>
-			`${model.provider} ${model.name} ${model.id}`.toLowerCase().includes(normalizedSearch),
-		);
-	}, [modelSelections, scopedModelPickerAgentId, scopedModelSearch]);
 
 	const updateAgentStatus = useCallback((clientEvent: AgentClientEvent, status: AgentStatus): void => {
 		setProject((current) =>
@@ -1888,9 +1858,7 @@ export function App() {
 											...item,
 											text: item.text + delta,
 											status: "streaming",
-											...(typeof item.streamStartedAt === "number"
-												? {}
-												: { streamStartedAt: Date.now() }),
+											...(typeof item.streamStartedAt === "number" ? {} : { streamStartedAt: Date.now() }),
 										}
 									: item,
 							);
@@ -1923,9 +1891,7 @@ export function App() {
 											...item,
 											thinking: (item.thinking ?? "") + delta,
 											status: "streaming",
-											...(typeof item.streamStartedAt === "number"
-												? {}
-												: { streamStartedAt: Date.now() }),
+											...(typeof item.streamStartedAt === "number" ? {} : { streamStartedAt: Date.now() }),
 										}
 									: item,
 							);
@@ -2625,10 +2591,10 @@ export function App() {
 								key={slot.role}
 								onClick={() => setSelection({ type: "agent", lane, workItemId: item.id, role: slot.role })}
 							>
-							<span className="truncate" title={slot.displayName}>
-								{slot.displayName}
-							</span>
-							<span className={`agent-create status-${slot.status}`}>{statusLabels[slot.status]}</span>
+								<span className="truncate" title={slot.displayName}>
+									{slot.displayName}
+								</span>
+								<span className={`agent-create status-${slot.status}`}>{statusLabels[slot.status]}</span>
 								{slot.currentInstanceId && (unreadCounts[slot.currentInstanceId] ?? 0) > 0 ? (
 									<span className="agent-unread">
 										{Math.min(99, unreadCounts[slot.currentInstanceId] ?? 0)}
@@ -2837,11 +2803,6 @@ export function App() {
 					if (await chooseModel(slot, model.provider, model.id)) {
 						setDrafts((current) => ({ ...current, [agentId]: "" }));
 					}
-					return;
-				}
-				if (name === "scoped-models") {
-					setDrafts((current) => ({ ...current, [agentId]: "" }));
-					await openScopedModelPicker(slot);
 					return;
 				}
 				if (name === "thinking") {
@@ -3258,9 +3219,6 @@ export function App() {
 			if (modelPickerAgentId) {
 				setModelPickerAgentId(null);
 				setModelSearch("");
-			} else if (scopedModelPickerAgentId) {
-				setScopedModelPickerAgentId(null);
-				setScopedModelSearch("");
 			} else if (sessionPanel) setSessionPanel(null);
 			else if (deleteDialog) setDeleteDialog(null);
 			else if (resetAgentDialog) setResetAgentDialog(null);
@@ -3290,7 +3248,6 @@ export function App() {
 		modelPickerAgentId,
 		renameDialog,
 		resetAgentDialog,
-		scopedModelPickerAgentId,
 		selectedWorkItem,
 		selection,
 		sessionPanel,
@@ -3301,12 +3258,11 @@ export function App() {
 	async function openSettings(): Promise<void> {
 		setSelection({ type: "settings" });
 		if (!("codepiddy" in window)) return;
-		const [status, permissions, skills, assignments, defaults, piRuntime] = await Promise.all([
+		const [status, permissions, skills, assignments, piRuntime] = await Promise.all([
 			window.codepiddy.getSettingsStatus(),
 			window.codepiddy.getPermissionDefaults(),
 			window.codepiddy.listAgentSkills(project?.rootPath),
 			window.codepiddy.getRoleSkillAssignments(),
-			window.codepiddy.getRoleModelDefaults(),
 			window.codepiddy.getPiRuntimeStatus(),
 		]);
 		setSettingsStatus(status);
@@ -3314,7 +3270,6 @@ export function App() {
 		setPermissionDefaults(permissions);
 		setAvailableSkills(skills);
 		setRoleSkillAssignments(assignments);
-		setRoleModelDefaults(defaults);
 	}
 
 	async function savePermissionDefaults(): Promise<void> {
@@ -3427,123 +3382,6 @@ export function App() {
 			await window.codepiddy.openBuiltinSkillsFolder();
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : "打开内置 Skill 文件夹失败");
-		}
-	}
-
-	async function saveRoleModelDefault(slot: AgentSlotSummary): Promise<void> {
-		if (!slot.currentInstanceId) return;
-		const selection = modelSelections[slot.currentInstanceId];
-		if (!selection) return;
-		try {
-			setRoleModelDefaults(
-				await window.codepiddy.setRoleModelDefault({
-					role: slot.role,
-					provider: selection.model.provider,
-					modelId: selection.model.id,
-					modelName: selection.model.name,
-					thinkingLevel: selection.thinkingLevel,
-				}),
-			);
-			setModelPickerAgentId(null);
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "保存角色默认模型失败");
-		}
-	}
-
-	async function clearRoleModelDefault(role: AgentRole): Promise<void> {
-		try {
-			setRoleModelDefaults(await window.codepiddy.clearRoleModelDefault(role));
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "清除角色默认模型失败");
-		}
-	}
-
-	async function openScopedModelPicker(slot: AgentSlotSummary): Promise<void> {
-		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
-		setModelPickerAgentId(null);
-		setScopedModelPickerAgentId(slot.currentInstanceId);
-		setScopedModelSearch("");
-		if (demoMode || !("codepiddy" in window)) {
-			setScopedModelDraft([]);
-			return;
-		}
-		setScopedModelPickerBusy(true);
-		setError(null);
-		try {
-			const locator: AgentInstanceLocator = {
-				agentInstanceId: slot.currentInstanceId,
-				projectId: project.id,
-				workItemId: selectedWorkItem.id,
-				role: slot.role,
-			};
-			const [selection, scopedModels] = await Promise.all([
-				window.codepiddy.getAgentModelSelection(locator),
-				window.codepiddy.getAgentScopedModels(locator),
-			]);
-			setModelSelections((current) => ({ ...current, [slot.currentInstanceId!]: selection }));
-			setScopedModelDraft(scopedModels);
-		} catch (caught) {
-			setError(clientErrorMessage(caught, "读取 Pi 模型范围失败"));
-		} finally {
-			setScopedModelPickerBusy(false);
-		}
-	}
-
-	function toggleScopedModel(model: AgentModelSelection["availableModels"][number]): void {
-		if (!scopedModelPickerAgentId) return;
-		const allModels = modelSelections[scopedModelPickerAgentId]?.availableModels ?? [];
-		const explicit =
-			scopedModelDraft.length === 0
-				? allModels.map((available) => ({ provider: available.provider, modelId: available.id }))
-				: scopedModelDraft;
-		const index = explicit.findIndex((item) => item.provider === model.provider && item.modelId === model.id);
-		const next =
-			index >= 0
-				? [...explicit.slice(0, index), ...explicit.slice(index + 1)]
-				: [...explicit, { provider: model.provider, modelId: model.id }];
-		if (next.length === 0) {
-			setError("循环模型范围至少保留一个模型；使用“全部模型”可取消范围限制");
-			return;
-		}
-		const allSelected =
-			next.length === allModels.length &&
-			allModels.every((available) =>
-				next.some((item) => item.provider === available.provider && item.modelId === available.id),
-			);
-		setScopedModelDraft(allSelected ? [] : next);
-	}
-
-	function moveScopedModel(index: number, direction: -1 | 1): void {
-		if (scopedModelDraft.length === 0) return;
-		const destination = index + direction;
-		if (destination < 0 || destination >= scopedModelDraft.length) return;
-		const next = [...scopedModelDraft];
-		[next[index], next[destination]] = [next[destination]!, next[index]!];
-		setScopedModelDraft(next);
-	}
-
-	async function saveScopedModels(slot: AgentSlotSummary): Promise<void> {
-		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
-		if (demoMode || !("codepiddy" in window)) {
-			setScopedModelPickerAgentId(null);
-			return;
-		}
-		setScopedModelPickerBusy(true);
-		setError(null);
-		try {
-			await window.codepiddy.setAgentScopedModels({
-				agentInstanceId: slot.currentInstanceId,
-				projectId: project.id,
-				workItemId: selectedWorkItem.id,
-				role: slot.role,
-				models: scopedModelDraft,
-			});
-			setScopedModelPickerAgentId(null);
-			setScopedModelSearch("");
-		} catch (caught) {
-			setError(clientErrorMessage(caught, "保存 Pi 模型范围失败"));
-		} finally {
-			setScopedModelPickerBusy(false);
 		}
 	}
 
@@ -3837,49 +3675,48 @@ export function App() {
 								清除
 							</button>
 						</div>
-					<small>修改后，新启动或重新启动的 Agent 才会使用新 Key。</small>
-				</section>
+						<small>修改后，新启动或重新启动的 Agent 才会使用新 Key。</small>
+					</section>
 
-				<section className="settings-card">
-					<div>
-						<h2>Shell</h2>
-						<p>
-							Agent 的 <code>bash</code> 工具需要一个 bash 可执行文件。留空则自动探测（Program Files 下的 Git
-							Bash、PATH 上的 bash.exe）；Git for Windows 装在非标准目录时填这里，否则工具会报
-							“No bash shell found”。
-						</p>
-					</div>
-					<div className="settings-status">
-						{settingsStatus?.shellPath ? "已配置" : "自动探测"}
-					</div>
-					{settingsStatus?.shellPath ? <code className="settings-shell-current">{settingsStatus.shellPath}</code> : null}
-					<input
-						type="text"
-						value={shellPath}
-						onChange={(event) => setShellPath(event.target.value)}
-						placeholder="留空自动探测，或填 bash.exe 完整路径"
-					/>
-					<div className="settings-actions">
-						<button
-							className="primary-button"
-							type="button"
-							disabled={shellPath.trim().length === 0}
-							onClick={() => void saveShellPath(shellPath)}
-						>
-							保存
-						</button>
-						<button
-							className="secondary-button"
-							type="button"
-							disabled={!settingsStatus?.shellPath}
-							onClick={() => void saveShellPath("")}
-						>
-							清除
-						</button>
-					</div>
-					<small>修改后，新启动或重置后的 Agent 才会使用新路径。</small>
-				</section>
-
+					<section className="settings-card">
+						<div>
+							<h2>Shell</h2>
+							<p>
+								Agent 的 <code>bash</code> 工具需要一个 bash 可执行文件。留空则自动探测（Program Files 下的 Git
+								Bash、PATH 上的 bash.exe）；Git for Windows 装在非标准目录时填这里，否则工具会报 “No bash shell
+								found”。
+							</p>
+						</div>
+						<div className="settings-status">{settingsStatus?.shellPath ? "已配置" : "自动探测"}</div>
+						{settingsStatus?.shellPath ? (
+							<code className="settings-shell-current">{settingsStatus.shellPath}</code>
+						) : null}
+						<input
+							type="text"
+							value={shellPath}
+							onChange={(event) => setShellPath(event.target.value)}
+							placeholder="留空自动探测，或填 bash.exe 完整路径"
+						/>
+						<div className="settings-actions">
+							<button
+								className="primary-button"
+								type="button"
+								disabled={shellPath.trim().length === 0}
+								onClick={() => void saveShellPath(shellPath)}
+							>
+								保存
+							</button>
+							<button
+								className="secondary-button"
+								type="button"
+								disabled={!settingsStatus?.shellPath}
+								onClick={() => void saveShellPath("")}
+							>
+								清除
+							</button>
+						</div>
+						<small>修改后，新启动或重置后的 Agent 才会使用新路径。</small>
+					</section>
 
 					<section className="settings-card skill-settings-card">
 						<div className="settings-card-heading">
@@ -3959,32 +3796,6 @@ export function App() {
 							<code>~/.pi/agent/settings.json</code>
 							<span>Pi 全局设置</span>
 						</div>
-						<div className="role-defaults">
-							<div>
-								<h3>角色默认模型</h3>
-								<p>从 Agent 模型选择器保存；这里只显示和清除角色覆盖。</p>
-							</div>
-							<div className="role-default-list">
-								{(["requirement-analysis", "coding", "bug-fix", "review"] as const).map((role) => {
-									const configured = roleModelDefaults[role];
-									return (
-										<div className="role-default-row" key={role}>
-											<span>{roleLabels[role]}</span>
-											<strong>
-												{configured
-													? `${configured.modelName} · ${configured.thinkingLevel}`
-													: "跟随 Pi 当前配置"}
-											</strong>
-											{configured ? (
-												<button type="button" onClick={() => void clearRoleModelDefault(role)}>
-													清除
-												</button>
-											) : null}
-										</div>
-									);
-								})}
-							</div>
-						</div>
 					</section>
 				</div>
 			);
@@ -4033,10 +3844,7 @@ export function App() {
 										setWorkPanelVisible((current) => {
 											const next = !current;
 											try {
-												window.localStorage.setItem(
-													"codepiddy.work-panel.visible",
-													next ? "1" : "0",
-												);
+												window.localStorage.setItem("codepiddy.work-panel.visible", next ? "1" : "0");
 											} catch {}
 											return next;
 										})
@@ -4093,16 +3901,16 @@ export function App() {
 								</div>
 							</div>
 						) : (
-						<div className="agent-header-actions">
-							<button
-								className="secondary-button"
-								type="button"
-								onClick={() => void createAgent(slot)}
-								disabled={busy || !("codepiddy" in window)}
-							>
-								创建 Agent
-							</button>
-						</div>
+							<div className="agent-header-actions">
+								<button
+									className="secondary-button"
+									type="button"
+									onClick={() => void createAgent(slot)}
+									disabled={busy || !("codepiddy" in window)}
+								>
+									创建 Agent
+								</button>
+							</div>
 						)}
 					</header>
 					{agentId ? (
@@ -4146,8 +3954,7 @@ export function App() {
 									<WorkPanel
 										projectRoot={project.rootPath}
 										toolItems={items.filter(
-											(item): item is Extract<TranscriptItem, { type: "tool" }> =>
-												item.type === "tool",
+											(item): item is Extract<TranscriptItem, { type: "tool" }> => item.type === "tool",
 										)}
 									/>
 								) : null}
@@ -4331,8 +4138,8 @@ export function App() {
 							<h1>{selectedWorkItem.title}</h1>
 							<p>{selectedWorkItem.description || "暂无描述"}</p>
 						</div>
-					<div className="work-item-actions">
-						<button
+						<div className="work-item-actions">
+							<button
 								className="secondary-button"
 								type="button"
 								onClick={() =>
@@ -4365,8 +4172,7 @@ export function App() {
 									<strong>{slot.displayName}</strong>
 									<small>{statusLabels[slot.status]}</small>
 								</span>
-								<span className={`agent-create status-${slot.status}`}>{statusLabels[slot.status]}
-								</span>
+								<span className={`agent-create status-${slot.status}`}>{statusLabels[slot.status]}</span>
 							</button>
 						))}
 					</div>
@@ -4964,148 +4770,11 @@ export function App() {
 											<span className="model-picker-status">正在应用 Pi 模型设置…</span>
 										) : null}
 										<button
-											className="secondary-button"
-											disabled={modelPickerBusy}
-											type="button"
-											onClick={() => void openScopedModelPicker(slot)}
-										>
-											循环模型范围
-										</button>
-										<button
-											className="secondary-button"
-											disabled={modelPickerBusy}
-											type="button"
-											onClick={() => void saveRoleModelDefault(slot)}
-										>
-											设为 {slot.displayName} 默认
-										</button>
-										<button
 											className="permission-cancel"
 											type="button"
 											onClick={() => setModelPickerAgentId(null)}
 										>
 											关闭
-										</button>
-									</div>
-								</div>
-							</div>
-						);
-					})()
-				: null}
-			{scopedModelPickerAgentId && selectedWorkItem && selection.type === "agent"
-				? (() => {
-						const slot = selectedWorkItem.agentSlots.find((candidate) => candidate.role === selection.role);
-						const modelSelection = modelSelections[scopedModelPickerAgentId];
-						if (!slot || !modelSelection) return null;
-						const useAllModels = scopedModelDraft.length === 0;
-						const selectedModels = scopedModelDraft.flatMap((scoped) => {
-							const model = modelSelection.availableModels.find(
-								(candidate) => candidate.provider === scoped.provider && candidate.id === scoped.modelId,
-							);
-							return model ? [{ scoped, model }] : [];
-						});
-						const providers = [...new Set(scopedModelPickerOptions.map((model) => model.provider))];
-						return (
-							<div className="modal-backdrop" role="presentation">
-								<button
-									className="modal-backdrop-dismiss"
-									type="button"
-									aria-label="关闭循环模型范围"
-									onClick={() => setScopedModelPickerAgentId(null)}
-								/>
-								<div className="modal model-picker scoped-model-picker" role="dialog" aria-modal="true">
-									<div className="scoped-model-heading">
-										<div>
-											<h2>循环模型范围</h2>
-											<p>限定 Pi 切换模型时使用的集合和顺序。使用全部模型表示不限制。</p>
-										</div>
-										<span>{useAllModels ? "全部模型" : `${scopedModelDraft.length} 个模型`}</span>
-									</div>
-									<input
-										value={scopedModelSearch}
-										onChange={(event) => setScopedModelSearch(event.target.value)}
-										placeholder="搜索可用模型"
-									/>
-									{!useAllModels ? (
-										<div className="scoped-model-order">
-											<strong>循环顺序</strong>
-											<div>
-												{selectedModels.map(({ model }, index) => (
-													<div key={`${model.provider}/${model.id}`}>
-														<span>{index + 1}</span>
-														<strong>{model.name}</strong>
-														<small>{model.provider}</small>
-														<button
-															type="button"
-															disabled={index === 0 || scopedModelPickerBusy}
-															onClick={() => moveScopedModel(index, -1)}
-														>
-															上移
-														</button>
-														<button
-															type="button"
-															disabled={index === selectedModels.length - 1 || scopedModelPickerBusy}
-															onClick={() => moveScopedModel(index, 1)}
-														>
-															下移
-														</button>
-													</div>
-												))}
-											</div>
-										</div>
-									) : null}
-									<div className="model-list scoped-model-list">
-										{providers.map((provider) => (
-											<section key={provider}>
-												<h3>{provider}</h3>
-												{scopedModelPickerOptions
-													.filter((model) => model.provider === provider)
-													.map((model) => {
-														const checked =
-															useAllModels ||
-															scopedModelDraft.some(
-																(item) => item.provider === model.provider && item.modelId === model.id,
-															);
-														return (
-															<button
-																type="button"
-																className={checked ? "selected" : ""}
-																key={`${model.provider}/${model.id}`}
-																disabled={scopedModelPickerBusy}
-																onClick={() => toggleScopedModel(model)}
-															>
-																<span className="scope-check" aria-hidden="true" />
-																<span>{model.name}</span>
-																<small>{model.id}</small>
-															</button>
-														);
-													})}
-											</section>
-										))}
-									</div>
-									<div className="model-picker-footer">
-										<button
-											className="secondary-button"
-											type="button"
-											disabled={scopedModelPickerBusy}
-											onClick={() => setScopedModelDraft([])}
-										>
-											使用全部模型
-										</button>
-										<button
-											className="primary-button"
-											type="button"
-											disabled={scopedModelPickerBusy}
-											onClick={() => void saveScopedModels(slot)}
-										>
-											{scopedModelPickerBusy ? "应用中" : "应用范围"}
-										</button>
-										<button
-											className="permission-cancel"
-											type="button"
-											onClick={() => setScopedModelPickerAgentId(null)}
-										>
-											取消
 										</button>
 									</div>
 								</div>
