@@ -1,13 +1,31 @@
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { PermissionManager } from "../../codepiddy-permission-extension/src/permission-manager.ts";
 import {
 	createPermissionPolicy,
 	DEFAULT_PERMISSION_DEFAULTS,
 	normalizePermissionDefaults,
 } from "../src/main/permission-settings.ts";
+
+// PermissionManager 有四个默认路径（全局配置、agents、settings.json、mcp.json），
+// 用例只显式传了前两个。不覆盖这个环境变量时，剩下的默认值会去问 Pi 要 agent 目录，
+// 那要求 @earendil-works/pi-coding-agent 的 dist 已构建 —— CI 的顺序是先跑 vitest
+// 再跑 build，全新 checkout 上没有 dist，模块解析直接失败。
+// 指到临时目录顺带避免读到本机真实的 ~/.pi，让用例彻底隔离。
+const policyAgentDir = mkdtempSync(path.join(tmpdir(), "codepiddy-policy-agent-"));
+const previousPolicyAgentDir = process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR;
+
+beforeAll(() => {
+	process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR = policyAgentDir;
+});
+
+afterAll(() => {
+	if (previousPolicyAgentDir === undefined) delete process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR;
+	else process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR = previousPolicyAgentDir;
+	rmSync(policyAgentDir, { recursive: true, force: true });
+});
 
 describe("permission settings", () => {
 	test("defaults every category to allow so a fresh install needs no prompts", () => {

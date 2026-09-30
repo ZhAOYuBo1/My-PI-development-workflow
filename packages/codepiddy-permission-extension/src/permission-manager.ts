@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, relative, resolve } from "node:path";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 import {
 	extractFrontmatter,
@@ -28,9 +28,24 @@ import {
 
 const PERMISSION_POLICY_AGENT_DIR_ENV_KEY = "PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR";
 
+/**
+ * 延迟 require Pi 的 agent 目录，不能写成顶层 import。
+ * `@earendil-works/pi-coding-agent` 的 exports 指向 dist/，顶层 import 会让
+ * 「只想 import 本文件测权限逻辑」的用例也必须先构建 coding-agent；
+ * 而 CI 是先跑 vitest、再跑 build，全新 checkout 上没有 dist，模块解析直接失败。
+ * 这里的调用方要么显式传 globalConfigPath/agentsDir，要么设了环境变量覆盖，
+ * 真正落到这个默认值的路径很少。
+ */
+let cachedGetAgentDir: (() => string) | null = null;
+function piAgentDir(): string {
+	cachedGetAgentDir ??= createRequire(import.meta.url)("@earendil-works/pi-coding-agent")
+		.getAgentDir as () => string;
+	return cachedGetAgentDir();
+}
+
 function defaultPolicyAgentDir(): string {
 	const override = process.env[PERMISSION_POLICY_AGENT_DIR_ENV_KEY]?.trim();
-	return override ? resolve(override) : getAgentDir();
+	return override ? resolve(override) : piAgentDir();
 }
 
 function defaultGlobalConfigPath(): string {
