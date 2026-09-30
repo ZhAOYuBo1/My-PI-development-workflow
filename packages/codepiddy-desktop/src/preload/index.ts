@@ -60,6 +60,7 @@ const channels = {
 	settingsGetRoleSkills: "codepiddy:settings:role-skills:get",
 	settingsSetRoleSkills: "codepiddy:settings:role-skills:set",
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
+	settingsOpenPermissionPolicy: "codepiddy:settings:permission-policy:open",
 	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
 	settingsOpenBuiltinSkills: "codepiddy:settings:builtin-skills:open",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
@@ -143,6 +144,7 @@ const api: CodePIddyClientApi = {
 	setRoleSkillAssignments: (input: SetRoleSkillAssignmentsInput) =>
 		ipcRenderer.invoke(channels.settingsSetRoleSkills, input),
 	openPiConfigFolder: () => ipcRenderer.invoke(channels.settingsOpenPiConfig),
+	openPermissionPolicyFolder: () => ipcRenderer.invoke(channels.settingsOpenPermissionPolicy),
 	openProjectSkillsFolder: (projectRoot: string) =>
 		ipcRenderer.invoke(channels.settingsOpenProjectSkills, projectRoot),
 	openBuiltinSkillsFolder: () => ipcRenderer.invoke(channels.settingsOpenBuiltinSkills),

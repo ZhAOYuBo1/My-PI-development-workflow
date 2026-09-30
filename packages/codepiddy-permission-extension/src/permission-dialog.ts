@@ -26,16 +26,40 @@ export type PermissionDecisionRequestOptions = {
 	timeoutDenialReason?: string;
 };
 
-const APPROVE_ONCE_OPTION = "Allow Once";
-const APPROVE_ALWAYS_OPTION = "Allow Always";
-const REJECT_OPTION = "Reject";
-const REJECT_WITH_REASON_OPTION = "Reject with Reason";
-const PERMISSION_DECISION_OPTIONS = [
-	APPROVE_ONCE_OPTION,
-	APPROVE_ALWAYS_OPTION,
-	REJECT_OPTION,
-	REJECT_WITH_REASON_OPTION,
-] as const;
+/**
+ * 弹窗选项。桌面端把这个列表原样渲染成按钮，所以文案是这个界面的唯一真相源。
+ *
+ * 之前这里是英文，而整个客户端都是中文 —— 权限请求恰好是安全最关键的一次交互，
+ * 却是唯一没翻译的地方。桌面端还靠 `option.startsWith("Allow")` 猜哪个是主按钮，
+ * 改一次文案样式就错位。现在标签与语义一起导出，桌面端按标签查表，
+ * `permission-settings.test.ts` 会断言两边覆盖同一组标签。
+ */
+export const PERMISSION_DECISION_LABELS = {
+	once: "仅本次允许",
+	always: "该 Agent 始终允许",
+	reject: "拒绝",
+	reject_with_reason: "拒绝并说明原因",
+} as const;
+
+export type PermissionDecisionOptionId = keyof typeof PERMISSION_DECISION_LABELS;
+
+/** 按展示顺序排列：先放放行，再放拒绝，默认焦点落在第一个。 */
+export const PERMISSION_DECISION_OPTION_IDS = [
+	"once",
+	"always",
+	"reject",
+	"reject_with_reason",
+] as const satisfies readonly PermissionDecisionOptionId[];
+
+export const PERMISSION_DECISION_OPTIONS: readonly string[] = PERMISSION_DECISION_OPTION_IDS.map(
+	(id) => PERMISSION_DECISION_LABELS[id],
+);
+
+/** 桌面上被点中的标签还原成语义 id；认不出来的标签一律按拒绝处理。 */
+export function permissionDecisionIdForLabel(label: string | undefined): PermissionDecisionOptionId | undefined {
+	if (label === undefined) return undefined;
+	return PERMISSION_DECISION_OPTION_IDS.find((id) => PERMISSION_DECISION_LABELS[id] === label);
+}
 const PERMISSION_DIALOG_MAX_VISIBLE_LINES = 32;
 const PERMISSION_DIALOG_MAX_VISIBLE_CHARACTERS = 2_200;
 
@@ -131,22 +155,23 @@ export async function requestPermissionDecisionFromUi(
 		[...PERMISSION_DECISION_OPTIONS],
 		selectOptions,
 	);
+	const decisionId = permissionDecisionIdForLabel(selected);
 
-	if (selected === APPROVE_ONCE_OPTION) {
+	if (decisionId === "once") {
 		return {
 			approved: true,
 			state: "once",
 		};
 	}
 
-	if (selected === APPROVE_ALWAYS_OPTION) {
+	if (decisionId === "always") {
 		return {
 			approved: true,
 			state: "always",
 		};
 	}
 
-	if (selected === REJECT_WITH_REASON_OPTION) {
+	if (decisionId === "reject_with_reason") {
 		const denialReason = normalizePermissionDenialReason(
 			await ui.input(`${title}\nShare why this request was denied (optional).`, "Reason shown back to the agent"),
 		);

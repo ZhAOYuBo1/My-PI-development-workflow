@@ -113,6 +113,7 @@ const channels = {
 	settingsGetRoleSkills: "codepiddy:settings:role-skills:get",
 	settingsSetRoleSkills: "codepiddy:settings:role-skills:set",
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
+	settingsOpenPermissionPolicy: "codepiddy:settings:permission-policy:open",
 	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
 	settingsOpenBuiltinSkills: "codepiddy:settings:builtin-skills:open",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
@@ -1399,6 +1400,14 @@ function registerIpcHandlers(
 	});
 	ipcMain.handle(channels.settingsOpenPiConfig, async () => {
 		const directory = path.join(app.getPath("home"), ".pi", "agent");
+		await mkdir(directory, { recursive: true });
+		const error = await shell.openPath(directory);
+		if (error) throw new Error(error);
+	});
+	// 权限策略目录是排查「为什么还在弹窗」的第一现场：扩展除了这份全局策略，
+	// 还会读 agents/ 子目录和项目级配置，设置页那 7 个开关只是其中一层。
+	ipcMain.handle(channels.settingsOpenPermissionPolicy, async () => {
+		const directory = path.join(app.getPath("userData"), "permissions", "policy");
 		await mkdir(directory, { recursive: true });
 		const error = await shell.openPath(directory);
 		if (error) throw new Error(error);

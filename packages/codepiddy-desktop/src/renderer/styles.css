@@ -96,7 +96,6 @@ button { color: inherit; }
 .agent-create.status-completed { color: #43825b; }
 .agent-create.status-failed { color: #b54840; }
 
-
 .transcript {
   flex: 1;
   overflow-y: auto;
@@ -335,7 +334,6 @@ button { color: inherit; }
   cursor: pointer;
 }
 
-
 .composer-stacked { align-items: stretch; flex-direction: column; }
 .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .composer-tools { display: flex; min-width: 0; align-items: center; gap: 7px; }
@@ -392,14 +390,160 @@ button { color: inherit; }
 }
 .model-seat { padding: 5px 8px; border: 0; border-radius: 7px; background: transparent; color: #6f6f6a; font-size: 12px; cursor: pointer; }
 .model-seat:hover { background: #efefeb; }
-.send-button { margin-left: auto; }
-.model-picker { width: min(620px, 100%); max-height: 78vh; }
+
+/* 推理强度：收起时是发送按钮左侧一个和 model-seat 同规格的小按钮，点开才弹滑块。
+   配色全部取自本文件既有的中性灰 + 柔和绿（#e8eee9 / #4d6653 / #bfc9bf），
+   不引入新的色系，否则在输入区里会显得是外挂的东西。
+
+   选择器一律写成 `.composer button.thinking-control-trigger:not(:disabled)`：
+   文件里 `.composer button` 与 `.composer button:not(:disabled)` 的特异性比
+   `.thinking-control-trigger` 高，会把 border-radius 改成 50%、背景改成 #2f2f2d，
+   触发按钮会退化成一个黑色胶囊。这里必须压过那两条，不能靠源码顺序。 */
+.thinking-control { position: relative; flex: 0 0 auto; }
+.thinking-control.is-disabled { opacity: 0.55; }
+
+/* 几何（宽高、圆角、边框、内边距）必须与 disabled 无关地生效，所以这条不能带
+   :not(:disabled)。.composer button 的 width:32px / border-radius:50% / border:0
+   特异性 0,1,1，这里用 .composer button.thinking-control-trigger（0,2,1）压住。
+   之前把几何和外观都写在 :not(:disabled) 里，结果 modelPickerBusy 闪一帧时
+   整条规则失配、几何回退到 32px 圆点，右侧工具栏一帧从 92px 缩到 74px 再弹回。 */
+.composer button.thinking-control-trigger {
+  display: inline-flex;
+  width: auto;
+  min-width: 50px;
+  height: 30px;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* 外观对 disabled / 非 disabled 一视同仁，切换时盒子不变 */
+.composer button.thinking-control-trigger:not(:disabled),
+.composer button.thinking-control-trigger:disabled {
+  border-color: rgb(255 255 255 / 80%);
+  background: rgb(246 247 244 / 58%);
+  color: #666b65;
+  box-shadow: var(--cp-glass-highlight), 0 4px 12px rgb(36 43 37 / 5%);
+  backdrop-filter: blur(10px);
+  transition: border-color 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out;
+}
+.composer button.thinking-control-trigger:not(:disabled) { cursor: pointer; }
+.composer button.thinking-control-trigger:disabled { cursor: default; }
+.composer button.thinking-control-trigger:not(:disabled):hover { border-color: #d2d8d1; background: rgb(255 255 255 / 78%); color: #343a35; }
+.composer button.thinking-control-trigger[aria-expanded="true"]:not(:disabled) { border-color: #d2d8d1; background: rgb(255 255 255 / 78%); color: #405d49; }
+.thinking-control-current { color: #4d6653; font-weight: 600; }
+.thinking-control-caret {
+  width: 0;
+  height: 0;
+  border-top: 3.5px solid #97a49a;
+  border-right: 3px solid transparent;
+  border-left: 3px solid transparent;
+  transition: transform 140ms ease;
+}
+.thinking-control-caret.is-open { transform: rotate(180deg); }
+
+/* 玻璃浮层，与 .slash-menu / .model-picker 同族（玻璃属性在文件后半段统一覆盖）。 */
+.thinking-control-popover {
+  position: absolute;
+  z-index: 40;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: grid;
+  gap: 9px;
+  width: 236px;
+  padding: 13px 13px 11px;
+  border: 1px solid #dfe3de;
+  border-radius: 13px;
+}
+
+/* 轨道：细条而不是胶囊。原来 22px 高的圆角条加一个 38px 的带字 thumb，
+   整条轨道读起来像一颗药丸，而不是一个可拖的滑块。 */
+.thinking-slider {
+  position: relative;
+  height: 6px;
+  margin: 0 8px;
+  border-radius: 3px;
+  background: rgb(118 126 118 / 15%);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+/* 6px 的轨道太难点，用一个不可见的加高命中区把可点范围撑到 24px */
+.thinking-slider::before { position: absolute; inset: -9px 0; content: ""; }
+.thinking-slider:focus-visible { outline: 2px solid #9cac9e; outline-offset: 5px; }
+.thinking-slider.is-dragging { cursor: grabbing; }
+
+/* 填充区到 thumb 为止。单色，因为渐变在这个界面上会读成一条装饰色带。 */
+.thinking-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 3px;
+  background: #9db3a1;
+}
+
+/* thumb 是一个 16px 的圆点，不带文字。
+   位置用 `calc(8px + (100% - 16px) * ratio)`：两端各留半个直径的余量，
+   所以 0% 和 100% 时圆点仍然整个落在轨道内，不会顶出轨道或浮层边缘。 */
+.thinking-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 1px solid #b3c2b6;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(60 66 61 / 26%);
+  pointer-events: none;
+  transition: box-shadow 130ms ease-out, transform 130ms ease-out;
+}
+.thinking-slider:hover .thinking-slider-thumb { box-shadow: 0 2px 5px rgb(60 66 61 / 32%); }
+.thinking-slider.is-dragging .thinking-slider-thumb { box-shadow: 0 3px 9px rgb(60 66 61 / 38%); transform: scale(1.12); }
+
+/* 档位刻度：名字按各自的吸附点绝对定位。
+   之前用 flex + space-between，那只对齐首尾两个盒子，中间几个名字和滑块吸附点是错开的。 */
+.thinking-control-scale {
+  position: relative;
+  height: 13px;
+  margin: 0 8px;
+  color: #a3a8a3;
+  font-size: 10px;
+}
+.thinking-control-tick {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: color 120ms ease;
+}
+.thinking-control-tick.is-current { color: #405646; font-weight: 600; }
+
+.thinking-control-hint,
+.thinking-control-note {
+  margin: 0;
+  color: #8a8a85;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.thinking-control-note code { color: #6f6f6a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-control-caret { transition: none; }
+}
+
+/* 工具栏右端一组：强度控件紧贴发送按钮。
+   之前靠 .send-button 的 margin-left:auto 顶到右边，但那条规则会把全部富余空间
+   吃掉，导致强度控件贴到工具组末尾（上下文环右边）而不是贴着发送按钮。 */
+.composer-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
+.composer-actions .send-button { margin-left: 0; }
 .model-picker > input { width: 100%; padding: 9px 10px; border: 1px solid #ddddda; border-radius: 8px; }
-.thinking-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
-.thinking-row button { padding: 5px 9px; border: 1px solid #ddddda; border-radius: 999px; background: #fff; cursor: pointer; }
-.thinking-row button.selected { background: #292928; color: #fff; }
-.model-list { max-height: 440px; overflow-y: auto; }
-.model-list h3 { margin: 14px 0 6px; color: #8a8a85; font-size: 12px; text-transform: uppercase; }
+.model-list { overflow-y: auto; }
 .model-list section > button { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
 .model-list section > button:hover, .model-list section > button.selected { background: #eeeeea; }
 .model-list small { color: #999994; }
@@ -526,58 +670,90 @@ button { color: inherit; }
 .file-menu button { grid-template-columns: 34px minmax(0, 1fr); }
 .file-menu .file-glyph { width: 30px; min-width: 30px; padding: 0; background: #e7e7e3; }
 
-.model-picker {
-  overflow: hidden;
-  padding: 0;
-  border-color: #d7d7d2;
-  background: #fafaf8;
+/* 模型选择器：贴着「模型名 ▾」按钮向上弹的抽屉浮层。
+   之前是 .modal-backdrop + 居中 .modal —— 620px 宽、整屏压暗 38%、背景模糊，
+   选一个模型要先关掉一个对话框。现在没有遮罩，浮层由 .model-picker-anchor 定位。
+   关闭方式：点抽屉/触发按钮之外、Esc、选中模型。 */
+.model-picker-anchor {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
 }
 
-.model-picker > h2 { padding: 20px 22px 0; margin-bottom: 14px; }
-.model-picker > input { width: calc(100% - 44px); margin: 0 22px; background: #fff; }
-.model-picker > .thinking-row { padding: 0 22px; }
-.model-picker > .permission-cancel { margin-bottom: 14px; }
+.model-picker {
+  position: absolute;
+  z-index: 40;
+  bottom: calc(100% + 8px);
+  left: 0;
+  /* 宽度由内容决定（max-content = 最长的那个模型名），但至少和触发按钮一样宽，
+     所以短名字不会缩成一条、长的名字也不会被截断。max-width 只在模型名特别长时兜底。 */
+  width: max-content;
+  min-width: 100%;
+  max-width: min(340px, calc(100vw - 48px));
+  overflow: hidden;
+  padding: 7px 0 4px;
+  border-radius: 13px;
+}
+
+.model-picker > input {
+  width: calc(100% - 16px);
+  margin: 0 8px 4px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+/* 抽屉现在长在 .composer 里面，所以每一行都会撞上 .composer button:not(:disabled)
+   （background:#2f2f2d;color:#fff，特异性 0,2,1）。行样式必须写成
+   .composer .model-list ...（0,3,1）压过它，否则整列变成黑底白字。 */
+.composer .model-picker > input:focus {
+  border-color: #b6c2b7;
+  box-shadow: 0 0 0 3px rgb(83 111 90 / 6%);
+}
 .model-list {
-  max-height: min(480px, 58vh);
-  padding: 0 14px 14px;
+  max-height: min(320px, 46vh);
+  padding: 0 6px;
   scrollbar-gutter: stable;
 }
 
 .model-list section {
-  overflow: hidden;
-  margin-top: 10px;
-  border: 1px solid #e0e0dc;
-  border-radius: 11px;
-  background: #fff;
+  overflow: visible;
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
+.model-list section + section { margin-top: 4px; }
 
 .model-list h3 {
   margin: 0;
-  padding: 8px 11px;
-  border-bottom: 1px solid #ecece8;
-  background: #f4f4f1;
-  color: #757570;
+  padding: 5px 8px 2px;
+  border: 0;
+  background: transparent;
+  color: #a3a8a3;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: .04em;
 }
 
-.model-list section > button {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, .8fr);
-  min-height: 46px;
-  gap: 14px;
-  padding: 9px 11px;
-  border-radius: 0;
-  border-bottom: 1px solid #efefec;
+.composer .model-list section > button {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #30342f;
+  text-align: left;
 }
-
-.model-list section > button:last-child { border-bottom: 0; }
-.model-list section > button:hover { background: #f3f3f0; }
-.model-list section > button.selected {
-  background: #e9ede8;
-  box-shadow: inset 3px 0 0 #4e6954;
-}
-.model-list section > button span { min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.model-list section > button small { min-width: 0; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.model-list section > button:hover { background: #f0f0ed; }
+.model-list section > button.selected { background: #e7e7e3; box-shadow: none; }
+/* 模型名字号/字重必须和 .model-seat 一样（12px / 400），否则抽屉里的名字
+   和按钮上显示的同一个模型长得不一样宽，一眼对不上。
+   不加 text-overflow: ellipsis：宁可让抽屉按内容撑开，也不要把名字截断。 */
+.model-list section > button span { min-width: 0; color: inherit; font-size: 12px; font-weight: 400; white-space: nowrap; }
 
 .model-seat {
   border: 1px solid #e1e1dc;
@@ -589,34 +765,10 @@ button { color: inherit; }
 .settings-page { display: grid; gap: 18px; max-width: 860px; overflow-y: auto; height: 100%; }
 .settings-page > h1 { margin-bottom: 0; }
 .settings-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.provider-settings-card { gap: 18px; }
-.provider-list { display: grid; gap: 8px; }
-.provider-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; border: 1px solid #e4e4df; border-radius: 10px; background: #fff; }
-.provider-copy { display: grid; min-width: 0; gap: 3px; }
-.provider-copy strong, .provider-copy span, .provider-copy small, .provider-copy em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.provider-copy span { color: #6f6f6a; font-size: 12px; }
-.provider-copy em { color: #4e7158; font-size: 11px; font-style: normal; }
-.provider-actions { display: flex; flex: 0 0 auto; gap: 4px; }
-.provider-actions button { padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: #666662; font-size: 12px; cursor: pointer; }
-.provider-actions button:hover { background: #efefeb; }
-.provider-actions .danger-link { color: #a54b43; }
 .provider-empty { padding: 18px; border: 1px dashed #ddddda; border-radius: 10px; color: #999994; text-align: center; }
-.provider-form { display: grid; gap: 14px; padding-top: 17px; border-top: 1px solid #e8e8e3; }
-.provider-form h3 { margin: 0; font-size: 15px; }
-.provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.provider-grid label { display: grid; gap: 6px; color: #666662; font-size: 12px; }
-.provider-grid input, .provider-grid select { min-width: 0; padding: 9px 10px; border: 1px solid #dcdcd7; border-radius: 8px; background: #fff; outline: none; }
-.provider-grid input:focus, .provider-grid select:focus { border-color: #9a9a94; box-shadow: 0 0 0 3px rgb(70 70 66 / 8%); }
-.provider-grid input:disabled { background: #f0f0ed; color: #888883; }
-.provider-wide { grid-column: 1 / -1; }
-.provider-checkbox { display: flex; align-items: center; gap: 8px; color: #666662; font-size: 12px; }
-.provider-checkbox input { width: auto; }
 
 @media (max-width: 1000px) {
-  .provider-grid { grid-template-columns: 1fr; }
-  .provider-wide { grid-column: auto; }
-  .model-list section > button { grid-template-columns: minmax(0, 1fr); gap: 3px; }
-  .model-list section > button small { text-align: left; }
+  .model-list section > button { gap: 8px; }
 }
 /* Composer button reset: popup rows and model selector are not circular send buttons. */
 .composer .slash-menu button {
@@ -648,8 +800,7 @@ button { color: inherit; }
 }
 .model-list section > button { text-align: left; }
 @media (max-width: 1000px) {
-  .model-list section > button { grid-template-columns: minmax(0, 1fr) minmax(100px, .8fr); gap: 10px; }
-  .model-list section > button small { text-align: right; }
+  .model-list section > button { gap: 8px; }
 }
 .active-project-contents { margin-top: 7px; padding-top: 7px; border-top: 1px solid #e5e5e1; }
 .active-project-label { padding: 3px 10px 5px; color: #aaa9a4; font-size: 10px; letter-spacing: .04em; }
@@ -853,20 +1004,14 @@ button { color: inherit; }
 @media (pointer: coarse) {
   .message-copy { opacity: 1; }
 }
-/* footer 是弹窗玻璃的一部分，不是一个独立面板。
-   之前这里写死了 background:#fff 加一条 border-top，而 .model-picker 本身是
-   76% 透明的玻璃（见下方 Layered neutral glass 一节），于是在半透明面板上切出
-   一条不透明的白色横带 + 一根实线，视觉上像是弹窗被切成了两半。
-   「关闭」是收尾动作，之前左边还有状态文字和两个按钮，space-between 把它顶到了
-   最右；那些按钮删掉后只剩它一个子元素，space-between 就把它甩到了左边。 */
+/* footer 现在只在「正在应用 Pi 模型设置…」时出现（见 App.tsx），
+   「关闭」按钮删掉了：右上角 X、Esc 和点遮罩都能关，底部再挂一个纯属占地方。 */
 .model-picker-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 10px;
-  padding: 10px 18px 14px;
+  padding: 8px 16px 12px;
 }
-.model-picker-footer .permission-cancel { margin: 0; padding: 8px 10px; }
 .message-image-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -988,17 +1133,6 @@ button { color: inherit; }
 .turn-elapsed { color: #a3a39e; font-variant-numeric: tabular-nums; }
 .turn-elapsed::before { content: "·"; margin: 0 5px; }
 .message-elapsed { font-size: 10px; color: #898984; font-variant-numeric: tabular-nums; }
-.message-collapse {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  border: 0;
-  background: none;
-  padding: 2px 4px;
-  color: #898984;
-  cursor: pointer;
-}
-.message-collapse:hover { color: #565652; }
 .message-collapse .chevron { font-size: 15px; }
 .stream-stats { display: block; margin-top: 6px; color: #898984; font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
 .agent-activity {
@@ -1055,6 +1189,18 @@ button { color: inherit; }
 .message-rich-text ol { margin: 7px 0 11px; padding-left: 22px; }
 .message-rich-text li { margin: 3px 0; }
 .message-rich-text blockquote { margin: 10px 0; padding: 8px 11px; border: 1px solid #e1e1dc; border-radius: 8px; background: #f7f7f4; color: #666662; }
+/* GFM 表格：外层只负责横向滚动，列宽交给内容，免得窄栏里被压成两行 */
+.message-table-scroll { margin: 10px 0; overflow-x: auto; border: 1px solid #e2e3dd; border-radius: 10px; background: rgb(255 255 255 / 58%); }
+.message-table { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.55; color: #34372f; }
+.message-table th,
+.message-table td { padding: 7px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid #ecece6; }
+.message-table th { background: rgb(240 243 238 / 92%); color: #2f332d; font-weight: 600; }
+.message-table tbody tr:nth-child(even) { background: rgb(246 247 243 / 72%); }
+.message-table tbody tr:last-child td { border-bottom: 0; }
+.message-table th[data-align="center"],
+.message-table td[data-align="center"] { text-align: center; }
+.message-table th[data-align="right"],
+.message-table td[data-align="right"] { text-align: right; }
 .inline-code { padding: 2px 5px; border: 1px solid #deded9; border-radius: 5px; background: #f0f0ed; color: #41413e; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .88em; }
 .tool-error-guidance { margin-top: 8px; padding: 7px 9px; border-radius: 7px; background: #f8e9e6; color: #8a443c; font-size: 10px; line-height: 1.45; }
 .tool-error-guidance { margin-top: 8px; padding: 7px 9px; border-radius: 7px; background: #f8e9e6; color: #8a443c; font-size: 10px; line-height: 1.45; }
@@ -1065,31 +1211,6 @@ button { color: inherit; }
   align-items: center;
   gap: 8px;
 }
-
-.stop-button:disabled {
-  color: #9b9b96;
-  background: #f5f5f2;
-  cursor: default;
-}
-
-.turn-divider {
-  display: flex;
-  max-width: 760px;
-  align-items: center;
-  gap: 10px;
-  margin: 24px auto 18px;
-  color: #a0a09b;
-  font-size: 9px;
-  letter-spacing: .08em;
-}
-.turn-divider::before,
-.turn-divider::after {
-  height: 1px;
-  flex: 1;
-  background: #ecece8;
-  content: "";
-}
-.turn-divider span { flex: 0 0 auto; }
 
 .message-assistant {
   padding-bottom: 18px;
@@ -1204,11 +1325,10 @@ button { color: inherit; }
 .model-list section > button.keyboard-selected {
   position: relative;
   z-index: 1;
-  outline: 2px solid #708876;
+  outline: 2px solid #9cac9e;
   outline-offset: -2px;
   background: #edf1ec;
 }
-.model-list section > button.keyboard-selected small { color: #53675a; }
 .toast {
   animation: codepiddy-toast-in 180ms cubic-bezier(.2, .8, .2, 1) both;
 }
@@ -1220,22 +1340,8 @@ button { color: inherit; }
   .system-output-fold summary::before { transition: none; }
   .toast { animation: none; }
 }
-.model-empty {
-  display: grid;
-  min-height: 150px;
-  place-items: center;
-  color: #92928d;
-  font-size: 12px;
-}
-.model-picker-keyboard-hint {
-  margin-right: auto;
-  color: #969691;
-  font-size: 9px;
-  white-space: nowrap;
-}
 .model-picker-footer .model-picker-status { margin-right: 0; }
 @media (max-width: 720px) {
-  .model-picker-keyboard-hint { display: none; }
 }
 /* Per-role skill management */
 .skill-settings-card { gap: 18px; }
@@ -1811,7 +1917,17 @@ textarea:focus-visible,
 .permission-picker-list button[aria-selected="true"] { background: #e5eee6; color: #354f3b; font-weight: 600; }
 .permission-settings-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .permission-settings-footer small { max-width: 68ch; line-height: 1.5; }
-.permission-settings-footer .primary-button { flex: 0 0 auto; }
+/* 权限卡就地报错。设置页通用的 error 横幅固定在 main pane 顶部，页面一长就滚出屏幕，
+   而保存失败恰恰是用户最需要当场看到的事。 */
+.permission-settings-error {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #fbeeec;
+  color: #8f3b33;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 
 /* 25% 挡不住背景里的彩色强调控件：文件管理器表头那个绿色「刷新」按钮透过来
    变成一个说不清来历的色块。压到 38% 后背景只读作「暗一层」，不再能辨认出
@@ -1821,7 +1937,8 @@ textarea:focus-visible,
 .modal,
 .model-picker,
 .slash-menu,
-.agent-actions-menu {
+.agent-actions-menu,
+.thinking-control-popover {
   border-color: rgb(255 255 255 / 84%);
   background: rgb(252 252 250 / 76%);
   box-shadow: var(--cp-glass-highlight), var(--cp-shadow-float);
@@ -1835,8 +1952,8 @@ textarea:focus-visible,
 .slash-menu button:hover,
 .slash-menu button.selected,
 .agent-actions-menu button:hover { background: rgb(242 244 241 / 94%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 76%); }
-.model-list section { border-color: rgb(255 255 255 / 78%); background: rgb(255 255 255 / 44%); }
-.model-list h3 { border-color: rgb(104 112 105 / 12%); background: rgb(241 242 239 / 54%); }
+.model-list section { border: 0; background: transparent; }
+.model-list h3 { padding: 5px 8px 2px; border: 0; background: transparent; }
 .model-list section > button:hover { background: rgb(255 255 255 / 58%); }
 .model-list section > button.selected { background: rgb(231 237 231 / 70%); }
 

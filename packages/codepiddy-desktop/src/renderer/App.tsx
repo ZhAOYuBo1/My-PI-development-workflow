@@ -28,6 +28,8 @@ import { MessageContent } from "./components/message-content.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { StreamStats } from "./components/StreamStats.tsx";
 import { estimateTokens, extractUsageOutput, type FinalStreamStats, formatElapsed } from "./components/stream-stats.ts";
+import { ThinkingControl } from "./components/ThinkingControl.tsx";
+import { thinkingLevelLabel } from "./components/thinking-levels.ts";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
 import {
 	formatTurnElapsed,
@@ -37,6 +39,7 @@ import {
 } from "./components/turn-group.ts";
 import { WorkPanel } from "./components/WorkPanel.tsx";
 import { demoProject } from "./demo-project.ts";
+import { permissionChoicePresentation } from "./permission-choices.ts";
 
 type Selection =
 	| { type: "welcome" }
@@ -1329,6 +1332,9 @@ export function App() {
 		externalDirectory: "ask",
 	});
 	const [permissionSaving, setPermissionSaving] = useState(false);
+	// 权限卡自己的错误位。设置页通用的 error 横幅固定在 main pane 顶部，
+	// 页面滚到下面就看不见，而这里恰恰是最需要立刻看到失败的地方。
+	const [permissionError, setPermissionError] = useState<string | null>(null);
 	const [tavilyApiKey, setTavilyApiKey] = useState("");
 	const [shellPath, setShellPath] = useState("");
 	const [availableSkills, setAvailableSkills] = useState<AgentSkillSummary[]>([]);
@@ -1416,6 +1422,7 @@ export function App() {
 	const imageInputRef = useRef<HTMLInputElement | null>(null);
 	const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
 	const modelListRef = useRef<HTMLDivElement | null>(null);
+	const modelPickerRef = useRef<HTMLDivElement | null>(null);
 	const modelPickerInitializedRef = useRef<string | null>(null);
 	const modelPickerKeyboardScrollRef = useRef(false);
 	const modelPickerSelectedIndexRef = useRef(0);
@@ -2808,7 +2815,7 @@ export function App() {
 				if (name === "thinking") {
 					if (!args) {
 						setDrafts((current) => ({ ...current, [agentId]: "" }));
-						await openModelPicker(slot);
+						await cycleThinking(slot);
 						return;
 					}
 					const selection = modelSelections[agentId];
@@ -3205,6 +3212,22 @@ export function App() {
 	}, [modelPickerAgentId, modelPickerOptions, modelSearch, modelSelections]);
 
 	useEffect(() => {
+		if (!modelPickerAgentId) return;
+		// 之前模型选择器是居中对话框，靠一层全屏遮罩按钮来点外面关闭。
+		// 改成贴着模型名向上弹的抽屉之后没有遮罩了，改成监听 document 上的
+		// mousedown：点在抽屉和触发按钮之外才算关，点抽屉内部（搜索框、滚动）不算。
+		const onPointerDown = (event: MouseEvent): void => {
+			const target = event.target as Node;
+			if (modelPickerRef.current?.contains(target)) return;
+			if ((target as HTMLElement).closest?.(".model-picker-anchor")) return;
+			setModelPickerAgentId(null);
+			setModelSearch("");
+		};
+		document.addEventListener("mousedown", onPointerDown);
+		return () => document.removeEventListener("mousedown", onPointerDown);
+	}, [modelPickerAgentId]);
+
+	useEffect(() => {
 		if (!modelPickerAgentId || !modelPickerKeyboardScrollRef.current) return;
 		const selected = modelListRef.current?.querySelector<HTMLElement>(
 			`[data-model-index="${modelPickerSelectedIndex}"]`,
@@ -3272,17 +3295,64 @@ export function App() {
 		setRoleSkillAssignments(assignments);
 	}
 
-	async function savePermissionDefaults(): Promise<void> {
+	/**
+	 * 改一项就落一次盘，不再要按「保存权限」。
+	 *
+	 * 同一个设置页里原本混着三套保存模型：权限和 Tavily/Shell 要点保存，
+	 * Skills 勾选即存，运行时是即时执行。用户得记三套规则，而且前两者
+	 * 改完直接切走就静默丢失。统一成即时保存后，权限这一项的行为和 Skills 一致，
+	 * 也和权限本身「下一次工具调用就生效」的事实一致（扩展按 mtime 失效缓存）。
+	 *
+	 * 先乐观更新再回滚：写盘是本地操作，失败时把界面退回去并在卡片内报错，
+	 * 而不是把错误塞到页面顶部的全局横幅里（长页面滚下去看不见）。
+	 */
+	async function updatePermissionDefaults(patch: Partial<PermissionDefaults>): Promise<void> {
 		if (!("codepiddy" in window) || permissionSaving) return;
+		const previous = permissionDefaults;
+		const next = { ...previous, ...patch };
+		setPermissionDefaults(next);
 		setPermissionSaving(true);
-		setError(null);
+		setPermissionError(null);
 		try {
-			setPermissionDefaults(await window.codepiddy.setPermissionDefaults(permissionDefaults));
+			setPermissionDefaults(await window.codepiddy.setPermissionDefaults(next));
 		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "保存默认权限失败");
+			setPermissionDefaults(previous);
+			setPermissionError(caught instanceof Error ? caught.message : "保存默认权限失败");
 		} finally {
 			setPermissionSaving(false);
 		}
+	}
+
+	/**
+	 * `/thinking` 不带参数时循环到下一档。
+	 *
+	 * 以前这里是打开模型弹窗，因为强度那排按钮就住在弹窗里。弹窗移除强度之后，
+	 * 再打开它就变成「打开模型选择器却什么都改不了」的死命令，所以改成循环 ——
+	 * 和滑块控件表达的是同一个心智模型：强度是个可以连续往上调的量。
+	 */
+	async function cycleThinking(slot: AgentSlotSummary): Promise<void> {
+		const agentId = slot.currentInstanceId;
+		if (!agentId) return;
+		const selection = modelSelections[agentId];
+		const levels = selection?.availableThinkingLevels ?? [];
+		if (levels.length === 0) {
+			setError("当前模型不支持思考强度");
+			return;
+		}
+		const index = selection ? levels.indexOf(selection.thinkingLevel) : -1;
+		const next = levels[(index + 1) % levels.length];
+		if (!next) return;
+		const from = selection?.thinkingLevel;
+		if (!(await chooseThinking(slot, next))) return;
+		updateTranscript(agentId, (items) => [
+			...items,
+			{
+				id: crypto.randomUUID(),
+				type: "system",
+				text: `思考强度：${from ? thinkingLevelLabel(from) : "未设置"} → ${thinkingLevelLabel(next)}`,
+				createdAt: new Date().toISOString(),
+			},
+		]);
 	}
 
 	async function runPiRuntimeAction(action: "check" | "install" | "rollback"): Promise<void> {
@@ -3367,6 +3437,14 @@ export function App() {
 		}
 	}
 
+	async function openPermissionPolicyFolder(): Promise<void> {
+		try {
+			await window.codepiddy.openPermissionPolicyFolder();
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "打开权限配置目录失败");
+		}
+	}
+
 	async function openProjectSkillsFolder(): Promise<void> {
 		if (!project || !("codepiddy" in window)) return;
 		try {
@@ -3387,10 +3465,20 @@ export function App() {
 
 	async function openModelPicker(slot: AgentSlotSummary): Promise<void> {
 		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
+		// 点一下打开、再点一下收回。之前是居中对话框（有遮罩兜底关闭），
+		// 改成贴着按钮的抽屉之后必须自己做这个切换。
+		if (modelPickerAgentId === slot.currentInstanceId) {
+			setModelPickerAgentId(null);
+			setModelSearch("");
+			return;
+		}
 		setModelPickerAgentId(slot.currentInstanceId);
 		setModelSearch("");
 		if (demoMode || !("codepiddy" in window)) return;
-		setModelPickerBusy(true);
+		// 已经有 selection 就直接开抽屉，把刷新放到后台做，不要顺手把工具栏禁用掉：
+		// modelPickerBusy 会同时禁用思考强度按钮，disabled 一帧会让它换一套外观，
+		// 用户看到的是「点模型按钮时右边闪一下」。
+		if (!modelSelections[slot.currentInstanceId]) setModelPickerBusy(true);
 		setError(null);
 		try {
 			const selection = await window.codepiddy.getAgentModelSelection({
@@ -3583,44 +3671,49 @@ export function App() {
 								<h2>默认权限</h2>
 								<p>所有 Agent 共用。按工具类型分别设置；“修改文件”不包含 Bash 命令。</p>
 							</div>
-							<div className="settings-status">全局</div>
+							<div className="skill-settings-actions">
+								<div className="settings-status">全局</div>
+								<button className="secondary-button" type="button" onClick={() => void openPermissionPolicyFolder()}>
+									打开权限配置目录
+								</button>
+							</div>
 						</div>
 						<div className="permission-setting-list">
 							<PermissionSettingRow
 								label="读取文件"
 								description="read、grep、find 和 ls"
 								value={permissionDefaults.read}
-								onChange={(read) => setPermissionDefaults((current) => ({ ...current, read }))}
+								onChange={(read) => void updatePermissionDefaults({ read })}
 							/>
 							<PermissionSettingRow
 								label="修改文件"
 								description="write 和 edit"
 								value={permissionDefaults.write}
-								onChange={(write) => setPermissionDefaults((current) => ({ ...current, write }))}
+								onChange={(write) => void updatePermissionDefaults({ write })}
 							/>
 							<PermissionSettingRow
 								label="命令执行"
 								description="Bash，可执行任意命令；Coding Agent 常用"
 								value={permissionDefaults.bash}
-								onChange={(bash) => setPermissionDefaults((current) => ({ ...current, bash }))}
+								onChange={(bash) => void updatePermissionDefaults({ bash })}
 							/>
 							<PermissionSettingRow
 								label="MCP 工具"
 								description="调用已配置的 MCP 服务"
 								value={permissionDefaults.mcp}
-								onChange={(mcp) => setPermissionDefaults((current) => ({ ...current, mcp }))}
+								onChange={(mcp) => void updatePermissionDefaults({ mcp })}
 							/>
 							<PermissionSettingRow
 								label="Skill"
 								description="读取和使用 Agent Skill"
 								value={permissionDefaults.skills}
-								onChange={(skills) => setPermissionDefaults((current) => ({ ...current, skills }))}
+								onChange={(skills) => void updatePermissionDefaults({ skills })}
 							/>
 							<PermissionSettingRow
 								label="其他工具"
 								description="未单独列出的工具，如 web_search"
 								value={permissionDefaults.otherTools}
-								onChange={(otherTools) => setPermissionDefaults((current) => ({ ...current, otherTools }))}
+								onChange={(otherTools) => void updatePermissionDefaults({ otherTools })}
 							/>
 							<PermissionSettingRow
 								label="项目外路径"
@@ -3631,18 +3724,16 @@ export function App() {
 								}
 							/>
 						</div>
+						{permissionError ? (
+							<p className="permission-settings-error" role="alert">
+								{permissionError}
+							</p>
+						) : null}
 						<div className="permission-settings-footer">
 							<small>
-								直接允许命令执行可运行任意命令。保存后对所有 Agent 的后续工具调用生效；已弹出的请求仍需处理。
+								直接允许命令执行可运行任意命令。改动即时保存，对所有 Agent 的后续工具调用生效；已弹出的请求仍需处理。
 							</small>
-							<button
-								className="primary-button"
-								type="button"
-								disabled={permissionSaving}
-								onClick={() => void savePermissionDefaults()}
-							>
-								{permissionSaving ? "保存中" : "保存权限"}
-							</button>
+							<span className="settings-status">{permissionSaving ? "保存中" : "已保存"}</span>
 						</div>
 					</section>
 					<section className="settings-card">
@@ -4082,12 +4173,123 @@ export function App() {
 										>
 											<AppIcon name="paperclip" size={15} />
 										</button>
+<div className="model-picker-anchor">
 										<button className="model-seat" type="button" onClick={() => void openModelPicker(slot)}>
-											{modelSelections[agentId]?.model.name ?? "选择模型"} ·{" "}
-											{modelSelections[agentId]?.thinkingLevel ?? "—"} ▾
+											{modelSelections[agentId]?.model.name ?? "选择模型"} ▾
 										</button>
-										<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
+										{modelPickerAgentId === agentId && modelSelections[agentId]
+											? (() => {
+													const modelSelection = modelSelections[agentId];
+													const filtered = modelPickerOptions;
+													const providers = [...new Set(filtered.map((model) => model.provider))];
+													return (
+														<div
+															ref={modelPickerRef}
+															className="modal model-picker"
+															role="dialog"
+															aria-label="选择模型"
+															onKeyDown={(event) => {
+																if (event.key === "ArrowDown" && filtered.length > 0) {
+																	event.preventDefault();
+																	modelPickerKeyboardScrollRef.current = true;
+																	setModelPickerSelectedIndex((current) => {
+																		const next = (current + 1) % filtered.length;
+																		modelPickerSelectedIndexRef.current = next;
+																		return next;
+																	});
+																} else if (event.key === "ArrowUp" && filtered.length > 0) {
+																	event.preventDefault();
+																	modelPickerKeyboardScrollRef.current = true;
+																	setModelPickerSelectedIndex((current) => {
+																		const next = (current - 1 + filtered.length) % filtered.length;
+																		modelPickerSelectedIndexRef.current = next;
+																		return next;
+																	});
+																} else if (
+																	event.key === "Enter" &&
+																	event.target === modelSearchInputRef.current &&
+																	!modelPickerBusy
+																) {
+																	const model = filtered[modelPickerSelectedIndexRef.current];
+																	if (!model) return;
+																	event.preventDefault();
+																	void chooseModel(slot, model.provider, model.id);
+																}
+															}}
+														>
+															<input
+																ref={modelSearchInputRef}
+																value={modelSearch}
+																onChange={(event) => {
+																	setModelSearch(event.target.value);
+																	modelListRef.current?.scrollTo({ top: 0 });
+																	modelPickerSelectedIndexRef.current = 0;
+																	modelPickerKeyboardScrollRef.current = true;
+																	setModelPickerSelectedIndex(0);
+																}}
+																placeholder="搜索模型"
+															/>
+															<div
+																className="model-list"
+																ref={modelListRef}
+																onWheel={() => {
+																	modelPickerKeyboardScrollRef.current = false;
+																}}
+															>
+																{providers.map((provider) => (
+																	<section key={provider}>
+																		<h3>{provider}</h3>
+																		{filtered
+																			.map((model, index) => ({ model, index }))
+																			.filter((entry) => entry.model.provider === provider)
+																			.map(({ model, index }) => (
+																				<button
+																					type="button"
+																					className={[
+																						model.id === modelSelection.model.id &&
+																						model.provider === modelSelection.model.provider
+																							? "selected"
+																							: "",
+																						index === modelPickerSelectedIndex ? "keyboard-selected" : "",
+																					]
+																						.filter(Boolean)
+																						.join(" ")}
+																					data-model-index={index}
+																					onMouseEnter={() => {
+																						modelPickerKeyboardScrollRef.current = false;
+																						modelPickerSelectedIndexRef.current = index;
+																						setModelPickerSelectedIndex(index);
+																					}}
+																					key={provider + model.id}
+																					disabled={modelPickerBusy}
+																					title={model.id}
+																					onClick={() => void chooseModel(slot, model.provider, model.id)}
+																				>
+																					<span>{model.name}</span>
+																				</button>
+																			))}
+																	</section>
+																))}
+															</div>
+															{modelPickerBusy ? (
+																<div className="model-picker-footer">
+																	<span className="model-picker-status">正在应用 Pi 模型设置…</span>
+																</div>
+															) : null}
+														</div>
+													);
+												})()
+											: null}
 									</div>
+									<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
+									</div>
+									<div className="composer-actions">
+									<ThinkingControl
+										levels={modelSelections[agentId]?.availableThinkingLevels ?? []}
+										value={modelSelections[agentId]?.thinkingLevel ?? ""}
+										disabled={modelPickerBusy}
+										onChange={(level) => void chooseThinking(slot, level)}
+									/>
 									{canAbort ? (
 										<button
 											className="send-button stop-send-button"
@@ -4109,6 +4311,7 @@ export function App() {
 											<AppIcon name="arrow-up" />
 										</button>
 									)}
+								</div>
 								</div>
 							</form>
 						</>
@@ -4588,7 +4791,7 @@ export function App() {
 							<div className="permission-options">
 								{extensionDialog.options.map((option) => (
 									<button
-										className={option.startsWith("Allow") ? "primary-button" : "secondary-button"}
+										className={permissionChoicePresentation(option).className}
 										type="button"
 										key={option}
 										onClick={() => void respondToExtensionDialog({ value: option })}
@@ -4645,143 +4848,6 @@ export function App() {
 					</div>
 				</div>
 			) : null}
-			{modelPickerAgentId && selectedWorkItem && selection.type === "agent"
-				? (() => {
-						const slot = selectedWorkItem.agentSlots.find((candidate) => candidate.role === selection.role);
-						const modelSelection = modelSelections[modelPickerAgentId];
-						if (!slot || !modelSelection) return null;
-						const filtered = modelPickerOptions;
-						const providers = [...new Set(filtered.map((model) => model.provider))];
-						return (
-							<div className="modal-backdrop" role="presentation">
-								<button
-									className="modal-backdrop-dismiss"
-									type="button"
-									aria-label="关闭模型选择器"
-									onClick={() => {
-										setModelPickerAgentId(null);
-										setModelSearch("");
-									}}
-								/>
-								<div
-									className="modal model-picker"
-									role="dialog"
-									aria-modal="true"
-									aria-label="选择模型"
-									onKeyDown={(event) => {
-										if (event.key === "ArrowDown" && filtered.length > 0) {
-											event.preventDefault();
-											modelPickerKeyboardScrollRef.current = true;
-											setModelPickerSelectedIndex((current) => {
-												const next = (current + 1) % filtered.length;
-												modelPickerSelectedIndexRef.current = next;
-												return next;
-											});
-										} else if (event.key === "ArrowUp" && filtered.length > 0) {
-											event.preventDefault();
-											modelPickerKeyboardScrollRef.current = true;
-											setModelPickerSelectedIndex((current) => {
-												const next = (current - 1 + filtered.length) % filtered.length;
-												modelPickerSelectedIndexRef.current = next;
-												return next;
-											});
-										} else if (
-											event.key === "Enter" &&
-											event.target === modelSearchInputRef.current &&
-											!modelPickerBusy
-										) {
-											const model = filtered[modelPickerSelectedIndexRef.current];
-											if (!model) return;
-											event.preventDefault();
-											void chooseModel(slot, model.provider, model.id);
-										}
-									}}
-								>
-									<h2>选择模型</h2>
-									<input
-										ref={modelSearchInputRef}
-										value={modelSearch}
-										onChange={(event) => {
-											setModelSearch(event.target.value);
-											modelListRef.current?.scrollTo({ top: 0 });
-											modelPickerSelectedIndexRef.current = 0;
-											modelPickerKeyboardScrollRef.current = true;
-											setModelPickerSelectedIndex(0);
-										}}
-										placeholder="搜索模型"
-									/>
-									<div className="thinking-row">
-										{modelSelection.availableThinkingLevels.map((level) => (
-											<button
-												type="button"
-												className={level === modelSelection.thinkingLevel ? "selected" : ""}
-												key={level}
-												disabled={modelPickerBusy}
-												onClick={() => void chooseThinking(slot, level)}
-											>
-												{level}
-											</button>
-										))}
-									</div>
-									<div
-										className="model-list"
-										ref={modelListRef}
-										onWheel={() => {
-											modelPickerKeyboardScrollRef.current = false;
-										}}
-									>
-										{providers.map((provider) => (
-											<section key={provider}>
-												<h3>{provider}</h3>
-												{filtered
-													.map((model, index) => ({ model, index }))
-													.filter((entry) => entry.model.provider === provider)
-													.map(({ model, index }) => (
-														<button
-															type="button"
-															className={[
-																model.id === modelSelection.model.id &&
-																model.provider === modelSelection.model.provider
-																	? "selected"
-																	: "",
-																index === modelPickerSelectedIndex ? "keyboard-selected" : "",
-															]
-																.filter(Boolean)
-																.join(" ")}
-															data-model-index={index}
-															onMouseEnter={() => {
-																modelPickerKeyboardScrollRef.current = false;
-																modelPickerSelectedIndexRef.current = index;
-																setModelPickerSelectedIndex(index);
-															}}
-															key={provider + model.id}
-															disabled={modelPickerBusy}
-															onClick={() => void chooseModel(slot, model.provider, model.id)}
-														>
-															<span>{model.name}</span>
-															<small>{model.id}</small>
-														</button>
-													))}
-											</section>
-										))}
-									</div>
-									<div className="model-picker-footer">
-										{modelPickerBusy ? (
-											<span className="model-picker-status">正在应用 Pi 模型设置…</span>
-										) : null}
-										<button
-											className="permission-cancel"
-											type="button"
-											onClick={() => setModelPickerAgentId(null)}
-										>
-											关闭
-										</button>
-									</div>
-								</div>
-							</div>
-						);
-					})()
-				: null}
 			{archiveToast ? (
 				<output className="toast" aria-live="polite">
 					“{archiveToast.title}”已归档

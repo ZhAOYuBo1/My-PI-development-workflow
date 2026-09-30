@@ -235,6 +235,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	getRoleSkillAssignments(): Promise<RoleSkillAssignments>;
 	setRoleSkillAssignments(input: SetRoleSkillAssignmentsInput): Promise<RoleSkillAssignments>;
 	openPiConfigFolder(): Promise<void>;
+	openPermissionPolicyFolder(): Promise<void>;
 	openProjectSkillsFolder(projectRoot: string): Promise<void>;
 	openBuiltinSkillsFolder(): Promise<void>;
 	getAgentModelSelection(input: AgentInstanceLocator): Promise<AgentModelSelection>;
@@ -321,6 +322,38 @@ export interface PermissionDefaults {
 	externalDirectory: PermissionState;
 }
 
+/**
+ * 权限请求弹窗的选项表 —— 扩展与桌面端的单一真相源。
+ *
+ * 之前两端各自硬编码英文文案：扩展发 "Allow Once" / "Allow Always"，
+ * 桌面端靠 `option.startsWith("Allow")` 猜哪个是主按钮。扩展改一次文案，
+ * 桌面端的按钮样式就跟着错位；而且整个中文界面里只剩这个弹窗是英文。
+ * 改成两端都查这张表之后，文案不会再各自漂移。
+ */
+export type PermissionDecisionId = "once" | "always" | "reject" | "reject_with_reason";
+
+export interface PermissionDecisionChoice {
+	readonly id: PermissionDecisionId;
+	/** 直接显示给用户的文案。 */
+	readonly label: string;
+	readonly tone: "approve" | "deny";
+	/** 主按钮：回车默认落在它上面。 */
+	readonly primary: boolean;
+	/** 选中后是否要写进策略文件，从而跨会话生效。 */
+	readonly persistent: boolean;
+}
+
+export const PERMISSION_DECISION_CHOICES: readonly PermissionDecisionChoice[] = [
+	{ id: "once", label: "仅本次允许", tone: "approve", primary: true, persistent: false },
+	{ id: "always", label: "该 Agent 始终允许", tone: "approve", primary: false, persistent: true },
+	{ id: "reject", label: "拒绝", tone: "deny", primary: false, persistent: false },
+	{ id: "reject_with_reason", label: "拒绝并说明原因", tone: "deny", primary: false, persistent: false },
+];
+
+export function findPermissionDecisionChoice(label: string): PermissionDecisionChoice | undefined {
+	return PERMISSION_DECISION_CHOICES.find((choice) => choice.label === label);
+}
+
 export type AgentSkillSource = "builtin" | "codex" | "agents" | "pi" | "project";
 
 export interface AgentSkillSummary {
@@ -358,16 +391,6 @@ export interface CustomProviderInput {
 	reasoning: boolean;
 	contextWindow: number;
 	maxTokens: number;
-}
-
-export interface CustomProviderSummary extends Omit<CustomProviderInput, "apiKey"> {
-	apiKeyConfigured: boolean;
-}
-
-export interface ProviderConnectionTestResult {
-	ok: boolean;
-	status?: number;
-	message: string;
 }
 
 export interface RecentProject {
