@@ -280,7 +280,8 @@ docs/images/                             README 界面截图（由 capture-scree
 - Tavily Key 使用 Electron `safeStorage`；
 - 默认只直接允许项目内文件读取和修改；
 - 文件管理器只能列出和读取项目根目录内的路径，越界请求被拒绝；
-- Bash、MCP、Skill 和项目外路径仍可以配置审批策略；
+- Bash、MCP、Skill 和项目外路径的审批策略可在设置中调整，出厂默认全部放行，因此首次使用不会弹出授权请求；
+- 多 Agent 之间不做进程内编排，交接靠共享工作树和工作项文档；启动哪些 Agent 由工作项的角色槽位和需求批准状态决定；
 - 当前 Windows MVP 尚未提供强执行沙箱，Agent 进程仍使用当前操作系统用户权限。
 
 更多信息见 [SECURITY.md](SECURITY.md)。
