@@ -99,6 +99,30 @@ test("shows context usage beside the model and jumps through the transcript mini
 	const minimapCenter = minimapBox!.y + minimapBox!.height / 2;
 	expect(Math.abs(ticksCenter - minimapCenter)).toBeLessThan(2);
 	expect(Math.round(lastTickBox!.y - firstTickBox!.y)).toBe(140);
+
+	// 防回归：定位条不得压住消息正文。必须在文件管理器打开（转录视口 < 816px，
+	// 消息列铺满）时断言——宽视口下消息列居中留白，改造前也能平凡通过。
+	const assertMinimapDoesNotOverlap = async (): Promise<void> => {
+		const firstMessage = page.locator(".message, .turn-group").first();
+		await expect(firstMessage).toBeVisible();
+		const [rail, message] = await Promise.all([minimap.boundingBox(), firstMessage.boundingBox()]);
+		expect(rail).not.toBeNull();
+		expect(message).not.toBeNull();
+		expect(rail!.x + rail!.width).toBeLessThanOrEqual(message!.x);
+	};
+	await assertMinimapDoesNotOverlap();
+	// 按钮文案是「隐藏文件管理器」表示面板当前开着。默认开着，若被关掉则打开再断言。
+	const showPanel = page.getByRole("button", { name: "显示文件管理器" });
+	if (await showPanel.isVisible()) {
+		await showPanel.click();
+		await expect(page.locator(".work-panel")).toBeVisible();
+		await assertMinimapDoesNotOverlap();
+		await page.getByRole("button", { name: "隐藏文件管理器" }).click();
+		await expect(page.locator(".work-panel")).toHaveCount(0);
+		await page.getByRole("button", { name: "显示文件管理器" }).click();
+		await expect(page.locator(".work-panel")).toBeVisible();
+	}
+
 	await minimap.locator("button").first().hover();
 	await expect(minimap.locator(".transcript-minimap-preview").first()).toContainText("第 1 轮");
 	const transcript = page.locator(".transcript");

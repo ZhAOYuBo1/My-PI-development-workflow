@@ -2030,14 +2030,18 @@ textarea:focus-visible,
 .transcript-stage { position: relative; min-height: 0; flex: 1; display: flex; }
 .transcript-stage > .transcript { height: 100%; padding-bottom: 70px; flex: 1; min-width: 0; }
 .transcript-entry { position: relative; }
+/* 定位条是转录流的独立左列，不是覆盖层。原先 position:absolute + left:12px/width:28px
+   会压在正文上：转录视口窄于 760+56=816px 时 .message 铺满、左边缘固定在 x=28，
+   而定位条右边缘在 x=40，恒定重叠 12px（1600px 窗口 + 开文件看板即触发）。
+   改成 flex 列后横向不可能重叠，不依赖 left/width 的具体数值。 */
 .transcript-minimap {
-  position: absolute;
-  z-index: 30;
-  top: 20px;
-  bottom: 20px;
-  left: 12px;
-  width: 28px;
+  position: relative;
+  flex: 0 0 40px;
+  align-self: stretch;
+  /* 原 top/bottom:20px 的等效写法，给刻度留出上下呼吸空间 */
+  margin: 20px 0;
   border: 0;
+  /* 保留穿透：这 40px 原本被正文覆盖，点击要能选中文本，只有刻度可点 */
   pointer-events: none;
 }
 .transcript-minimap-tick {

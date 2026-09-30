@@ -22,8 +22,8 @@
 
 #### Scenario: 窄窗隐藏定位栏
 
-- **WHEN** 窗口宽度 ≤ 760px
-- **THEN** 定位栏 `display: none` 且不占据布局宽度，正文列恢复占满转录区
+- **WHEN** 窗口宽度 ≤ 980px
+- **THEN** 定位栏 `display: none` 且不占据布局宽度（flex 项不参与分配），正文列恢复占满转录区
 
 ### Requirement: 刻度纵向几何保持不变
 
