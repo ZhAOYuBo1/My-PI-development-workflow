@@ -895,11 +895,10 @@ class AgentManager {
 				? path.join(this.repositoryRoot, "coding-agent-package", "dist", "bundle", "cli.js")
 				: path.join(this.repositoryRoot, "packages", "coding-agent", "src", "cli.ts"));
 		const nodeExecutable = process.env.CODEPIDDY_NODE_EXECUTABLE ?? (packaged ? process.execPath : "node");
-		const [tavilyApiKey, roleModelDefault, roleSkillAssignments, shellPath] = await Promise.all([
+		const [tavilyApiKey, roleModelDefault, roleSkillAssignments] = await Promise.all([
 			this.settingsStore.getTavilyApiKey(),
 			this.settingsStore.getRoleModelDefault(agent.role),
 			this.settingsStore.getRoleSkillAssignments(),
-			this.settingsStore.getShellPath(),
 		]);
 		const roleSkillPaths = await resolveRoleSkillPaths(
 			this.repositoryRoot,
@@ -935,9 +934,9 @@ class AgentManager {
 							).href,
 						}),
 				...(tavilyApiKey ? { TAVILY_API_KEY: tavilyApiKey } : {}),
-				// pi 只从 settings.json 读 shellPath；用环境变量把设置页的路径喂进去，
-				// 免得改写用户自己的 ~/.pi/agent/settings.json。Git for Windows 装在非标准目录时必需。
-				...(shellPath ? { PI_SHELL_PATH: shellPath } : {}),
+				// shellPath 不走环境变量：Pi 原生从 settings.json 读，AppSettingsStore.setShellPath
+				// 已写进 PI_CODING_AGENT_DIR/settings.json。曾经传的 PI_SHELL_PATH 需要 Pi 源码里的
+				// 私有补丁，用户从 npm 升级 Pi 后失效且无人察觉。
 				CODEPIDDY_AGENT_ROLE: agent.role,
 				CODEPIDDY_PROJECT_ROOT: agent.projectRoot,
 				CODEPIDDY_WORK_ITEM_DIR: agent.workItemDirectory,

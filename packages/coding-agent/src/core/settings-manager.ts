@@ -991,12 +991,14 @@ export class SettingsManager {
 	}
 
 	/**
-	 * `PI_SHELL_PATH` 供宿主应用（如 CodePIddy 设置页）在不改写 settings.json 的前提下覆盖 bash 路径，
-	 * 用于 Git for Windows 装在非标准目录（如 D:\git\Git）导致自动探测失败的场景。
+	 * `getShellPath` 保持上游行为：只读 settings.json 的 `shellPath`。
+	 * 宿主应用（如 CodePIddy）需要设置 bash 路径时，应写 `PI_CODING_AGENT_DIR` 指向的
+	 * settings.json，而不是往这里加环境变量旁路 —— 后者会让宿主依赖私有补丁，
+	 * 用户从 npm 升级 Pi 后静默失效。
 	 */
 	getShellPath(): string | undefined {
-		const shellPath = process.env.PI_SHELL_PATH?.trim() || this.settings.shellPath;
-		return shellPath ? normalizePath(shellPath) : undefined;
+		const shellPath = this.settings.shellPath;
+		return shellPath ? normalizePath(shellPath) : shellPath;
 	}
 
 	setShellPath(path: string | undefined): void {

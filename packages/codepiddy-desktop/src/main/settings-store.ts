@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import type {
 	AgentRole,
@@ -28,6 +29,16 @@ const ROLE_SKILLS_SCHEMA_VERSION = 2;
 
 function isNotFound(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+/**
+ * Pi 的全局配置目录，对齐 packages/coding-agent/src/config.ts 的 getAgentDir()：
+ * 环境变量名由 APP_NAME 推导为 PI_CODING_AGENT_DIR，缺省是 ~/.pi/agent。
+ * 抄这里而不是引 Pi 的源码，外壳对 npm 版 Pi 升级免疫。
+ */
+function resolvePiAgentDir(): string {
+	const configured = process.env.PI_CODING_AGENT_DIR?.trim();
+	return configured ? path.resolve(configured) : path.join(homedir(), ".pi", "agent");
 }
 
 function isAgentRole(value: string): value is AgentRole {
@@ -67,6 +78,7 @@ export class AppSettingsStore {
 	private readonly permissionDefaultsPath: string;
 	private readonly permissionPolicyPath: string;
 	private readonly shellPathFile: string;
+	private readonly piSettingsPath: string;
 
 	constructor(userDataPath: string) {
 		const settingsDirectory = path.join(userDataPath, "settings");
@@ -76,6 +88,35 @@ export class AppSettingsStore {
 		this.permissionDefaultsPath = path.join(settingsDirectory, "permission-defaults.json");
 		this.permissionPolicyPath = path.join(userDataPath, "permissions", "policy", "pi-permissions.jsonc");
 		this.shellPathFile = path.join(settingsDirectory, "shell.json");
+		this.piSettingsPath = path.join(resolvePiAgentDir(), "settings.json");
+	}
+
+	/**
+	 * 把 shellPath 同步到 Pi 自己的 settings.json。
+	 *
+	 * Pi 只从 settings.json 读 shellPath（packages/coding-agent/src/core/settings-manager.ts
+	 * 的 getShellPath），所以这是唯一不依赖 Pi 私有补丁的通路。曾经用 PI_SHELL_PATH
+	 * 环境变量绕过，那段读取是我们往 Pi 源码里加的，用户从 npm 升级 Pi 后就没了，
+	 * 而外壳毫无察觉地继续传一个没人读的环境变量。
+	 *
+	 * 合并写而不是覆盖：settings.json 里还有模型、主题等用户自己的配置。
+	 */
+	private async syncPiShellPath(shellPath: string | null): Promise<void> {
+		let current: Record<string, unknown> = {};
+		try {
+			const parsed: unknown = JSON.parse(await readFile(this.piSettingsPath, "utf8"));
+			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+				current = parsed as Record<string, unknown>;
+			}
+		} catch (error) {
+			if (!isNotFound(error)) throw error;
+		}
+		if (current.shellPath === (shellPath ?? undefined)) return;
+		const next = { ...current };
+		if (shellPath) next.shellPath = shellPath;
+		else delete next.shellPath;
+		await mkdir(path.dirname(this.piSettingsPath), { recursive: true });
+		await writeFile(this.piSettingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 	}
 
 	async getShellPath(): Promise<string | null> {
@@ -103,6 +144,7 @@ export class AppSettingsStore {
 				if (!isNotFound(error)) throw error;
 			}
 		}
+		await this.syncPiShellPath(shellPath || null);
 		return this.status();
 	}
 
