@@ -1189,12 +1189,19 @@ button { color: inherit; }
 .message-rich-text ol { margin: 7px 0 11px; padding-left: 22px; }
 .message-rich-text li { margin: 3px 0; }
 .message-rich-text blockquote { margin: 10px 0; padding: 8px 11px; border: 1px solid #e1e1dc; border-radius: 8px; background: #f7f7f4; color: #666662; }
-/* GFM 表格：外层只负责横向滚动，列宽交给内容，免得窄栏里被压成两行 */
-.message-table-scroll { margin: 10px 0; overflow-x: auto; border: 1px solid #e2e3dd; border-radius: 10px; background: rgb(255 255 255 / 58%); }
-.message-table { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.55; color: #34372f; }
+/* GFM 表格。外层负责「不超出消息区」+ 溢出时横向滚动 + 卡片外观。
+   字号和颜色都【不写死】：继承 .message 的正文样式（16px / #292928）。
+   之前写死成 12/11/13px 会让整张表读起来像嵌在正文里的另一个控件，
+   而不是正文的一部分 —— 「框内字比外面小」就是这个写死值造成的。 */
+.message-table-scroll { max-width: 100%; margin: 10px 0; overflow-x: auto; border: 1px solid #e2e3dd; border-radius: 10px; background: rgb(255 255 255 / 58%); }
+.message-table { width: 100%; border-collapse: collapse; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .message-table th,
-.message-table td { padding: 7px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid #ecece6; }
-.message-table th { background: rgb(240 243 238 / 92%); color: #2f332d; font-weight: 600; }
+.message-table td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #ecece6; }
+/* 列间竖线：每行第二列起加左边框，首列靠外框收口、末列靠外框收口，都不画。
+   竖线比横线重一点（#e0e2da vs #ecece6），斑马纹行上才看得清。 */
+.message-table th + th,
+.message-table td + td { border-left: 1px solid #e0e2da; }
+.message-table th { background: rgb(240 243 238 / 92%); font-weight: 600; }
 .message-table tbody tr:nth-child(even) { background: rgb(246 247 243 / 72%); }
 .message-table tbody tr:last-child td { border-bottom: 0; }
 .message-table th[data-align="center"],

@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
+import { splitTableRow, type TableAlignment, tableAlignment, tableColumnCount } from "./markdown-table.ts";
 
-// 轻量 markdown 渲染（标题/列表/引用/行内码/围栏代码块），从 App.tsx 移出供对话与文件预览共用。
+// 轻量 markdown 渲染（标题/列表/引用/行内码/围栏代码块/表格），从 App.tsx 移出供对话与文件预览共用。
 function InlineText({ text }: { text: string }) {
 	const tokens = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
 	return (
@@ -19,6 +20,62 @@ function InlineText({ text }: { text: string }) {
 				return <span key={`${index}-${token}`}>{token}</span>;
 			})}
 		</>
+	);
+}
+
+// GFM 表格：必须同时有表头行和分隔行（`|---|---|`）才算表格，解析见 markdown-table.ts。
+
+// biome 的 noArrayIndexKey 连模板字符串里的下标也不放过，所以 key 一律由内容生成，
+// 重复时加后缀（表格里两行完全相同是合法的，不能撞 key）。
+function uniqueKeys(values: string[]): string[] {
+	const seen = new Map<string, number>();
+	return values.map((value) => {
+		const count = seen.get(value) ?? 0;
+		seen.set(value, count + 1);
+		return count === 0 ? value : `${value} #${count}`;
+	});
+}
+
+function RichTable({
+	head,
+	align,
+	rows,
+	columns,
+}: {
+	head: string[];
+	align: TableAlignment[];
+	rows: string[][];
+	columns: number;
+}) {
+	const columnKeys = uniqueKeys(
+		Array.from({ length: columns }, (_, columnIndex) => head[columnIndex] || `col${columnIndex + 1}`),
+	);
+	const rowKeys = uniqueKeys(rows.map((row) => row.join(" ")));
+	return (
+		<div className="message-table-scroll">
+			<table className="message-table">
+				<thead>
+					<tr>
+						{columnKeys.map((columnKey, columnIndex) => (
+							<th key={columnKey} data-align={align[columnIndex] ?? undefined}>
+								<InlineText text={head[columnIndex] ?? ""} />
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((row, rowIndex) => (
+						<tr key={rowKeys[rowIndex]}>
+							{columnKeys.map((columnKey, columnIndex) => (
+								<td key={columnKey} data-align={align[columnIndex] ?? undefined}>
+									<InlineText text={row[columnIndex] ?? ""} />
+								</td>
+							))}
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
 	);
 }
 
@@ -52,7 +109,33 @@ function RichText({ text }: { text: string }) {
 		);
 		list = null;
 	};
-	for (const line of lines) {
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index]!;
+		const head = splitTableRow(line);
+		const nextLine = lines[index + 1];
+		const align = nextLine === undefined ? null : tableAlignment(splitTableRow(nextLine));
+		if (head && align) {
+			flushParagraph();
+			flushList();
+			const rows: string[][] = [];
+			let cursor = index + 2;
+			for (; cursor < lines.length; cursor++) {
+				const row = splitTableRow(lines[cursor]!);
+				if (!row) break;
+				rows.push(row);
+			}
+			blocks.push(
+				<RichTable
+					key={`table-${blocks.length}`}
+					head={head}
+					align={align}
+					rows={rows}
+					columns={tableColumnCount(head, rows)}
+				/>,
+			);
+			index = cursor - 1;
+			continue;
+		}
 		const heading = /^(#{1,4})\s+(.+)$/.exec(line);
 		const unordered = /^[-*]\s+(.+)$/.exec(line);
 		const ordered = /^\d+[.)]\s+(.+)$/.exec(line);
