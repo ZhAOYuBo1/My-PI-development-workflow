@@ -4,10 +4,7 @@ import {
 	PERMISSION_DECISION_OPTION_IDS,
 	permissionDecisionIdForLabel,
 } from "../../codepiddy-permission-extension/src/permission-dialog.ts";
-import {
-	KNOWN_PERMISSION_CHOICE_LABELS,
-	permissionChoicePresentation,
-} from "../src/renderer/permission-choices.ts";
+import { KNOWN_PERMISSION_CHOICE_LABELS, permissionChoicePresentation } from "../src/renderer/permission-choices.ts";
 
 describe("permission dialog choices", () => {
 	// 弹窗是通用扩展 UI：扩展发什么标签，桌面端就渲染什么。桌面端要判断主次按钮，

@@ -29,8 +29,8 @@ import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { StreamStats } from "./components/StreamStats.tsx";
 import { estimateTokens, extractUsageOutput, type FinalStreamStats, formatElapsed } from "./components/stream-stats.ts";
 import { ThinkingControl } from "./components/ThinkingControl.tsx";
-import { thinkingLevelLabel } from "./components/thinking-levels.ts";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
+import { thinkingLevelLabel } from "./components/thinking-levels.ts";
 import {
 	formatTurnElapsed,
 	groupTranscriptIntoTurns,
@@ -3673,7 +3673,11 @@ export function App() {
 							</div>
 							<div className="skill-settings-actions">
 								<div className="settings-status">全局</div>
-								<button className="secondary-button" type="button" onClick={() => void openPermissionPolicyFolder()}>
+								<button
+									className="secondary-button"
+									type="button"
+									onClick={() => void openPermissionPolicyFolder()}
+								>
 									打开权限配置目录
 								</button>
 							</div>
@@ -3731,7 +3735,8 @@ export function App() {
 						) : null}
 						<div className="permission-settings-footer">
 							<small>
-								直接允许命令执行可运行任意命令。改动即时保存，对所有 Agent 的后续工具调用生效；已弹出的请求仍需处理。
+								直接允许命令执行可运行任意命令。改动即时保存，对所有 Agent
+								的后续工具调用生效；已弹出的请求仍需处理。
 							</small>
 							<span className="settings-status">{permissionSaving ? "保存中" : "已保存"}</span>
 						</div>
@@ -4173,145 +4178,153 @@ export function App() {
 										>
 											<AppIcon name="paperclip" size={15} />
 										</button>
-<div className="model-picker-anchor">
-										<button className="model-seat" type="button" onClick={() => void openModelPicker(slot)}>
-											{modelSelections[agentId]?.model.name ?? "选择模型"} ▾
-										</button>
-										{modelPickerAgentId === agentId && modelSelections[agentId]
-											? (() => {
-													const modelSelection = modelSelections[agentId];
-													const filtered = modelPickerOptions;
-													const providers = [...new Set(filtered.map((model) => model.provider))];
-													return (
-														<div
-															ref={modelPickerRef}
-															className="modal model-picker"
-															role="dialog"
-															aria-label="选择模型"
-															onKeyDown={(event) => {
-																if (event.key === "ArrowDown" && filtered.length > 0) {
-																	event.preventDefault();
-																	modelPickerKeyboardScrollRef.current = true;
-																	setModelPickerSelectedIndex((current) => {
-																		const next = (current + 1) % filtered.length;
-																		modelPickerSelectedIndexRef.current = next;
-																		return next;
-																	});
-																} else if (event.key === "ArrowUp" && filtered.length > 0) {
-																	event.preventDefault();
-																	modelPickerKeyboardScrollRef.current = true;
-																	setModelPickerSelectedIndex((current) => {
-																		const next = (current - 1 + filtered.length) % filtered.length;
-																		modelPickerSelectedIndexRef.current = next;
-																		return next;
-																	});
-																} else if (
-																	event.key === "Enter" &&
-																	event.target === modelSearchInputRef.current &&
-																	!modelPickerBusy
-																) {
-																	const model = filtered[modelPickerSelectedIndexRef.current];
-																	if (!model) return;
-																	event.preventDefault();
-																	void chooseModel(slot, model.provider, model.id);
-																}
-															}}
-														>
-															<input
-																ref={modelSearchInputRef}
-																value={modelSearch}
-																onChange={(event) => {
-																	setModelSearch(event.target.value);
-																	modelListRef.current?.scrollTo({ top: 0 });
-																	modelPickerSelectedIndexRef.current = 0;
-																	modelPickerKeyboardScrollRef.current = true;
-																	setModelPickerSelectedIndex(0);
-																}}
-																placeholder="搜索模型"
-															/>
+										<div className="model-picker-anchor">
+											<button
+												className="model-seat"
+												type="button"
+												onClick={() => void openModelPicker(slot)}
+											>
+												{modelSelections[agentId]?.model.name ?? "选择模型"} ▾
+											</button>
+											{modelPickerAgentId === agentId && modelSelections[agentId]
+												? (() => {
+														const modelSelection = modelSelections[agentId];
+														const filtered = modelPickerOptions;
+														const providers = [...new Set(filtered.map((model) => model.provider))];
+														return (
 															<div
-																className="model-list"
-																ref={modelListRef}
-																onWheel={() => {
-																	modelPickerKeyboardScrollRef.current = false;
+																ref={modelPickerRef}
+																className="modal model-picker"
+																role="dialog"
+																aria-label="选择模型"
+																onKeyDown={(event) => {
+																	if (event.key === "ArrowDown" && filtered.length > 0) {
+																		event.preventDefault();
+																		modelPickerKeyboardScrollRef.current = true;
+																		setModelPickerSelectedIndex((current) => {
+																			const next = (current + 1) % filtered.length;
+																			modelPickerSelectedIndexRef.current = next;
+																			return next;
+																		});
+																	} else if (event.key === "ArrowUp" && filtered.length > 0) {
+																		event.preventDefault();
+																		modelPickerKeyboardScrollRef.current = true;
+																		setModelPickerSelectedIndex((current) => {
+																			const next = (current - 1 + filtered.length) % filtered.length;
+																			modelPickerSelectedIndexRef.current = next;
+																			return next;
+																		});
+																	} else if (
+																		event.key === "Enter" &&
+																		event.target === modelSearchInputRef.current &&
+																		!modelPickerBusy
+																	) {
+																		const model = filtered[modelPickerSelectedIndexRef.current];
+																		if (!model) return;
+																		event.preventDefault();
+																		void chooseModel(slot, model.provider, model.id);
+																	}
 																}}
 															>
-																{providers.map((provider) => (
-																	<section key={provider}>
-																		<h3>{provider}</h3>
-																		{filtered
-																			.map((model, index) => ({ model, index }))
-																			.filter((entry) => entry.model.provider === provider)
-																			.map(({ model, index }) => (
-																				<button
-																					type="button"
-																					className={[
-																						model.id === modelSelection.model.id &&
-																						model.provider === modelSelection.model.provider
-																							? "selected"
-																							: "",
-																						index === modelPickerSelectedIndex ? "keyboard-selected" : "",
-																					]
-																						.filter(Boolean)
-																						.join(" ")}
-																					data-model-index={index}
-																					onMouseEnter={() => {
-																						modelPickerKeyboardScrollRef.current = false;
-																						modelPickerSelectedIndexRef.current = index;
-																						setModelPickerSelectedIndex(index);
-																					}}
-																					key={provider + model.id}
-																					disabled={modelPickerBusy}
-																					title={model.id}
-																					onClick={() => void chooseModel(slot, model.provider, model.id)}
-																				>
-																					<span>{model.name}</span>
-																				</button>
-																			))}
-																	</section>
-																))}
-															</div>
-															{modelPickerBusy ? (
-																<div className="model-picker-footer">
-																	<span className="model-picker-status">正在应用 Pi 模型设置…</span>
+																<input
+																	ref={modelSearchInputRef}
+																	value={modelSearch}
+																	onChange={(event) => {
+																		setModelSearch(event.target.value);
+																		modelListRef.current?.scrollTo({ top: 0 });
+																		modelPickerSelectedIndexRef.current = 0;
+																		modelPickerKeyboardScrollRef.current = true;
+																		setModelPickerSelectedIndex(0);
+																	}}
+																	placeholder="搜索模型"
+																/>
+																<div
+																	className="model-list"
+																	ref={modelListRef}
+																	onWheel={() => {
+																		modelPickerKeyboardScrollRef.current = false;
+																	}}
+																>
+																	{providers.map((provider) => (
+																		<section key={provider}>
+																			<h3>{provider}</h3>
+																			{filtered
+																				.map((model, index) => ({ model, index }))
+																				.filter((entry) => entry.model.provider === provider)
+																				.map(({ model, index }) => (
+																					<button
+																						type="button"
+																						className={[
+																							model.id === modelSelection.model.id &&
+																							model.provider === modelSelection.model.provider
+																								? "selected"
+																								: "",
+																							index === modelPickerSelectedIndex
+																								? "keyboard-selected"
+																								: "",
+																						]
+																							.filter(Boolean)
+																							.join(" ")}
+																						data-model-index={index}
+																						onMouseEnter={() => {
+																							modelPickerKeyboardScrollRef.current = false;
+																							modelPickerSelectedIndexRef.current = index;
+																							setModelPickerSelectedIndex(index);
+																						}}
+																						key={provider + model.id}
+																						disabled={modelPickerBusy}
+																						title={model.id}
+																						onClick={() =>
+																							void chooseModel(slot, model.provider, model.id)
+																						}
+																					>
+																						<span>{model.name}</span>
+																					</button>
+																				))}
+																		</section>
+																	))}
 																</div>
-															) : null}
-														</div>
-													);
-												})()
-											: null}
-									</div>
-									<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
+																{modelPickerBusy ? (
+																	<div className="model-picker-footer">
+																		<span className="model-picker-status">正在应用 Pi 模型设置…</span>
+																	</div>
+																) : null}
+															</div>
+														);
+													})()
+												: null}
+										</div>
+										<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
 									</div>
 									<div className="composer-actions">
-									<ThinkingControl
-										levels={modelSelections[agentId]?.availableThinkingLevels ?? []}
-										value={modelSelections[agentId]?.thinkingLevel ?? ""}
-										disabled={modelPickerBusy}
-										onChange={(level) => void chooseThinking(slot, level)}
-									/>
-									{canAbort ? (
-										<button
-											className="send-button stop-send-button"
-											type="button"
-											aria-label="中断当前回复"
-											title="中断当前回复（Esc）"
-											disabled={abortingAgents[agentId] === true}
-											onClick={() => void abortAgent(slot)}
-										>
-											<AppIcon name="stop" size={15} />
-										</button>
-									) : (
-										<button
-											className="send-button"
-											type="submit"
-											aria-label="发送消息"
-											disabled={!draft.trim() && attachments.length === 0}
-										>
-											<AppIcon name="arrow-up" />
-										</button>
-									)}
-								</div>
+										<ThinkingControl
+											levels={modelSelections[agentId]?.availableThinkingLevels ?? []}
+											value={modelSelections[agentId]?.thinkingLevel ?? ""}
+											disabled={modelPickerBusy}
+											onChange={(level) => void chooseThinking(slot, level)}
+										/>
+										{canAbort ? (
+											<button
+												className="send-button stop-send-button"
+												type="button"
+												aria-label="中断当前回复"
+												title="中断当前回复（Esc）"
+												disabled={abortingAgents[agentId] === true}
+												onClick={() => void abortAgent(slot)}
+											>
+												<AppIcon name="stop" size={15} />
+											</button>
+										) : (
+											<button
+												className="send-button"
+												type="submit"
+												aria-label="发送消息"
+												disabled={!draft.trim() && attachments.length === 0}
+											>
+												<AppIcon name="arrow-up" />
+											</button>
+										)}
+									</div>
 								</div>
 							</form>
 						</>
