@@ -23,11 +23,14 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Validate committed model data
         run: npm run check:model-data
+      # 必须排在两个 test 之前：测试会 import 兄弟包的产物，dist 不存在时模块解析会直接失败。
+      # 注意 build:codepiddy 不含 Pi 那几个重包（chord/tui/ai/agent/protocol/client/server/
+      # coding-agent），要覆盖它们得用 build:codepiddy-runtime，代价是 CI 从不到 1 分钟涨到数分钟。
+      - name: Build CodePIddy
+        run: npm run build:codepiddy
       - name: Test CodePIddy core
         run: npm test --workspace=@codepiddy/core
       - name: Test CodePIddy desktop
         run: npm test --workspace=@codepiddy/desktop
       - name: Static checks
         run: npm run check
-      - name: Build CodePIddy
-        run: npm run build:codepiddy
