@@ -111,9 +111,11 @@ export const WorkPanel = memo(function WorkPanel({
 		setQuery("");
 		setSearchResults(null);
 		void loadDir("");
-	}, [projectRoot, loadDir]);
+		// loadDir 自身的依赖里有 projectRoot，工作区切换时 loadDir 会换新引用，这里跟着重跑。
+	}, [loadDir]);
 
 	// 选中文件（含跟随打开）时展开祖先目录并读文件。
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reloadSeq 不参与读取，只作为「刷新」按钮的重跑信号（见 setReloadSeq）
 	useEffect(() => {
 		if (!activePath) {
 			setFileState(null);
@@ -276,7 +278,8 @@ export const WorkPanel = memo(function WorkPanel({
 			return (
 				<div className="file-lines">
 					{content.content.split("\n").map((line, index) => (
-						<div className="file-line" key={index}>
+						// biome-ignore lint/suspicious/noArrayIndexKey: 文件视图的行身份就是行号，内容不会重排；按内容做 key 反而会因重复行/空行撞 key
+						<div className="file-line" key={`line-${index}`}>
 							<span className="file-line-no">{index + 1}</span>
 							<span className="file-line-text">{line || " "}</span>
 						</div>
@@ -297,6 +300,7 @@ export const WorkPanel = memo(function WorkPanel({
 
 	return (
 		<aside className="work-panel" aria-label="文件管理器" style={{ width }}>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: 纯鼠标拖拽手柄，补键盘调整宽度属于新功能，不在本次改动范围 */}
 			<div className="work-panel-resize" onMouseDown={startResize} title="拖拽调整宽度" />
 			<div className="work-panel-headbar">
 				<strong>文件管理器</strong>

@@ -55,7 +55,7 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 		const observer = new ResizeObserver(measure);
 		observer.observe(node);
 		return () => observer.disconnect();
-	}, [open, sliderUseful, levels]);
+	}, [open, sliderUseful]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -185,8 +185,15 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 								onPointerUp={endDrag}
 								onPointerCancel={endDrag}
 							>
-								<span className="thinking-slider-fill" style={{ width: `calc(8px + (100% - 16px) * ${percent / 100})` }} />
-								<span className="thinking-slider-thumb" style={{ left: `calc(8px + (100% - 16px) * ${percent / 100})` }} aria-hidden="true" />
+								<span
+									className="thinking-slider-fill"
+									style={{ width: `calc(8px + (100% - 16px) * ${percent / 100})` }}
+								/>
+								<span
+									className="thinking-slider-thumb"
+									style={{ left: `calc(8px + (100% - 16px) * ${percent / 100})` }}
+									aria-hidden="true"
+								/>
 							</div>
 							<div className="thinking-control-scale" aria-hidden="true">
 								{levels.map((level, index) => (
