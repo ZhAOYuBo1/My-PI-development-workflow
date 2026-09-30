@@ -1,8 +1,9 @@
 # 交接文档（HANDOVER）
 
 > 日期：2026-09-30｜分支：`main`｜远端 `origin/main` = `db4b6e2`
-> 本地领先远端 **3 个提交**（未 push）：`4051b61`、`e591860`、`4db2049`
-> 工作区有**未跟踪**改动：`openspec/changes/transcript-minimap-gutter/`（本次新建，已 validate 通过）
+> 本地领先远端 **4 个提交**（未 push）：`4051b61`、`e591860`、`4db2049`、`2d5336d`
+> ⚠️ **工作区有 16 个文件已验证但未提交**（见「三」全部 ✅ 项），提交前请先读「三.0」
+> ⚠️ **当前跑的是 stock Pi 0.99.1，4 个功能已失效**，详见「三.5」与「四.3」
 
 ---
 
@@ -61,54 +62,137 @@ npm start --workspace=@codepiddy/desktop
 
 ---
 
-## 三、待办（已确认但未做）
+## 三、本轮改动与待办
 
-### 3.1 修 `powershell` 漏项 —— 建议优先
+### 3.0 ⚠️ 先回滚 Pi
 
-`permission-settings.ts:50-57` 的工具白名单：
+`active.json` 指向 stock Pi 0.99.1，4 个功能已失效。**动代码前先回滚到 0.85.1**，
+否则验证期间会一直踩坑。设置页点「回滚」，或直接改
+`%APPDATA%\@codepiddy\desktop\pi-updates\active.json`。回滚后确认进程命令行回到
+`packages\coding-agent\src\cli.ts`。
 
-```ts
-tools: { read, grep, find, ls, write, edit }   // ← 少了 powershell
+### 3.1 ✅ powershell 归入 bash 类别 —— 已修，且原结论是错的
+
+> ⚠️ **本节上一版结论有误，已实测推翻。** 原文说「powershell 会绕过审批」——
+> 实际相反：它不绕过，只是**归错了类**。真 bug 更严重。
+
+`powershell` 不在引擎的 `BUILT_IN_TOOL_PERMISSION_NAMES`（`permission-manager.ts:49`），
+所以 `checkPermission` 落到 1028/1037 兜底，走 `defaultPolicy.tools` = `otherTools`。实测：
+
+```
+[bash deny, otherTools allow]   powershell=allow(default)   ← 真 bug：命令执行拒绝却管不住
+[bash allow, otherTools deny]   powershell=deny (default)   ← 归错类
 ```
 
-而 `coding-agent/src/cli/args.ts:440` 里 `powershell` 是 Windows 上的 Pi 内置工具。默认全 allow 时无感，**一旦用户把「其他工具」收紧成每次询问，powershell 就绕过审批**。1 行的事。
+用户把「命令执行」拉到拒绝，Pi 的 PowerShell 工具照样能跑任意命令。设置页那行写的是
+「命令执行 / Bash」，用户合理预期它管住所有 shell。
 
-### 3.2 撤掉 `PI_SHELL_PATH` 这个 Pi 补丁 —— 保护外壳
+**修法**（`permission-settings.ts`）：`tools` 映射加 `powershell: defaults.bash`。改完：
 
-**这是「Pi 更新不要破坏外壳」这个诉求下唯一真正要做的事。**
-
-`coding-agent/src/core/settings-manager.ts:997-999`：
-
-```ts
-getShellPath(): string | undefined {
-	const shellPath = process.env.PI_SHELL_PATH?.trim() || this.settings.shellPath;
+```
+[bash deny, otherTools allow]   powershell=deny (tool)      bash=deny
+[bash ask,  otherTools allow]   powershell=ask  (tool)      bash=ask
+[bash allow, otherTools deny]   powershell=allow(tool)      bash=allow
 ```
 
-这个环境变量读取是**我们往 Pi 源码里加的**。用户点「更新 Pi」= 从 npm 装官方原版 = 这段代码不存在 = 外层 `index.ts:940` 拼了命传的 `PI_SHELL_PATH` 静默失效。
+已加测试 `powershell follows the bash category, not otherTools` 锁住三种组合。
+**没动** `packages/codepiddy-permission-extension/`：引擎的
+`BUILT_IN_TOOL_PERMISSION_NAMES` 同样缺 `powershell`，但 `tools` 里有精确条目后已走
+`source=tool`，效果一样，不值得为此改引擎。
 
-但 **Pi 本来就有这个设置项**（`settings-manager.ts:106-122` 的 `Settings.shellPath`，注释写「e.g., for Cygwin users on Windows」，还有 `setShellPath` API）。所以**根本不需要改 Pi** —— 外壳直接往 `~/.pi/agent/settings.json` 写 `shellPath` 即可，效果一样且不可能被更新破坏。
+### 3.2 ✅ 撤掉 `PI_SHELL_PATH` 私有补丁 —— 已修
 
-（另一个 Pi 补丁 `rpc-mode.ts:784` 的 `desktopSupportedBuiltins` 同样会丢，但 `pi-builtin-commands.ts:81` 有兜底，实际安全，不用管。）
+`coding-agent/src/core/settings-manager.ts` 的 `getShellPath()` 曾读 `process.env.PI_SHELL_PATH`，
+那是**我们往 Pi 源码里加的**。用户点「更新 Pi」= 从 npm 装官方原版 = 这段代码不存在 =
+外层继续传一个没人读的环境变量，且毫无察觉。
 
-### 3.3 权限出厂默认值要不要收回来
+而 Pi 本来就有 `Settings.shellPath`（同文件 `setShellPath` API，注释写「e.g. for Cygwin
+users on Windows」）。所以不需要改 Pi。
 
-`e591860` 把 5 个默认值全改成了 `allow`。复查后的判断：**只有 `skills: allow` 是必须的**（`skill-prompt-sanitizer.ts:246` 会把非 allow 的 Skill 从 system prompt 的 `<available_skills>` 整个删掉，等于让模型看不见 Skill）。`bash` / `mcp` / `externalDirectory` 作为出厂默认用 `ask` 是合理的保守设计。
+**改法**：`AppSettingsStore.setShellPath()` 现在把值写进 Pi 自己的
+`PI_CODING_AGENT_DIR/settings.json`（缺省 `~/.pi/agent`，合并写、不覆盖用户其他设置），
+spawn 侧不再传 `PI_SHELL_PATH`。`getShellPath()` 现已与上游逐字节一致，只留一段说明
+「不要在这里加环境变量旁路」的注释。
 
-**用户尚未拍板**。若要收回，只改 `permission-settings.ts` 的常量 + `permission-settings.test.ts` 与两个 e2e 的断言。
+副作用：`packages/coding-agent/test/settings-shell-path.test.ts` 整个删除——它只为测这个
+补丁而存在。desktop 侧补了 4 个测试（写入 / 保留其他设置 / 清除 / 隔离 agent dir）。
+**测试里必须设 `PI_CODING_AGENT_DIR` 到临时目录**，否则会污染用户真实的 `~/.pi/agent/settings.json`。
 
-### 3.4 定位条压字 —— OpenSpec 已写好，未实现
+### 3.3 ✅ Pi 更新报「退出码 1」—— 已修（不是网络问题）
 
-`openspec/changes/transcript-minimap-gutter/`，`openspec validate --strict` 通过。诊断结论：
+**症状**：客户端点更新 Pi 报 `Pi 安装失败（退出码 1），请检查 npm 网络与配置`。
 
-- `.transcript-minimap` 绝对定位 `left: 12px; width: 28px`（`styles.css:2033-2042`），占 x ∈ [12, 40]
-- `.message` 是 `max-width: 760px; margin: 0 auto`（`styles.css:113-116`）
-- 转录视口窄于 `760 + 56 = 816px` 时消息列铺满，左边缘固定 x = 28
-- **重叠恒为 12px**。典型触发场景：1600px 窗口 + 开文件管理器（转录区约 730px）
-- 窄窗（≤760px）定位条 `display: none`、宽窗关面板时消息列居中，所以「时有时无」
+**根因：父进程 npm 的环境变量泄漏进子 npm。** 应用由 `npm start` 启动，npm 会把项目
+`.npmrc` 的设置转成 `npm_config_*` 注入子进程；`runNpmInstall` 原来用
+`env: { ...process.env }` 原样传给子 npm，于是两条策略生效：
 
-成因是之前修「开面板正文被压缩」那次，把 `.transcript` 内边距从百分比改成固定 `28px`，不再随宽度留白。
+| 来源 | 配置 | 后果 |
+| --- | --- | --- |
+| 仓库 `.npmrc` | `min-release-age=2` | 拒绝安装发布不满 2 天的版本 |
+| 用户 `~/.npmrc` | `registry=npmmirror` | 从镜像装，但版本是从 npmjs 查的 |
 
-推荐方案：定位条从绝对定位覆盖层改成 `.transcript` 的同级 flex 列（`flex: 0 0 40px; align-self: stretch`），横向不重叠由布局保证而非数值。详见该 change 的 `design.md`。
+updater 先向 `registry.npmjs.org` 查最新版（当时 0.99.1，当天发布），再让子 npm 装这个
+固定版本 → `ETARGET: No matching version found ... with a date before 2026/9/28`。
+
+**放大问题**：`child.stdout.resume()` 把 npm 输出整个丢掉，所以只报「请检查网络与配置」，
+跟真实原因毫无关系。
+
+**修法**（`pi-runtime-updater.ts`）：
+- 显式 `--registry=https://registry.npmjs.org`，与查版本同源
+- 显式 `--min-release-age=0`（Pi 自身自更新 `config.ts` 也是这么做的）
+- 新增 `buildInstallEnv()`：剥掉所有 `npm_config_*` / `npm_*` 环境变量
+- 保留 stderr 但只提取 `npm error code XXX`（不含凭据）带进报错
+
+**验证**：`test/pi-npm-install.test.ts` 3 个测试锁住上述行为；`git stash` 回退 updater 后
+这 3 个测试 3/3 失败，修复后 3/3 通过。另用真实 npm + 真实 registry 跑通完整安装。
+
+### 3.4 ✅ 定位条压字 + 代码块三件套 —— 已修
+
+**定位条**（OpenSpec `transcript-minimap-gutter`）：`.transcript-minimap` 绝对定位
+`left:12px; width:28px`（占 x ∈ [12,40]），`.message` 是 `max-width:760px; margin:0 auto`。
+转录视口窄于 `760+56=816px` 时消息列铺满、左边缘固定 x=28，**恒定重叠 12px**。
+1600px 窗口 + 开文件看板即触发。改成 `.transcript` 的同级 flex 列（`flex: 0 0 40px;
+align-self: stretch; margin: 20px 0`），横向不重叠由布局保证。保留 `pointer-events: none`。
+
+`boundingBox` 实测：旧 CSS overlap=12px，新 CSS overlap=0px（正文列窄 40px，可把 `flex`
+收到 32px）。
+
+> 早期文档写「窄窗 ≤760px 隐藏定位栏」，实为 **980px**（`styles.css`），已更正。
+
+**代码块**（新增 `e2e/code-block.e2e.ts`）：
+- 「折叠」原本只是把滚动框 420px→150px 且 `overflow` 仍为 `auto`，**内容一行没截断**，视觉上等于坏掉。改为真折叠：`overflow: hidden` + 底部渐隐遮罩 + 「展开全部代码」按钮
+- 默认改为换行（`useState(true)`）——桌面端代码列窄，不换行几乎每块都有横向滚动条
+- 工具栏原本 `font-size: 9px` + 给 UI 按钮套 monospace，违反 DESIGN.md「monospace 只留给
+  代码/路径/命令」。改为 11px 无衬线，开启态用 muted green；只有语言标签保留等宽
+- 删除死 CSS `.message-code-language`（全仓库只有它自己引用，组件实际用 `.message-code-toolbar > span`）
+- 按钮文案由 `自动换行`/`不换行` 改为固定 `换行` + active 态高亮（原来切换时标签变长度，导致工具栏宽度跳动）
+
+### 3.5 降低 Pi 私有补丁面 —— OpenSpec 已写，未实现
+
+`openspec/changes/pi-update-resilience/`，`validate --strict` 通过。**这是下一件事。**
+
+**背景**：用户已把 Pi 更新到 stock 0.99.1，4 个功能失效（详见「四.3」）。私有补丁从 7 个
+降到 5 个的方案：
+
+| 动作 | 代价 | 净收益 |
+| --- | --- | --- |
+| 删「循环模型范围」+ `get/set_scoped_models` | **零**（该功能在外壳里本就无行为效果） | -2 个补丁 |
+| 探针加严 + UI 降级 | 低 | 覆盖全部 5 个，把静默失效变成明确提示 |
+| 删「设为 X Agent 默认」 | 去掉一个外壳功能（非补丁） | 界面更简 |
+
+**关键论证**：「循环模型范围」对应 Pi 的 `scopedModels`，而它只影响 `cycleModel()`（Ctrl+P）
+与启动默认模型（仅 `--models` 驱动）。**外壳从不发 `cycle_model`**，所以删掉零代价——
+与「用 `--models` 替换」有本质区别，后者要付出「改范围必须重启 Agent」的代价。
+
+**剩下 5 个确认无原生替代**（`design.md` 第七节有证据）：`reload`、认证 3 个、`import_jsonl`。
+需向上游提 issue，不自行替换。`reload` 换重启进程会让用户敲 `/reload` 丢当前回复，也不划算。
+
+### 3.6 权限出厂默认值要不要收回来（待用户拍板）
+
+`e591860` 把 5 个默认值全改成了 `allow`。复查判断：**只有 `skills: allow` 是必须的**
+（`skill-prompt-sanitizer.ts:246` 会把非 allow 的 Skill 从 system prompt 的
+`<available_skills>` 整个删掉，等于让模型看不见 Skill）。`bash` / `mcp` /
+`externalDirectory` 用 `ask` 更合理。**用户尚未拍板。**
 
 ---
 
@@ -116,17 +200,19 @@ getShellPath(): string | undefined {
 
 ### 4.1 `workflow.e2e.ts` minimap 用例间歇性失败
 
-**现象**：第二个 prompt 之后流式输出停住。Playwright 页面快照显示第 2 轮用户消息已渲染、状态「Pi 正在处理」、发送按钮 disabled，30 秒内等不到回复。
+**现象**：第 2 个 prompt 之后流式输出停住，`toHaveCount` 拿不到第 N 条回复（失败行常在 86 或 146，都在 prompt 循环里）。
 
-**不是超时**：fake Pi（`e2e/fixtures/fake-pi-rpc.mjs:47-72`）是同步无条件回复的，第 2 个 `prompt` 命令根本没送到 Pi 进程。方向在 `PiRpcProcess` 那条链上（事件流丢失 / prompt 未写出）。
+**不是超时**：fake Pi（`e2e/fixtures/fake-pi-rpc.mjs:47-72`）是同步无条件回复的，prompt 根本没送到 Pi 进程。方向在 `PiRpcProcess` 那条链上（事件流丢失 / prompt 未写出）。
 
-**不是本次改动引入**：已用**未被本次修改的第一个用例**作为前驱测试复现，同样失败。
+**不是本次改动引入（已用 `git stash` 严格验证）**：把 `styles.css` + `workflow.e2e.ts` 一起 stash、重新 build 后跑基线，**5/5 全部失败在同一行 86**。
 
-**试过但无效的猜测性修法**（已精确回退，`git diff` 里那个循环一字未动）：
+**副作用**：这个 flake 会**先于**新加的重叠断言失败，所以「minimap 用例是否通过」不能用来判断 3.4 的修法对错。已另写独立探针（只发 2 轮，绕开 8 轮循环）对比两种 CSS 验证，探针已删除。
+
+**试过但无效的猜测性修法**（已精确回退）：
 - 等发送按钮恢复可见再发下一条
 - 把 `toHaveCount` 超时从 8s 放大到 30s
 
-**建议**：单独开一个 issue 排查 `codepiddy-core/src/pi-rpc-process.ts` 的命令写出与事件分发。不要在定位条那个 change 里顺手改。
+**建议**：单独开 issue 排查 `codepiddy-core/src/pi-rpc-process.ts` 的命令写出与事件分发。**修好之前，任何依赖多轮 prompt 的 e2e 断言都不可信。**
 
 ### 4.2 CI 完全跑不到真实 Pi
 
@@ -135,24 +221,80 @@ getShellPath(): string | undefined {
 
 所以「用户点更新 Pi 导致外壳破坏」这类问题在 CI 里 100% 不可见。
 
-### 4.3 role-guard 和 provider 扩展从未被加载
+### 4.3 用户已把 Pi 更新到 stock 0.99.1，4 个功能失效（已实测确认）
+
+**这不是待推测的风险，是已发生的事实。** 三层证据：
+
+1. `active.json` = `{"version":"0.99.1","installId":"v0.99.1-5d8b3dd1-..."}`
+2. 进程命令行确认外壳在跑它：
+   `node ...\pi-updates\versions\v0.99.1-*\dist\bundle\cli.js --mode rpc`
+3. 直接对那份 Pi 发命令（探针，已删）：
+   ```
+   OK    get_state (原生)              正常
+   OK    get_commands (原生)           正常
+   FAIL  get_scoped_models             Unknown command
+   FAIL  get_auth_providers            Unknown command
+   FAIL  import_jsonl                  Unknown command
+   ```
+
+**失效清单**（用户已独立确认 `/reload` 失效）：
+
+| 功能 | 入口 | 状态 |
+| --- | --- | --- |
+| 选择模型（一级弹窗） | 模型选择器 | ✅ 全原生命令，正常 |
+| 循环模型范围（二级） | 一级弹窗内「循环模型范围」按钮 | ❌ |
+| `/reload` | 斜杠命令 | ❌ 用户已确认 |
+| `/import` | 斜杠命令（**无独立按钮**，`importSession` 只在 `index.ts:770` 被调用） | ❌ |
+| `/login` `/logout` | 斜杠命令 + provider id | ❌ |
+
+**主流程完全不受影响**：建项目 → 建需求 → 建 Agent → 聊天 → 工具调用，一条都不碰这 4 个功能。
+这就是为什么「更新完看着没失效」。
+
+**两个容易误判的点**：
+
+- 「选择模型」弹窗是**两级**的。一级用 `getState` / `getAvailableModels` /
+  `getAvailableThinkingLevels`（全原生），二级「循环模型范围」才踩 `get_scoped_models`。
+  只测一级会误判为「没坏」。
+- 探针放行的原因：`probePiUpdate`（`index.ts:341-345`）只验 4 个原生命令，stock Pi
+  必然通过；回滚只在启动失败时触发，而握手永远正常。
+
+**处置见「三.5」的 OpenSpec change `pi-update-resilience`。** 动手前先按「三.0」回滚。
+
+### 4.4 两种扩展 Pi 的机制寿命完全不同
+
+| 机制 | 做法 | 升级后 |
+| --- | --- | --- |
+| 扩展注入 | 外壳传 JS 文件，Pi 自己 `load`（`--extension`） | ✅ 活 |
+| 改源码 | 编辑 Pi 的 `.ts`，加 `case` | ❌ 死 |
+
+`permission.js`、`tavily-tool.js` 走前者；7 个 RPC 命令走后者。
+**以后要扩展 Pi，优先用扩展注入。** `settings-manager.ts` 的 `PI_SHELL_PATH` 也已按这个
+思路改成写 Pi 原生 `settings.json`，`getShellPath()` 现与上游逐字节一致。
+
+剩余 5 个私有补丁确认无原生替代（证据见 `pi-update-resilience/design.md` 第七节）：
+`BUILTIN_SLASH_COMMANDS` 只被 `interactive-mode.ts` 消费，`rpc-mode.ts:808` 只用于列举；
+扩展 API 的 `ProviderConfig.oauth` 注释写明「OAuth provider for /login support」，
+即扩展只能*注册* OAuth provider 不能*发起*登录；`ExtensionContextActions` 只有只读的
+`getScopedModels`，无 setter。
+
+### 4.5 role-guard 和 provider 扩展从未被加载
 
 `packages/codepiddy-role-guard-extension/` 和 `packages/codepiddy-provider-extension/` 参与了 `npm run check` 的 typecheck，但**不在 spawn 参数里**（`main/index.ts:959-966` 只加载 `permission.js` 和 `tavily-tool.js`）。
 
 后果：「Review 不许改生产代码」「需求分析不跑 shell」目前只是 `role-profiles.ts` 里的自然语言，**没有代码级强制**。用户已明确表示这个「目前就这样」，暂不处理。
 
-### 4.4 userData 路径开发态与打包态不一致
+### 4.6 userData 路径开发态与打包态不一致
 
 - 开发态（`electron .`）：`%APPDATA%\@codepiddy\desktop\`
 - 打包态（用 `productName`）：`%APPDATA%\CodePIddy\`
 
 `%APPDATA%\CodePIddy\settings\shell.json` 是早前手工建在**错误路径**的，应用从没读过。开发态真实的 `settings/` 下只有 `permission-defaults.json`。
 
-### 4.5 权限引擎 4 层策略只有 1 层生效
+### 4.7 权限引擎 4 层策略只有 1 层生效
 
 引擎设计了 global / project / agent / projectAgent 四层，CodePIddy 只用 global（`<userData>/permissions/policy/pi-permissions.jsonc`）。ADR-0006:15 承诺的「Role 映射到 per-agent 权限」**没有落地**。
 
-### 4.6 权限扩展 bundle 里 inline 了一份旧 Pi
+### 4.8 权限扩展 bundle 里 inline 了一份旧 Pi
 
 `build-codepiddy-runtime.mjs:16-35` 用 `bundle: true` 且无 `external`，把本地 Pi 的 `dist/index.js` 模块图（6.37 MB）inline 进 `permission.js`。进程里跑两份 Pi（用户装的新版 + 内联的旧版），各自算 `getAgentDir`。当前靠外层传 `PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR` 覆盖，配置路径没事。
 
@@ -202,13 +344,26 @@ cd packages/codepiddy-desktop && npx playwright test e2e/workflow.e2e.ts --repor
 npx openspec validate <change-name> --strict
 ```
 
-**当前基线**：core 23 passed / 5 files；desktop 64 passed / 14 files；e2e 15 passed（minimap 用例见 4.1）。
+**当前基线**：core 23 passed / 5 files；desktop 71 passed / 15 files（本轮 +7：powershell 1、
+shellPath 4、npm install 3 —— 减去删掉的 `settings-shell-path.test.ts`）；e2e 16 passed / 1
+failed（失败项即 4.1 的既有 flake，新增的 `code-block.e2e.ts` 稳定 3/3）。三个包 typecheck 全干净。
+
+**三个 OpenSpec change 全部 `validate --strict` 通过**：
+`desktop-work-panel`、`transcript-minimap-gutter`、`pi-update-resilience`。
 
 ---
 
 ## 七、压缩 / 合并前提醒
 
-1. **三个提交未 push**：`4051b61`、`e591860`、`4db2049`。压缩前先决定是否 push，避免丢。
-2. **未跟踪目录** `openspec/changes/transcript-minimap-gutter/` 需要 `git add`。
-3. `4db2049` 改了 19 个文件、跨 5 个包，压缩成一个提交时 commit message 建议保留「删了什么」和「为什么删死文件」这两段，否则以后没人知道 `.codepiddy/permissions.jsonc` 为什么消失。
-4. `e591860` 和 `4db2049` 改的是同一片权限相关代码，若要 squash，注意 `permission-settings.ts` 的默认值和 `permission-settings.test.ts` 的断言必须一致。
+1. **四个提交未 push**：`4051b61`、`e591860`、`4db2049`、`2d5336d`。压缩前先决定是否 push，避免丢。
+2. **先回滚 Pi**（见「三.0」）。当前 0.99.1 有 4 个功能是坏的，验证任何东西都会受干扰。
+3. **本轮 16 个文件已验证但未提交**，建议拆成 5 个 commit（每项都做过「stash 回退后测试必须失败」的反向验证）：
+   - `fix: govern powershell with the bash permission category`（3.1，2 文件）
+   - `refactor: drop the PI_SHELL_PATH Pi patch`（3.2，3 文件 + 删 1 个 Pi 测试）
+   - `fix: stop leaking npm_config_* into the Pi runtime install`（3.3，1 文件 + 1 新测试）
+   - `fix: keep the transcript minimap out of the message text`（3.4 定位条，CSS + e2e）
+   - `fix: make code blocks wrap by default and fold by truncating`（3.4 代码块，组件 + CSS + 新 e2e + fake Pi）
+4. `4db2049` 改了 19 个文件、跨 5 个包，压缩成一个提交时 commit message 建议保留「删了什么」和「为什么删死文件」这两段，否则以后没人知道 `.codepiddy/permissions.jsonc` 为什么消失。
+5. `e591860`、`4db2049`、本轮的 3.1 都改了同一片权限相关代码。若要 squash，注意 `permission-settings.ts` 的默认值、`tools.powershell` 映射与 `permission-settings.test.ts` 的断言必须一致。
+6. **下一件事是 `pi-update-resilience`**（见「三.5」）。别把 3.2 当成「Pi 补丁问题已解决」——RPC 协议层还有 5 个命令依赖 Pi 私有补丁，其中 4 个已确认失效。
+7. **改 Pi 源码前先想清楚**：优先用扩展注入（`--extension`）或 Pi 原生配置，不要再编辑 `packages/coding-agent/src`。见「四.4」。
