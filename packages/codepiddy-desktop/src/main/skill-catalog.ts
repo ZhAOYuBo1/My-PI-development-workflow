@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { AgentRole, AgentSkillSource, AgentSkillSummary, RoleSkillAssignments } from "@codepiddy/shared";
@@ -73,11 +73,25 @@ async function discoverSkillDirectory(
 	return result;
 }
 
+/** 开发态在 packages/codepiddy-agent-skills，打包后由 build-codepiddy-runtime.mjs 复制成 skills/。 */
+const BUILTIN_SKILL_DIRECTORIES = ["packages/codepiddy-agent-skills", "skills"] as const;
+
+export async function resolveBuiltinSkillsDirectory(repositoryRoot: string): Promise<string | null> {
+	for (const relative of BUILTIN_SKILL_DIRECTORIES) {
+		const directory = path.join(repositoryRoot, relative);
+		try {
+			if ((await stat(directory)).isDirectory()) return directory;
+		} catch {}
+	}
+	return null;
+}
+
 export async function discoverAgentSkills(repositoryRoot: string, projectRoot?: string): Promise<AgentSkillSummary[]> {
 	const home = os.homedir();
 	const groups: Array<Promise<AgentSkillSummary[]>> = [
-		discoverSkillDirectory(path.join(repositoryRoot, "packages", "codepiddy-agent-skills"), "builtin", "builtin"),
-		discoverSkillDirectory(path.join(repositoryRoot, "skills"), "builtin", "builtin"),
+		...BUILTIN_SKILL_DIRECTORIES.map((relative) =>
+			discoverSkillDirectory(path.join(repositoryRoot, relative), "builtin", "builtin"),
+		),
 		discoverSkillDirectory(path.join(home, ".codex", "skills"), "codex"),
 		discoverSkillDirectory(path.join(home, ".agents", "skills"), "agents"),
 		discoverSkillDirectory(path.join(home, ".pi", "agent", "skills"), "pi"),

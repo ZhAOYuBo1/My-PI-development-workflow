@@ -76,7 +76,7 @@ import { type InstalledPiRuntime, PiRuntimeUpdater } from "./pi-runtime-updater.
 import { RecentProjectStore } from "./recent-project-store.ts";
 import { AppSettingsStore } from "./settings-store.ts";
 import { SingleFlightMap } from "./single-flight.ts";
-import { discoverAgentSkills, resolveRoleSkillPaths } from "./skill-catalog.ts";
+import { discoverAgentSkills, resolveBuiltinSkillsDirectory, resolveRoleSkillPaths } from "./skill-catalog.ts";
 
 const channels = {
 	abortAgent: "codepiddy:agent:abort",
@@ -124,6 +124,7 @@ const channels = {
 	settingsSetRoleSkills: "codepiddy:settings:role-skills:set",
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
 	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
+	settingsOpenBuiltinSkills: "codepiddy:settings:builtin-skills:open",
 	settingsGetRoleDefaults: "codepiddy:settings:role-models:get",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
 	settingsSetRoleDefault: "codepiddy:settings:role-models:set",
@@ -1480,6 +1481,12 @@ function registerIpcHandlers(
 		const projectRoot = requireOpenProjectRoot(rawProjectRoot);
 		const directory = path.join(projectRoot, ".codepiddy", ".pi", "skills");
 		await mkdir(directory, { recursive: true });
+		const error = await shell.openPath(directory);
+		if (error) throw new Error(error);
+	});
+	ipcMain.handle(channels.settingsOpenBuiltinSkills, async () => {
+		const directory = await resolveBuiltinSkillsDirectory(agentManager.repositoryPath);
+		if (!directory) throw new Error("未找到内置 Skill 目录");
 		const error = await shell.openPath(directory);
 		if (error) throw new Error(error);
 	});

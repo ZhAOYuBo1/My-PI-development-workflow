@@ -244,6 +244,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	setRoleSkillAssignments(input: SetRoleSkillAssignmentsInput): Promise<RoleSkillAssignments>;
 	openPiConfigFolder(): Promise<void>;
 	openProjectSkillsFolder(projectRoot: string): Promise<void>;
+	openBuiltinSkillsFolder(): Promise<void>;
 	getRoleModelDefaults(): Promise<RoleModelDefaults>;
 	setRoleModelDefault(input: RoleModelDefault): Promise<RoleModelDefaults>;
 	clearRoleModelDefault(role: AgentRole): Promise<RoleModelDefaults>;

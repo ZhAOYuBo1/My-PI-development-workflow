@@ -68,6 +68,7 @@ const channels = {
 	settingsSetRoleSkills: "codepiddy:settings:role-skills:set",
 	settingsOpenPiConfig: "codepiddy:settings:pi-config:open",
 	settingsOpenProjectSkills: "codepiddy:settings:project-skills:open",
+	settingsOpenBuiltinSkills: "codepiddy:settings:builtin-skills:open",
 	settingsGetRoleDefaults: "codepiddy:settings:role-models:get",
 	settingsGetPermissions: "codepiddy:settings:permissions:get",
 	settingsSetRoleDefault: "codepiddy:settings:role-models:set",
@@ -157,6 +158,7 @@ const api: CodePIddyClientApi = {
 	openPiConfigFolder: () => ipcRenderer.invoke(channels.settingsOpenPiConfig),
 	openProjectSkillsFolder: (projectRoot: string) =>
 		ipcRenderer.invoke(channels.settingsOpenProjectSkills, projectRoot),
+	openBuiltinSkillsFolder: () => ipcRenderer.invoke(channels.settingsOpenBuiltinSkills),
 	getRoleModelDefaults: () => ipcRenderer.invoke(channels.settingsGetRoleDefaults),
 	setRoleModelDefault: (input: RoleModelDefault) => ipcRenderer.invoke(channels.settingsSetRoleDefault, input),
 	clearRoleModelDefault: (role: AgentRole) => ipcRenderer.invoke(channels.settingsClearRoleDefault, role),

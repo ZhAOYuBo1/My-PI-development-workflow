@@ -3445,6 +3445,15 @@ export function App() {
 		}
 	}
 
+	async function openBuiltinSkillsFolder(): Promise<void> {
+		if (!("codepiddy" in window)) return;
+		try {
+			await window.codepiddy.openBuiltinSkillsFolder();
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "打开内置 Skill 文件夹失败");
+		}
+	}
+
 	async function saveRoleModelDefault(slot: AgentSlotSummary): Promise<void> {
 		if (!slot.currentInstanceId) return;
 		const selection = modelSelections[slot.currentInstanceId];
@@ -3904,6 +3913,13 @@ export function App() {
 							</div>
 							<div className="skill-settings-actions">
 								<div className="settings-status">{availableSkills.length} 个可用</div>
+								<button
+									className="secondary-button"
+									type="button"
+									onClick={() => void openBuiltinSkillsFolder()}
+								>
+									打开内置 Skill 文件夹
+								</button>
 								<button
 									className="secondary-button"
 									type="button"

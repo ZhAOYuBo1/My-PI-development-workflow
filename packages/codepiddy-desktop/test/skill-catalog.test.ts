@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
@@ -11,6 +13,7 @@ import {
 	BUILTIN_OPENSPEC_UPDATE_ID,
 	DEFAULT_ROLE_SKILL_ASSIGNMENTS,
 	discoverAgentSkills,
+	resolveBuiltinSkillsDirectory,
 	resolveRoleSkillPaths,
 } from "../src/main/skill-catalog.ts";
 
@@ -34,6 +37,23 @@ describe("agent skill catalog", () => {
 		for (const id of bundledIds) expect(ids.has(id), `missing ${id}`).toBe(true);
 		expect(skills.find((skill) => skill.id === BUILTIN_GRILL_WITH_DOCS_ID)?.name).toBe("grill-with-docs");
 		expect(skills.find((skill) => skill.id === BUILTIN_OPEN_CODE_REVIEW_ID)?.name).toBe("open-code-review");
+	});
+
+	test("resolves the bundled skill directory so settings can open it", async () => {
+		const directory = await resolveBuiltinSkillsDirectory(repositoryRoot);
+		expect(directory).toBe(path.join(repositoryRoot, "packages", "codepiddy-agent-skills"));
+	});
+
+	test("falls back to the packaged runtime layout and reports nothing when absent", async () => {
+		const packagedRoot = await mkdtemp(path.join(tmpdir(), "codepiddy-runtime-"));
+		try {
+			await mkdir(path.join(packagedRoot, "skills"), { recursive: true });
+			expect(await resolveBuiltinSkillsDirectory(packagedRoot)).toBe(path.join(packagedRoot, "skills"));
+			await rm(path.join(packagedRoot, "skills"), { recursive: true });
+			expect(await resolveBuiltinSkillsDirectory(packagedRoot)).toBeNull();
+		} finally {
+			await rm(packagedRoot, { force: true, recursive: true });
+		}
 	});
 
 	test("assigns Grill and OpenSpec by role and enables open-code-review for Review", async () => {
