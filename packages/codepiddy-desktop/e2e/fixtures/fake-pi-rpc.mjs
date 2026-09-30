@@ -68,6 +68,13 @@ function handlePrompt(command) {
 		output({ type: "agent_settled" });
 		return;
 	}
+	if (command.message.includes("code-block-long")) {
+		// 一行超长（验证默认换行）+ 超过折叠阈值的多行（验证默认折叠与展开）。
+		const long = "x".repeat(220);
+		const body = Array.from({ length: 30 }, (_, index) => `const value${index} = "${long}";`).join("\n");
+		finishWithText(`代码块测试：\n\n\`\`\`typescript\n${body}\n\`\`\`\n`);
+		return;
+	}
 	finishWithText("Fake Pi 已完成当前请求。");
 }
 

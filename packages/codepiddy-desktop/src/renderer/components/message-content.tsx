@@ -94,10 +94,18 @@ function RichText({ text }: { text: string }) {
 	return <>{blocks}</>;
 }
 
+const COLLAPSE_LINE_THRESHOLD = 24;
+const COLLAPSE_LENGTH_THRESHOLD = 3000;
+
 function MessageCodeBlock({ value, language }: { value: string; language?: string }) {
 	const [copied, setCopied] = useState(false);
-	const [collapsed, setCollapsed] = useState(value.length > 3000 || value.split("\n").length > 24);
-	const [wrapped, setWrapped] = useState(false);
+	// 长代码默认折叠。折叠必须是真的截断（overflow:hidden + 渐隐），
+	// 之前只是把滚动框从 420px 缩到 150px，内容一行没少，读起来像坏了。
+	const [collapsed, setCollapsed] = useState(
+		value.length > COLLAPSE_LENGTH_THRESHOLD || value.split("\n").length > COLLAPSE_LINE_THRESHOLD,
+	);
+	// 默认换行：桌面端代码列窄，不换行的话横向滚动条几乎每块都在。
+	const [wrapped, setWrapped] = useState(true);
 	async function copyCode(): Promise<void> {
 		try {
 			await navigator.clipboard.writeText(value.replace(/\n$/, ""));
@@ -108,15 +116,24 @@ function MessageCodeBlock({ value, language }: { value: string; language?: strin
 	return (
 		<div className={`message-code-block ${collapsed ? "collapsed" : ""} ${wrapped ? "wrapped" : ""}`}>
 			<div className="message-code-toolbar">
-				<span>{language || "code"}</span>
-				<div>
-					<button type="button" onClick={() => setWrapped((current) => !current)}>
-						{wrapped ? "不换行" : "自动换行"}
+				<span className="message-code-lang">{language || "code"}</span>
+				<div className="message-code-actions">
+					<button
+						type="button"
+						className={wrapped ? "is-active" : ""}
+						aria-pressed={wrapped}
+						onClick={() => setWrapped((current) => !current)}
+					>
+						换行
 					</button>
-					<button type="button" onClick={() => void copyCode()}>
-						{copied ? "已复制" : "复制代码"}
+					<button type="button" className={copied ? "is-active" : ""} onClick={() => void copyCode()}>
+						{copied ? "已复制" : "复制"}
 					</button>
-					<button type="button" onClick={() => setCollapsed((current) => !current)}>
+					<button
+						type="button"
+						aria-expanded={!collapsed}
+						onClick={() => setCollapsed((current) => !current)}
+					>
 						{collapsed ? "展开" : "折叠"}
 					</button>
 				</div>
@@ -124,6 +141,11 @@ function MessageCodeBlock({ value, language }: { value: string; language?: strin
 			<pre>
 				<code>{value.replace(/\n$/, "")}</code>
 			</pre>
+			{collapsed ? (
+				<button type="button" className="message-code-expand" onClick={() => setCollapsed(false)}>
+					展开全部代码
+				</button>
+			) : null}
 		</div>
 	);
 }
