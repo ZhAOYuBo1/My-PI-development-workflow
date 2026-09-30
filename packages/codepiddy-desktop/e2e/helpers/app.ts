@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { _electron as electron, type ElectronApplication, type Page } from "@playwright/test";
+import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
 
 export interface CodePIddyE2EApp {
 	app: ElectronApplication;
@@ -74,4 +74,22 @@ export async function openRequirementAgent(page: Page): Promise<void> {
 	const createButton = page.getByRole("button", { name: "创建 Agent" });
 	if (await createButton.isVisible()) await createButton.click();
 	await page.locator(".composer textarea").waitFor();
+}
+
+/**
+ * 往 composer 发一条消息。
+ *
+ * composer 的 textarea 是受控组件，提交读的是 React 的 draft state。Playwright 的 fill()
+ * 改完 DOM 之后 state 还要传播一拍；不等它就直接按 Enter，会把空草稿提交出去，
+ * 那一轮永远不会有回复。表现出来是「回复计数少 1」或后续断言超时，而且时好时坏。
+ *
+ * 发送按钮的 disabled 状态恰好由 draft 是否为空决定（App.tsx 的
+ * `disabled={!draft.trim() && attachments.length === 0}`），所以等它 enabled
+ * 就等于等 draft state 到位。所有发消息的用例都应该走这里，不要自己 fill + Enter。
+ */
+export async function sendComposerMessage(page: Page, text: string): Promise<void> {
+	const composer = page.locator(".composer textarea");
+	await composer.fill(text);
+	await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled();
+	await composer.press("Enter");
 }

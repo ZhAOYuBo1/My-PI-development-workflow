@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent } from "./helpers/app.ts";
+import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent, sendComposerMessage } from "./helpers/app.ts";
 
 /**
  * 消息内代码块：默认换行、默认折叠、折叠必须是真的截断。
@@ -11,8 +11,7 @@ test("code blocks wrap by default and collapse by truncating", async () => {
 	try {
 		await createFeatureWorkItem(page);
 		await openRequirementAgent(page);
-		await page.locator(".composer textarea").fill("给我一个 code-block-long 的例子");
-		await page.locator(".composer textarea").press("Enter");
+		await sendComposerMessage(page, "给我一个 code-block-long 的例子");
 
 		const block = page.locator(".message-code-block").first();
 		await expect(block).toBeVisible({ timeout: 15_000 });

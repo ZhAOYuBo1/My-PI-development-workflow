@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent, type CodePIddyE2EApp } from "./helpers/app.ts";
+import {
+	createFeatureWorkItem,
+	launchCodePIddy,
+	openRequirementAgent,
+	sendComposerMessage,
+	type CodePIddyE2EApp,
+} from "./helpers/app.ts";
 
 let client: CodePIddyE2EApp;
 test.beforeEach(async () => { client = await launchCodePIddy(); });
@@ -10,8 +16,7 @@ test("non-blocking errors appear above the header and dismiss themselves", async
 	await createFeatureWorkItem(page);
 	await openRequirementAgent(page);
 	const composer = page.locator(".composer textarea");
-	await composer.fill("/compact");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "/compact");
 	const alert = page.getByRole("alert");
 	await expect(alert).toContainText("Nothing to compact");
 	await expect(alert.getByRole("button", { name: "关闭错误提示" })).toBeVisible();

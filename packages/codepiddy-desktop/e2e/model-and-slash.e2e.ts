@@ -1,7 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent, type CodePIddyE2EApp } from "./helpers/app.ts";
+import {
+	createFeatureWorkItem,
+	launchCodePIddy,
+	openRequirementAgent,
+	sendComposerMessage,
+	type CodePIddyE2EApp,
+} from "./helpers/app.ts";
 
 let client: CodePIddyE2EApp;
 test.beforeEach(async () => {
@@ -51,8 +57,7 @@ test("new Pi RPC resources are merged with its own built-in slash commands witho
 		return count;
 	});
 	expect(flashes).toBe(0);
-	await composer.fill("/model");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "/model");
 	await expect(page.getByRole("dialog", { name: "选择模型" })).toBeVisible();
 });
 

@@ -1,7 +1,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent, type CodePIddyE2EApp } from "./helpers/app.ts";
+import {
+	createFeatureWorkItem,
+	launchCodePIddy,
+	openRequirementAgent,
+	sendComposerMessage,
+	type CodePIddyE2EApp,
+} from "./helpers/app.ts";
 
 let client: CodePIddyE2EApp;
 
@@ -34,8 +40,7 @@ test("creates a work item, runs an agent, and changes model with the keyboard", 
 	await page.getByRole("button", { name: "Agent 操作" }).click();
 
 	const composer = page.locator(".composer textarea");
-	await composer.fill("hello from e2e");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "hello from e2e");
 	await expect(page.getByText("Fake Pi 已完成当前请求。")).toBeVisible();
 
 	const modelButton = page.locator(".model-seat");
@@ -80,9 +85,11 @@ test("shows context usage beside the model and jumps through the transcript mini
 
 	const composer = page.locator(".composer textarea");
 	const assistantReplies = page.locator(".message-assistant").filter({ hasText: "Fake Pi 已完成当前请求。" });
+	// 流式期间发送按钮会被换成「中断当前回复」，所以它可见 == 上一轮已经彻底结束。
+	const sendButton = page.getByRole("button", { name: "发送消息" });
 	for (let index = 0; index < 8; index++) {
-		await composer.fill(`第 ${index + 1} 轮：请核对 OpenSpec proposal、design、specs 和 tasks 的一致性，并说明需要继续确认的边界。`);
-		await composer.press("Enter");
+		await expect(sendButton).toBeVisible();
+		await sendComposerMessage(page, `第 ${index + 1} 轮：请核对 OpenSpec proposal、design、specs 和 tasks 的一致性，并说明需要继续确认的边界。`);
 		await expect(assistantReplies).toHaveCount(index + 1);
 	}
 
@@ -141,8 +148,8 @@ test("shows context usage beside the model and jumps through the transcript mini
 	expect(jumpBox!.y + jumpBox!.height).toBeLessThanOrEqual(composerBox!.y - 8);
 
 	for (let index = 8; index < 22; index++) {
-		await composer.fill(`第 ${index + 1} 轮：继续完善当前 Change，并核对剩余任务。`);
-		await composer.press("Enter");
+		await expect(sendButton).toBeVisible();
+		await sendComposerMessage(page, `第 ${index + 1} 轮：继续完善当前 Change，并核对剩余任务。`);
 		await expect(assistantReplies).toHaveCount(index + 1);
 	}
 	await expect(minimap.locator("button")).toHaveCount(20);
@@ -160,8 +167,7 @@ test("composer toggles between centered send and stop while Pi is responding", a
 	expect(Math.abs(sendBox!.x + sendBox!.width / 2 - iconBox!.x - iconBox!.width / 2)).toBeLessThan(1);
 	expect(Math.abs(sendBox!.y + sendBox!.height / 2 - iconBox!.y - iconBox!.height / 2)).toBeLessThan(1);
 	const composer = page.locator(".composer textarea");
-	await composer.fill("permission");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "permission");
 	await expect(page.getByRole("dialog", { name: "权限请求" })).toBeVisible();
 	await page.getByRole("button", { name: "稍后处理" }).click();
 	const stop = page.getByRole("button", { name: "中断当前回复" });
@@ -183,11 +189,13 @@ test("defaults file reads and writes to allow and persists permission changes", 
 	await expect(reviewSkillCard.getByText("open-code-review", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "修改文件：直接允许" }).click();
 	await page.getByRole("listbox", { name: "修改文件权限" }).getByRole("option", { name: "每次询问" }).click();
-	await page.getByRole("button", { name: "保存权限" }).click();
-	const savedDefaults = JSON.parse(
-		await readFile(path.join(userDataRoot, "settings", "permission-defaults.json"), "utf8"),
-	) as Record<string, unknown>;
-	expect(savedDefaults).toMatchObject({ read: "allow", write: "ask", bash: "allow" });
+	// 没有「保存权限」按钮可点：权限改成改一项就落一次盘（App.tsx 的
+	// updatePermissionDefaults）。写盘是异步的，必须轮询等它落盘，不能直接读一次。
+	await expect
+		.poll(async () =>
+			JSON.parse(await readFile(path.join(userDataRoot, "settings", "permission-defaults.json"), "utf8")),
+		)
+		.toMatchObject({ read: "allow", write: "ask", bash: "allow" });
 });
 
 test("restores a pending permission request after switching away from the agent", async () => {
@@ -196,8 +204,7 @@ test("restores a pending permission request after switching away from the agent"
 	await openRequirementAgent(page);
 
 	const composer = page.locator(".composer textarea");
-	await composer.fill("permission");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "permission");
 	await expect(page.getByRole("dialog", { name: "权限请求" })).toBeVisible();
 	await page.getByRole("button", { name: "稍后处理" }).click();
 	await expect(page.getByRole("dialog", { name: "权限请求" })).toBeHidden();
@@ -226,8 +233,7 @@ test("offers a manual continuation when a failed tool ends without a final respo
 	await openRequirementAgent(page);
 
 	const composer = page.locator(".composer textarea");
-	await composer.fill("tool-fail");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "tool-fail");
 	await expect(page.getByText("工具失败后本轮已结束")).toBeVisible();
 	await expect(page.getByRole("button", { name: /read.*路径不存在/ })).toBeVisible();
 
@@ -243,11 +249,9 @@ test("executes desktop built-ins and forwards extension commands to Pi", async (
 	await openRequirementAgent(page);
 	const composer = page.locator(".composer textarea");
 
-	await composer.fill("/hotkeys");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "/hotkeys");
 	await expect(page.getByText(/CodePIddy 快捷键/)).toBeVisible();
 
-	await composer.fill("/ext-test");
-	await composer.press("Enter");
+	await sendComposerMessage(page, "/ext-test");
 	await expect(page.locator(".message-assistant").filter({ hasText: "Fake Pi 已完成当前请求。" }).last()).toBeVisible();
 });

@@ -32,7 +32,8 @@ test("global permission settings expose common operations and persist for every 
 	await expect(page.getByRole("listbox", { name: "Skill权限" })).toHaveCount(0);
 	await page.getByRole("button", { name: "Skill：直接允许" }).click();
 	await page.getByRole("listbox", { name: "Skill权限" }).getByRole("option", { name: "每次询问" }).click();
-	await page.getByRole("button", { name: "保存权限" }).click();
+	// 没有「保存权限」按钮可点：权限改成改一项就落一次盘（App.tsx 的
+	// updatePermissionDefaults）。下面的轮询就是在验证「不点任何按钮也已经写盘」。
 	const policyPath = path.join(userDataRoot, "permissions", "policy", "pi-permissions.jsonc");
 	await expect.poll(async () => JSON.parse(await readFile(policyPath, "utf8"))).toMatchObject({
 		defaultPolicy: { bash: "ask", skills: "ask", tools: "allow", mcp: "allow" },

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent } from "./helpers/app.ts";
+import { createFeatureWorkItem, launchCodePIddy, openRequirementAgent, sendComposerMessage } from "./helpers/app.ts";
 
 /**
  * 消息内 GFM 表格。
@@ -12,8 +12,7 @@ test("markdown tables render as tables, not raw pipe text", async () => {
 	try {
 		await createFeatureWorkItem(page);
 		await openRequirementAgent(page);
-		await page.locator(".composer textarea").fill("给我一个 md-table 的例子");
-		await page.locator(".composer textarea").press("Enter");
+		await sendComposerMessage(page, "给我一个 md-table 的例子");
 
 		const rich = page.locator(".message-rich-text").last();
 		await expect(rich.locator("table.message-table").first()).toBeVisible({ timeout: 15_000 });
