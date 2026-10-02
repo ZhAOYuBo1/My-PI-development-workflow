@@ -91,3 +91,14 @@ export function splitTurnEntries<T extends { type: string }>(
 	});
 	return { head, middle, tail };
 }
+
+/**
+ * 轮内中间过程默认折叠态：只有「最新一轮且 Agent 仍在运行」默认展开，其余默认折叠。
+ * 用户手动切换过的轮次始终以手动状态为准。
+ */
+export function resolveTurnCollapsed(
+	manual: boolean | undefined,
+	options: { isLatest: boolean; running: boolean },
+): boolean {
+	return manual ?? !(options.isLatest && options.running);
+}

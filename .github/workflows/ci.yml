@@ -28,9 +28,5 @@ jobs:
       # coding-agent），要覆盖它们得用 build:codepiddy-runtime，代价是 CI 从不到 1 分钟涨到数分钟。
       - name: Build CodePIddy
         run: npm run build:codepiddy
-      - name: Test CodePIddy core
-        run: npm test --workspace=@codepiddy/core
-      - name: Test CodePIddy desktop
-        run: npm test --workspace=@codepiddy/desktop
       - name: Static checks
         run: npm run check

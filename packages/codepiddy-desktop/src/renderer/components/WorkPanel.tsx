@@ -1,4 +1,5 @@
 import type { WorkspaceDirEntry, WorkspaceFileContent } from "@codepiddy/shared";
+import { ChevronRight, FileText, Folder } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageContent } from "./message-content.tsx";
 import { extractPanelPath, formatPanelSize, type ProjectableToolItem } from "./work-panel.ts";
@@ -24,29 +25,8 @@ function isMarkdownPath(path: string): boolean {
 }
 
 function PanelGlyph({ kind }: { kind: "dir" | "file" }) {
-	return (
-		<svg
-			className="file-tree-icon"
-			width={14}
-			height={14}
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="2"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			aria-hidden="true"
-		>
-			{kind === "dir" ? (
-				<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" />
-			) : (
-				<>
-					<path d="M6.5 3.5h5L16 8v12.5h-9.5Z" />
-					<path d="M11.5 3.5V8H16" />
-				</>
-			)}
-		</svg>
-	);
+	const Icon = kind === "dir" ? Folder : FileText;
+	return <Icon className="file-tree-icon" size={14} strokeWidth={2} aria-hidden="true" />;
 }
 
 interface DirState {
@@ -226,7 +206,7 @@ export const WorkPanel = memo(function WorkPanel({
 							onClick={() => toggleDir(child)}
 						>
 							<span className={`file-tree-caret${open ? " open" : ""}`} aria-hidden="true">
-								›
+								<ChevronRight size={12} strokeWidth={2} />
 							</span>
 							<PanelGlyph kind="dir" />
 							<span className="file-tree-name">{entry.name}</span>

@@ -23,6 +23,7 @@ import type {
 	WorkItemSummary,
 } from "@codepiddy/shared";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AppIcon } from "./components/app-icon.tsx";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
 import { MessageContent } from "./components/message-content.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
@@ -34,6 +35,7 @@ import { thinkingLevelLabel } from "./components/thinking-levels.ts";
 import {
 	formatTurnElapsed,
 	groupTranscriptIntoTurns,
+	resolveTurnCollapsed,
 	splitTurnEntries,
 	turnElapsedMs,
 } from "./components/turn-group.ts";
@@ -367,294 +369,6 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 	return items;
 }
 
-type AppIconName =
-	| "archive"
-	| "arrow-up"
-	| "branch"
-	| "chevron"
-	| "close"
-	| "copy"
-	| "edit"
-	| "folder"
-	| "more"
-	| "paperclip"
-	| "panel"
-	| "plus"
-	| "restore"
-	| "search"
-	| "stop"
-	| "settings"
-	| "warning"
-	| "eye"
-	| "terminal"
-	| "file-plus"
-	| "text-search"
-	| "file-search"
-	| "list"
-	| "sparkles"
-	| "plug"
-	| "checklist"
-	| "message-question"
-	| "globe"
-	| "clock"
-	| "check-circle"
-	| "x-circle"
-	| "caret"
-	| "shield";
-
-function AppIcon({ name, size = 16, className = "" }: { name: AppIconName; size?: number; className?: string }) {
-	const paths: Record<AppIconName, React.ReactNode> = {
-		archive: (
-			<>
-				<path d="M5 9h14v10H5zM4.5 6h15v3h-15zM9 12h6" />
-				<path d="M11 10.8h2v3.1h2.2L12 17l-3.2-3.1H11z" fill="currentColor" stroke="none" />
-			</>
-		),
-		"arrow-up": (
-			<>
-				<path d="M12 15.5V13M5 18.5h14" />
-				<path d="M12 4 6.7 9.4h3.8v4.2h3V9.4h3.8z" fill="currentColor" stroke="none" />
-			</>
-		),
-		branch: (
-			<>
-				<path d="M12 8v4m0 0h5v3m-5-3H7v3" />
-				<circle cx="12" cy="6" r="2" />
-				<circle cx="7" cy="17" r="2" />
-				<circle cx="17" cy="17" r="2" />
-				<circle cx="17" cy="17" r="1.35" fill="currentColor" stroke="none" />
-			</>
-		),
-		chevron: (
-			<>
-				<path d="m7 9 5-5 5 5M7 15l5 5 5-5" />
-				<circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-			</>
-		),
-		close: (
-			<>
-				<path d="M7.5 7.5 16.5 16.5M16.5 7.5l-9 9" />
-				<circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
-			</>
-		),
-		copy: (
-			<>
-				<path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h7l3 3v9.5a1.5 1.5 0 0 1-1.5 1.5H17" />
-				<path d="M16 7h3.5M16 7V4" />
-				<rect x="5" y="8" width="11" height="12" rx="1.5" />
-				<path d="M14.5 8H16v1.5h-1.5z" fill="currentColor" stroke="none" />
-			</>
-		),
-		edit: (
-			<>
-				<path d="m13.5 6 4.5 4.5M5 19l4.2-.9L19 8.3a2.1 2.1 0 0 0-3-3L6.2 15.1 5 19z" />
-				<path d="M5 19l3.2-3.2" />
-				<path d="M15 5.3 18.7 9l-1.4 1.4-3.7-3.7z" fill="currentColor" stroke="none" />
-			</>
-		),
-		folder: (
-			<>
-				<path d="M4.5 8V7a1.5 1.5 0 0 1 1.5-1.5h4l2 2H18A1.5 1.5 0 0 1 19.5 9v8a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17z" />
-				<path d="M4.5 10h15" />
-				<circle cx="16" cy="14.5" r="1.1" fill="currentColor" stroke="none" />
-			</>
-		),
-		more: (
-			<>
-				<circle cx="6" cy="12" r="1.4" />
-				<circle cx="12" cy="12" r="1.4" />
-				<circle cx="18" cy="12" r="1.4" />
-				<circle cx="12" cy="12" r="1.05" fill="currentColor" stroke="none" />
-			</>
-		),
-		paperclip: (
-			<>
-				<path d="M8 12.5 14 6.5a3 3 0 0 1 4.2 4.2l-7 7a4 4 0 0 1-5.7-5.7l7-7" />
-				<circle cx="17.2" cy="7.1" r="0.8" fill="currentColor" stroke="none" />
-			</>
-		),
-		panel: (
-			<>
-				<rect x="4.5" y="5" width="15" height="14" rx="2" />
-				<path d="M10 5v14" />
-				<rect x="6.5" y="9" width="1.5" height="6" rx="0.75" fill="currentColor" stroke="none" />
-			</>
-		),
-		plus: (
-			<>
-				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<path d="M11 7.5h2v3.5h3.5v2H13V16.5h-2V13H7.5v-2H11z" fill="currentColor" stroke="none" />
-			</>
-		),
-		restore: (
-			<>
-				<path d="M5.2 8.5A7.5 7.5 0 1 1 4.5 12M5 5.2v4h4M12 8v4l3 2" />
-				<path d="M4.2 5h4.6L5 9.6z" fill="currentColor" stroke="none" />
-			</>
-		),
-		search: (
-			<>
-				<path d="M14.8 14.8 20 20M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12z" />
-				<path d="M11 8.9 11.6 10.4l1.5.6-1.5.6L11 13l-.6-1.4-1.5-.6 1.5-.6z" fill="currentColor" stroke="none" />
-			</>
-		),
-		stop: (
-			<>
-				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none" />
-			</>
-		),
-		settings: (
-			<>
-				<path d="M10.44 4.66 L13.56 4.66 L13.80 6.12 L14.89 6.57 L16.08 5.71 L18.29 7.92 L17.43 9.11 L17.88 10.20 L19.34 10.44 L19.34 13.56 L17.88 13.80 L17.43 14.89 L18.29 16.08 L16.08 18.29 L14.89 17.43 L13.80 17.88 L13.56 19.34 L10.44 19.34 L10.20 17.88 L9.11 17.43 L7.92 18.29 L5.71 16.08 L6.57 14.89 L6.12 13.80 L4.66 13.56 L4.66 10.44 L6.12 10.20 L6.57 9.11 L5.71 7.92 L7.92 5.71 L9.11 6.57 L10.20 6.12Z" />
-				<path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4z" />
-				<circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
-			</>
-		),
-		warning: (
-			<>
-				<path d="M12 4.8 20 19H4z" />
-				<path d="M12 9.2v4.3" />
-				<circle cx="12" cy="16.3" r="0.85" fill="currentColor" stroke="none" />
-			</>
-		),
-		eye: (
-			<>
-				<path d="M4.2 12c2-3.2 4.6-4.8 7.8-4.8s5.8 1.6 7.8 4.8c-2 3.2-4.6 4.8-7.8 4.8S6.2 15.2 4.2 12z" />
-				<path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />
-				<circle cx="11.2" cy="11.8" r="1.15" fill="currentColor" stroke="none" />
-			</>
-		),
-		terminal: (
-			<>
-				<rect x="4.5" y="5.5" width="15" height="13" rx="2.5" />
-				<path d="m7.5 9.5 2.5 2.5-2.5 2.5" />
-				<path d="M12.5 14.5h3.5" />
-				<rect x="14.5" y="14" width="3.5" height="1.5" rx="0.75" fill="currentColor" stroke="none" />
-			</>
-		),
-		"file-plus": (
-			<>
-				<path d="M6 4.5h7l5 5V13M13 4.5v5h5M6 4.5v15h6" />
-				<path d="M15 14h2v2h2v2h-2v2h-2v-2h-2v-2h2z" fill="currentColor" stroke="none" />
-			</>
-		),
-		"text-search": (
-			<>
-				<path d="M4.5 6.5h10M4.5 10h8M4.5 13.5h6" />
-				<circle cx="15.2" cy="14.2" r="3.1" />
-				<path d="m17.5 16.5 2.2 2.2" />
-				<circle cx="15.2" cy="14.2" r="1" fill="currentColor" stroke="none" />
-			</>
-		),
-		"file-search": (
-			<>
-				<path d="M6 4.5h7l5 5v2M13 4.5v5h5M6 4.5v15h5" />
-				<circle cx="14.5" cy="14.5" r="3" />
-				<path d="m16.7 16.7 2.5 2.5" />
-				<circle cx="14.5" cy="14.5" r="0.9" fill="currentColor" stroke="none" />
-			</>
-		),
-		list: (
-			<>
-				<circle cx="6" cy="6.5" r="1" />
-				<circle cx="6" cy="12" r="1" />
-				<circle cx="6" cy="17.5" r="1" />
-				<path d="M10 6.5h9M10 12h9M10 17.5h9" />
-				<circle cx="6" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
-			</>
-		),
-		sparkles: (
-			<>
-				<path d="M11.5 4.5 13 9l4.5 1.5L13 12l-1.5 4.5L10 12l-4.5-1.5L10 9z" />
-				<path d="m18 4 .5 1.3 1.3.5-1.3.5L18 7.6l-.5-1.3-1.3-.5 1.3-.5z" />
-				<path d="M6 17.2l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z" fill="currentColor" stroke="none" />
-			</>
-		),
-		plug: (
-			<>
-				<path d="M9 4.5v4m6-4v4M7 8.5h10V12a5 5 0 0 1-5 5 5 5 0 0 1-5-5zM12 17v2.5" />
-				<path d="M5 12h2" />
-				<circle cx="12" cy="19" r="0.8" fill="currentColor" stroke="none" />
-			</>
-		),
-		checklist: (
-			<>
-				<rect x="4.5" y="5" width="5" height="5" rx="1.5" />
-				<path d="M12 7.5h7" />
-				<rect x="4.5" y="14" width="5" height="5" rx="1.5" />
-				<path d="M12 16.5h7" />
-				<path d="M5.3 7.4 6.6 8.7l2.5-2.8 1.2 1.1-3.7 4z" fill="currentColor" stroke="none" />
-			</>
-		),
-		"message-question": (
-			<>
-				<path d="M6.5 5.5h11a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-6l-4.5 3v-3a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2z" />
-				<path d="M9.5 9.8a2.5 2.5 0 1 1 4.5 1.5c-.7.9-2 1.1-2 2.5" />
-				<circle cx="12" cy="16" r="0.8" fill="currentColor" stroke="none" />
-			</>
-		),
-		globe: (
-			<>
-				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<path d="M4.7 12h14.6M12 4.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5m0-15c-2 2-3 4.5-3 7.5s1 5.5 3 7.5" />
-				<path
-					d="M16 6.5a2.1 2.1 0 0 0-2.1 2.1c0 1.5 2.1 3.8 2.1 3.8s2.1-2.3 2.1-3.8A2.1 2.1 0 0 0 16 6.5z"
-					fill="currentColor"
-					stroke="none"
-				/>
-			</>
-		),
-		clock: (
-			<>
-				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<path d="M12 7.5V12l3.5 2" />
-				<circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
-			</>
-		),
-		"check-circle": (
-			<>
-				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<path d="M7.6 12.1 10.5 15l6-6.2-1.3-1.2-4.7 4.9-1.7-1.7z" fill="currentColor" stroke="none" />
-			</>
-		),
-		"x-circle": (
-			<>
-				<path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
-				<path
-					d="M9.1 7.8 12 10.7l2.9-2.9 1.3 1.3-2.9 2.9 2.9 2.9-1.3 1.3-2.9-2.9-2.9 2.9-1.3-1.3 2.9-2.9-2.9-2.9z"
-					fill="currentColor"
-					stroke="none"
-				/>
-			</>
-		),
-		caret: <path d="M9.5 5.5 16.5 12l-7 6.5" />,
-		shield: (
-			<>
-				<path d="M12 4.5 19 7v5c0 4.2-2.8 6.8-7 8-4.2-1.2-7-3.8-7-8V7z" />
-				<path d="M12 11v4" />
-				<circle cx="12" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
-			</>
-		),
-	};
-	return (
-		<svg
-			className={`app-svg-icon ${className}`}
-			width={size}
-			height={size}
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="2"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			aria-hidden="true"
-		>
-			{paths[name]}
-		</svg>
-	);
-}
-
 /** 统计行只保留一条：该 assistant 消息之后是否还有更新的 assistant 消息。 */
 function hasLaterAssistant(items: TranscriptItem[], index: number): boolean {
 	for (let i = index + 1; i < items.length; i += 1) if (items[i]?.type === "assistant") return true;
@@ -792,23 +506,30 @@ const TranscriptTurns = memo(function TranscriptTurns({
 	items,
 	assistantModel,
 	idPrefix,
+	running,
 	collapsedRounds,
 	onToggleRound,
 }: {
 	items: TranscriptItem[];
 	assistantModel?: string;
 	idPrefix: string;
+	/** 当前 Agent 是否在跑，决定最新一轮中间过程是否默认展开。 */
+	running: boolean;
 	collapsedRounds: Record<string, boolean>;
 	onToggleRound(id: string, collapsed: boolean): void;
 }) {
 	const turns = groupTranscriptIntoTurns(items);
+	const latestTurnId = turns[turns.length - 1]?.id;
 	return (
 		<>
 			{turns.map((turn) => {
 				const key = `${idPrefix}:${turn.id}`;
-				// 一轮一折：只折中间过程，用户消息与最终结果常显。历史轮默认收起，最新轮展开。
+				// 一轮一折：只折中间过程，用户消息与最终结果常显。最新轮运行中展开，结束后默认收起。
 				const { head, middle, tail } = splitTurnEntries(turn);
-				const collapsed = collapsedRounds[key] ?? turn.id !== turns[turns.length - 1]!.id;
+				const collapsed = resolveTurnCollapsed(collapsedRounds[key], {
+					isLatest: turn.id === latestTurnId,
+					running,
+				});
 				const elapsed = turnElapsedMs(turn);
 				const renderEntry = (entry: TranscriptItem, index: number) => (
 					<div className={`transcript-entry entry-${entry.type}`} data-transcript-index={index} key={entry.id}>
@@ -1420,6 +1141,7 @@ export function App() {
 	const projectRef = useRef<ProjectSummary | null>(project);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
 	const imageInputRef = useRef<HTMLInputElement | null>(null);
+	const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 	const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
 	const modelListRef = useRef<HTMLDivElement | null>(null);
 	const modelPickerRef = useRef<HTMLDivElement | null>(null);
@@ -1540,6 +1262,26 @@ export function App() {
 		if (!selectedWorkItem || selection.type !== "agent") return null;
 		return selectedWorkItem.agentSlots.find((slot) => slot.role === selection.role)?.currentInstanceId ?? null;
 	}, [selectedWorkItem, selection]);
+
+	/*
+	 * 输入框跟随内容增高。
+	 * 不能只靠 CSS：textarea 的滚动高度要先把 height 归零才量得准，否则会一路只增不减。
+	 * 超过上限后改为内部滚动，避免长消息把转录区挤没。
+	 */
+	useLayoutEffect(() => {
+		const element = composerInputRef.current;
+		if (!element) return;
+		const draftText = activeAgentId ? (drafts[activeAgentId] ?? "") : "";
+		const maxHeight = 240;
+		if (!draftText) {
+			element.style.height = "";
+			element.style.overflowY = "hidden";
+			return;
+		}
+		element.style.height = "auto";
+		element.style.height = `${Math.min(element.scrollHeight, maxHeight)}px`;
+		element.style.overflowY = element.scrollHeight > maxHeight ? "auto" : "hidden";
+	}, [activeAgentId, drafts]);
 
 	useEffect(() => {
 		if (
@@ -4010,13 +3752,13 @@ export function App() {
 						)}
 					</header>
 					{agentId ? (
-						<>
-							<div className="transcript-stage">
-								<TranscriptMinimap
-									items={items}
-									activeIndex={activeTranscriptIndex}
-									onJump={jumpToTranscriptItem}
-								/>
+						<div className="transcript-stage">
+							<TranscriptMinimap
+								items={items}
+								activeIndex={activeTranscriptIndex}
+								onJump={jumpToTranscriptItem}
+							/>
+							<div className="conversation-column">
 								<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>
 									{items.length === 0 ? (
 										<div className="transcript-placeholder compact">
@@ -4039,6 +3781,7 @@ export function App() {
 											items={items}
 											assistantModel={modelSelections[agentId]?.model.name}
 											idPrefix={agentId}
+											running={Boolean(activity)}
 											collapsedRounds={collapsedRounds}
 											onToggleRound={(id, collapsed) =>
 												setCollapsedRounds((current) => ({ ...current, [id]: collapsed }))
@@ -4046,14 +3789,6 @@ export function App() {
 										/>
 									)}
 								</div>
-								{workPanelVisible && project ? (
-									<WorkPanel
-										projectRoot={project.rootPath}
-										toolItems={items.filter(
-											(item): item is Extract<TranscriptItem, { type: "tool" }> => item.type === "tool",
-										)}
-									/>
-								) : null}
 								{showJumpToLatest ? (
 									<button className="jump-to-latest" type="button" onClick={jumpToLatest}>
 										{activeAgentId && (unreadCounts[activeAgentId] ?? 0) > 0
@@ -4062,272 +3797,286 @@ export function App() {
 										<AppIcon name="arrow-up" size={14} className="jump-arrow" />
 									</button>
 								) : null}
-							</div>
-							<form
-								className="composer composer-stacked"
-								onDragOver={(event) => {
-									if (event.dataTransfer.types.includes("Files")) event.preventDefault();
-								}}
-								onDrop={(event) => {
-									const files = Array.from(event.dataTransfer.files);
-									if (files.length === 0) return;
-									event.preventDefault();
-									void addImageFiles(agentId, files);
-								}}
-								onSubmit={(event) => {
-									event.preventDefault();
-									void sendPrompt(slot);
-								}}
-							>
-								<SlashCommandMenu
-									query={draft}
-									commands={agentCommands[agentId] ?? []}
-									loading={agentCommandsLoading[agentId] === true}
-									modelSelection={modelSelections[agentId]}
-									onSelect={(command) => setDrafts((current) => ({ ...current, [agentId]: command }))}
-									onExecute={(command) => {
-										setDrafts((current) => ({ ...current, [agentId]: "" }));
-										void sendPrompt(slot, command);
+								<form
+									className="composer composer-stacked"
+									onDragOver={(event) => {
+										if (event.dataTransfer.types.includes("Files")) event.preventDefault();
 									}}
-								/>
-								<FileMentionMenu
-									query={draft}
-									files={fileMatches}
-									onSelect={(file) =>
-										setDrafts((current) => ({
-											...current,
-											[agentId]: (current[agentId] ?? "").replace(/@[^\s]*$/, `@${file} `),
-										}))
-									}
-								/>
-								{toolRecoveryOffer ? (
-									<div className="tool-recovery-offer">
-										<div>
-											<strong>工具失败后本轮已结束</strong>
-											<span title={toolRecoveryOffer.reason}>
-												{toolRecoveryOffer.toolName}：{toolRecoveryOffer.reason}
-											</span>
-										</div>
-										<button type="button" onClick={() => void continueAfterToolFailure(slot)}>
-											让 Pi 继续处理
-										</button>
-									</div>
-								) : null}
-								{activity ? (
-									<div className={`agent-activity activity-${activity.kind}`}>
-										<span className="activity-spinner" aria-hidden="true" />
-										<span>{activity.label}</span>
-										{activity.queued > 0 ? <small>{activity.queued} queued</small> : null}
-									</div>
-								) : null}
-								{attachments.length > 0 ? (
-									<div className="composer-image-strip">
-										{attachments.map((image) => (
-											<figure key={image.id}>
-												<img src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
-												<figcaption title={image.name}>{image.name}</figcaption>
-												<button
-													type="button"
-													aria-label={`移除 ${image.name}`}
-													onClick={() => removeImageAttachment(agentId, image.id)}
-												>
-													<AppIcon name="close" size={12} />
-												</button>
-											</figure>
-										))}
-									</div>
-								) : null}
-								<textarea
-									value={draft}
-									onChange={(event) => setDrafts((current) => ({ ...current, [agentId]: event.target.value }))}
-									onPaste={(event) => {
-										const files = Array.from(event.clipboardData.files);
+									onDrop={(event) => {
+										const files = Array.from(event.dataTransfer.files);
 										if (files.length === 0) return;
 										event.preventDefault();
 										void addImageFiles(agentId, files);
 									}}
-									onKeyDown={(event) => {
-										if (event.defaultPrevented || event.nativeEvent.isComposing) return;
-										if (event.key === "Enter" && !event.shiftKey) {
-											event.preventDefault();
-											void sendPrompt(slot);
-										}
+									onSubmit={(event) => {
+										event.preventDefault();
+										void sendPrompt(slot);
 									}}
-									placeholder="输入消息或 / 命令；Shift+Enter 换行"
-									rows={1}
-								/>
-								<div className="composer-toolbar">
-									<div className="composer-tools">
-										<input
-											ref={imageInputRef}
-											type="file"
-											accept="image/png,image/jpeg,image/webp,image/gif"
-											multiple
-											hidden
-											onChange={(event) => {
-												void addImageFiles(agentId, Array.from(event.target.files ?? []));
-												event.target.value = "";
-											}}
-										/>
-										<button
-											className="attach-button"
-											type="button"
-											aria-label="添加图片"
-											title="添加图片，也可粘贴或拖入"
-											onClick={() => imageInputRef.current?.click()}
-										>
-											<AppIcon name="paperclip" size={15} />
-										</button>
-										<div className="model-picker-anchor">
-											<button
-												className="model-seat"
-												type="button"
-												onClick={() => void openModelPicker(slot)}
-											>
-												{modelSelections[agentId]?.model.name ?? "选择模型"} ▾
+								>
+									<SlashCommandMenu
+										query={draft}
+										commands={agentCommands[agentId] ?? []}
+										loading={agentCommandsLoading[agentId] === true}
+										modelSelection={modelSelections[agentId]}
+										onSelect={(command) => setDrafts((current) => ({ ...current, [agentId]: command }))}
+										onExecute={(command) => {
+											setDrafts((current) => ({ ...current, [agentId]: "" }));
+											void sendPrompt(slot, command);
+										}}
+									/>
+									<FileMentionMenu
+										query={draft}
+										files={fileMatches}
+										onSelect={(file) =>
+											setDrafts((current) => ({
+												...current,
+												[agentId]: (current[agentId] ?? "").replace(/@[^\s]*$/, `@${file} `),
+											}))
+										}
+									/>
+									{toolRecoveryOffer ? (
+										<div className="tool-recovery-offer">
+											<div>
+												<strong>工具失败后本轮已结束</strong>
+												<span title={toolRecoveryOffer.reason}>
+													{toolRecoveryOffer.toolName}：{toolRecoveryOffer.reason}
+												</span>
+											</div>
+											<button type="button" onClick={() => void continueAfterToolFailure(slot)}>
+												让 Pi 继续处理
 											</button>
-											{modelPickerAgentId === agentId && modelSelections[agentId]
-												? (() => {
-														const modelSelection = modelSelections[agentId];
-														const filtered = modelPickerOptions;
-														const providers = [...new Set(filtered.map((model) => model.provider))];
-														return (
-															<div
-																ref={modelPickerRef}
-																className="modal model-picker"
-																role="dialog"
-																aria-label="选择模型"
-																onKeyDown={(event) => {
-																	if (event.key === "ArrowDown" && filtered.length > 0) {
-																		event.preventDefault();
-																		modelPickerKeyboardScrollRef.current = true;
-																		setModelPickerSelectedIndex((current) => {
-																			const next = (current + 1) % filtered.length;
-																			modelPickerSelectedIndexRef.current = next;
-																			return next;
-																		});
-																	} else if (event.key === "ArrowUp" && filtered.length > 0) {
-																		event.preventDefault();
-																		modelPickerKeyboardScrollRef.current = true;
-																		setModelPickerSelectedIndex((current) => {
-																			const next = (current - 1 + filtered.length) % filtered.length;
-																			modelPickerSelectedIndexRef.current = next;
-																			return next;
-																		});
-																	} else if (
-																		event.key === "Enter" &&
-																		event.target === modelSearchInputRef.current &&
-																		!modelPickerBusy
-																	) {
-																		const model = filtered[modelPickerSelectedIndexRef.current];
-																		if (!model) return;
-																		event.preventDefault();
-																		void chooseModel(slot, model.provider, model.id);
-																	}
-																}}
-															>
-																<input
-																	ref={modelSearchInputRef}
-																	value={modelSearch}
-																	onChange={(event) => {
-																		setModelSearch(event.target.value);
-																		modelListRef.current?.scrollTo({ top: 0 });
-																		modelPickerSelectedIndexRef.current = 0;
-																		modelPickerKeyboardScrollRef.current = true;
-																		setModelPickerSelectedIndex(0);
-																	}}
-																	placeholder="搜索模型"
-																/>
+										</div>
+									) : null}
+									{activity ? (
+										<div className={`agent-activity activity-${activity.kind}`}>
+											<span className="activity-spinner" aria-hidden="true" />
+											<span>{activity.label}</span>
+											{activity.queued > 0 ? <small>{activity.queued} queued</small> : null}
+										</div>
+									) : null}
+									{attachments.length > 0 ? (
+										<div className="composer-image-strip">
+											{attachments.map((image) => (
+												<figure key={image.id}>
+													<img src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
+													<figcaption title={image.name}>{image.name}</figcaption>
+													<button
+														type="button"
+														aria-label={`移除 ${image.name}`}
+														onClick={() => removeImageAttachment(agentId, image.id)}
+													>
+														<AppIcon name="close" size={12} />
+													</button>
+												</figure>
+											))}
+										</div>
+									) : null}
+									<textarea
+										ref={composerInputRef}
+										value={draft}
+										onChange={(event) =>
+											setDrafts((current) => ({ ...current, [agentId]: event.target.value }))
+										}
+										onPaste={(event) => {
+											const files = Array.from(event.clipboardData.files);
+											if (files.length === 0) return;
+											event.preventDefault();
+											void addImageFiles(agentId, files);
+										}}
+										onKeyDown={(event) => {
+											if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+											if (event.key === "Enter" && !event.shiftKey) {
+												event.preventDefault();
+												void sendPrompt(slot);
+											}
+										}}
+										placeholder="输入消息或 / 命令；Shift+Enter 换行"
+										rows={1}
+									/>
+									<div className="composer-toolbar">
+										<div className="composer-tools">
+											<input
+												ref={imageInputRef}
+												type="file"
+												accept="image/png,image/jpeg,image/webp,image/gif"
+												multiple
+												hidden
+												onChange={(event) => {
+													void addImageFiles(agentId, Array.from(event.target.files ?? []));
+													event.target.value = "";
+												}}
+											/>
+											<button
+												className="attach-button"
+												type="button"
+												aria-label="添加图片"
+												title="添加图片，也可粘贴或拖入"
+												onClick={() => imageInputRef.current?.click()}
+											>
+												<AppIcon name="paperclip" size={15} />
+											</button>
+											<div className="model-picker-anchor">
+												<button
+													className="model-seat"
+													type="button"
+													onClick={() => void openModelPicker(slot)}
+												>
+													{modelSelections[agentId]?.model.name ?? "选择模型"} ▾
+												</button>
+												{modelPickerAgentId === agentId && modelSelections[agentId]
+													? (() => {
+															const modelSelection = modelSelections[agentId];
+															const filtered = modelPickerOptions;
+															const providers = [...new Set(filtered.map((model) => model.provider))];
+															return (
 																<div
-																	className="model-list"
-																	ref={modelListRef}
-																	onWheel={() => {
-																		modelPickerKeyboardScrollRef.current = false;
+																	ref={modelPickerRef}
+																	className="modal model-picker"
+																	role="dialog"
+																	aria-label="选择模型"
+																	onKeyDown={(event) => {
+																		if (event.key === "ArrowDown" && filtered.length > 0) {
+																			event.preventDefault();
+																			modelPickerKeyboardScrollRef.current = true;
+																			setModelPickerSelectedIndex((current) => {
+																				const next = (current + 1) % filtered.length;
+																				modelPickerSelectedIndexRef.current = next;
+																				return next;
+																			});
+																		} else if (event.key === "ArrowUp" && filtered.length > 0) {
+																			event.preventDefault();
+																			modelPickerKeyboardScrollRef.current = true;
+																			setModelPickerSelectedIndex((current) => {
+																				const next =
+																					(current - 1 + filtered.length) % filtered.length;
+																				modelPickerSelectedIndexRef.current = next;
+																				return next;
+																			});
+																		} else if (
+																			event.key === "Enter" &&
+																			event.target === modelSearchInputRef.current &&
+																			!modelPickerBusy
+																		) {
+																			const model = filtered[modelPickerSelectedIndexRef.current];
+																			if (!model) return;
+																			event.preventDefault();
+																			void chooseModel(slot, model.provider, model.id);
+																		}
 																	}}
 																>
-																	{providers.map((provider) => (
-																		<section key={provider}>
-																			<h3>{provider}</h3>
-																			{filtered
-																				.map((model, index) => ({ model, index }))
-																				.filter((entry) => entry.model.provider === provider)
-																				.map(({ model, index }) => (
-																					<button
-																						type="button"
-																						className={[
-																							model.id === modelSelection.model.id &&
-																							model.provider === modelSelection.model.provider
-																								? "selected"
-																								: "",
-																							index === modelPickerSelectedIndex
-																								? "keyboard-selected"
-																								: "",
-																						]
-																							.filter(Boolean)
-																							.join(" ")}
-																						data-model-index={index}
-																						onMouseEnter={() => {
-																							modelPickerKeyboardScrollRef.current = false;
-																							modelPickerSelectedIndexRef.current = index;
-																							setModelPickerSelectedIndex(index);
-																						}}
-																						key={provider + model.id}
-																						disabled={modelPickerBusy}
-																						title={model.id}
-																						onClick={() =>
-																							void chooseModel(slot, model.provider, model.id)
-																						}
-																					>
-																						<span>{model.name}</span>
-																					</button>
-																				))}
-																		</section>
-																	))}
-																</div>
-																{modelPickerBusy ? (
-																	<div className="model-picker-footer">
-																		<span className="model-picker-status">正在应用 Pi 模型设置…</span>
+																	<input
+																		ref={modelSearchInputRef}
+																		value={modelSearch}
+																		onChange={(event) => {
+																			setModelSearch(event.target.value);
+																			modelListRef.current?.scrollTo({ top: 0 });
+																			modelPickerSelectedIndexRef.current = 0;
+																			modelPickerKeyboardScrollRef.current = true;
+																			setModelPickerSelectedIndex(0);
+																		}}
+																		placeholder="搜索模型"
+																	/>
+																	<div
+																		className="model-list"
+																		ref={modelListRef}
+																		onWheel={() => {
+																			modelPickerKeyboardScrollRef.current = false;
+																		}}
+																	>
+																		{providers.map((provider) => (
+																			<section key={provider}>
+																				<h3>{provider}</h3>
+																				{filtered
+																					.map((model, index) => ({ model, index }))
+																					.filter((entry) => entry.model.provider === provider)
+																					.map(({ model, index }) => (
+																						<button
+																							type="button"
+																							className={[
+																								model.id === modelSelection.model.id &&
+																								model.provider === modelSelection.model.provider
+																									? "selected"
+																									: "",
+																								index === modelPickerSelectedIndex
+																									? "keyboard-selected"
+																									: "",
+																							]
+																								.filter(Boolean)
+																								.join(" ")}
+																							data-model-index={index}
+																							onMouseEnter={() => {
+																								modelPickerKeyboardScrollRef.current = false;
+																								modelPickerSelectedIndexRef.current = index;
+																								setModelPickerSelectedIndex(index);
+																							}}
+																							key={provider + model.id}
+																							disabled={modelPickerBusy}
+																							title={model.id}
+																							onClick={() =>
+																								void chooseModel(slot, model.provider, model.id)
+																							}
+																						>
+																							<span>{model.name}</span>
+																						</button>
+																					))}
+																			</section>
+																		))}
 																	</div>
-																) : null}
-															</div>
-														);
-													})()
-												: null}
+																	{modelPickerBusy ? (
+																		<div className="model-picker-footer">
+																			<span className="model-picker-status">
+																				正在应用 Pi 模型设置…
+																			</span>
+																		</div>
+																	) : null}
+																</div>
+															);
+														})()
+													: null}
+											</div>
+											<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
 										</div>
-										<ContextGauge snapshot={sessionSnapshot} onClick={() => void openSessionPanel(slot)} />
+										<div className="composer-actions">
+											<ThinkingControl
+												levels={modelSelections[agentId]?.availableThinkingLevels ?? []}
+												value={modelSelections[agentId]?.thinkingLevel ?? ""}
+												disabled={modelPickerBusy}
+												onChange={(level) => void chooseThinking(slot, level)}
+											/>
+											{canAbort ? (
+												<button
+													className="send-button stop-send-button"
+													type="button"
+													aria-label="中断当前回复"
+													title="中断当前回复（Esc）"
+													disabled={abortingAgents[agentId] === true}
+													onClick={() => void abortAgent(slot)}
+												>
+													<AppIcon name="stop" size={15} />
+												</button>
+											) : (
+												<button
+													className="send-button"
+													type="submit"
+													aria-label="发送消息"
+													disabled={!draft.trim() && attachments.length === 0}
+												>
+													<AppIcon name="arrow-up" />
+												</button>
+											)}
+										</div>
 									</div>
-									<div className="composer-actions">
-										<ThinkingControl
-											levels={modelSelections[agentId]?.availableThinkingLevels ?? []}
-											value={modelSelections[agentId]?.thinkingLevel ?? ""}
-											disabled={modelPickerBusy}
-											onChange={(level) => void chooseThinking(slot, level)}
-										/>
-										{canAbort ? (
-											<button
-												className="send-button stop-send-button"
-												type="button"
-												aria-label="中断当前回复"
-												title="中断当前回复（Esc）"
-												disabled={abortingAgents[agentId] === true}
-												onClick={() => void abortAgent(slot)}
-											>
-												<AppIcon name="stop" size={15} />
-											</button>
-										) : (
-											<button
-												className="send-button"
-												type="submit"
-												aria-label="发送消息"
-												disabled={!draft.trim() && attachments.length === 0}
-											>
-												<AppIcon name="arrow-up" />
-											</button>
-										)}
-									</div>
-								</div>
-							</form>
-						</>
+								</form>
+							</div>
+							{workPanelVisible && project ? (
+								<WorkPanel
+									projectRoot={project.rootPath}
+									toolItems={items.filter(
+										(item): item is Extract<TranscriptItem, { type: "tool" }> => item.type === "tool",
+									)}
+								/>
+							) : null}
+						</div>
 					) : (
 						<>
 							<div className="transcript-placeholder">

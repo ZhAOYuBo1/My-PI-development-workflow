@@ -1151,17 +1151,29 @@ function createWindow(stateStore: RecentProjectStore): BrowserWindow {
 		})
 			? storedBounds
 			: null;
+	/**
+	 * Windows 11 22H2（build 22621）起才有系统背景材质，更早的系统会被忽略。
+	 * 侧栏的毛玻璃靠这层材质提供模糊，渲染层只叠 tint + sheen（与参考项目 macOS vibrancy 同构）。
+	 */
+	function supportsWindowsBackgroundMaterial(): boolean {
+		if (process.platform !== "win32") return false;
+		const build = Number(process.getSystemVersion().split(".")[2] ?? "0");
+		return Number.isFinite(build) && build >= 22621;
+	}
+
+	const useBackgroundMaterial = supportsWindowsBackgroundMaterial();
 	const window = new BrowserWindow({
 		width: visibleBounds?.width ?? 1320,
 		height: visibleBounds?.height ?? 860,
 		...(visibleBounds ? { x: visibleBounds.x, y: visibleBounds.y } : {}),
 		minWidth: 900,
 		minHeight: 620,
-		backgroundColor: "#eceeea",
+		backgroundColor: useBackgroundMaterial ? "#00000000" : "#f2f2f4",
 		...(process.platform === "win32"
 			? {
 					titleBarStyle: "hidden" as const,
-					titleBarOverlay: { color: "#eceeea", symbolColor: "#292928", height: 32 },
+					titleBarOverlay: { color: "#f2f2f4", symbolColor: "#17181a", height: 34 },
+					...(useBackgroundMaterial ? { backgroundMaterial: "acrylic" as const } : {}),
 				}
 			: {}),
 		show: false,

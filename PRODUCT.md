@@ -1,53 +1,49 @@
 # Product
 
-<!-- impeccable:product-schema 1 -->
+## Register
+
+product
 
 ## Platform
 
-Windows desktop application built with Electron. The interface should feel native to a developer workstation rather than like a web dashboard inside a window.
+web
 
-## Stack
+## Users
 
-- Electron main and preload processes
-- React and TypeScript renderer
-- Vite build pipeline
-- SQLite for local project and UI state
-- Pi coding agent as the source of truth for models, sessions, commands, tools, skills, and usage
+普通开发者。长时间在桌面端使用，通常全屏或半屏挂着一个项目，一边让 Agent 干活一边看文件、翻会话、改提示词。他们要的是能连续用几小时不累的界面，不是好看五秒钟的展示页。
 
-## Primary User
+## Product Purpose
 
-A programmer working on ordinary feature development and bug fixing who wants separate role-focused agents without surrendering control to an automatic pipeline.
+CodePIddy 是一个基于 Pi 的桌面编码工作台：管理项目、工作项、Agent 会话与权限，把 Agent 的执行过程可视化。本轮的职责边界是**客户端的美化与体验打磨**——不改业务逻辑、不改数据模型、不改 IPC，只让这个客户端看起来和用起来达到专业桌面工具的水准。
 
-## Core Job
+成功的样子：界面不再让人一眼觉得是 AI 生成的，长时间使用不刺眼、不疲劳，信息层级清楚到不需要解释。
 
-Keep feature work and bug-fix work organized inside each project, let the programmer manually enter the appropriate long-lived agent, and preserve handoff state through human-readable workflow documents.
+## Positioning
 
-## Product Model
+把 Agent 的工作过程放进一个安静、耐看、信息密度合适的桌面工作台里。
 
-- Every project contains two work lanes: 新需求 and 修漏洞.
-- A work item is the isolation boundary for workflow state.
-- New requirements use Requirement Analysis, Coding, and Review agents.
-- Bug fixes use Bug Fix and Review agents.
-- The user manually creates and switches agents; CodePIddy does not automatically advance the workflow.
-- Agents collaborate through the OpenSpec Change artifacts and other documents produced by their enabled Skills.
-- Only one writing agent may hold the project write lease at a time.
+## Brand Personality
 
-## Product Position
+克制、精密、可信、简约。
 
-CodePIddy is a Pi-powered workflow client, not a replacement agent runtime. Pi remains authoritative for provider configuration, models, slash commands, sessions, tools, and skills. CodePIddy contributes project organization, workflow boundaries, persistence, permissions, and a polished desktop interaction layer.
+语气直接、技术化、不谄媚；界面不解释自己，不用感叹号，不用营销腔。
 
-## Durable Constraints
+## Anti-references
 
-- Work Item context remains isolated, while the selected OpenSpec Change may live in the project's shared OpenSpec root.
-- Requirement approval is controlled by the user.
-- Read operations are normally allowed; modifying operations follow the configured permission extension.
-- Tavily integration is search-only and must not become a general webpage reader.
-- The Windows MVP does not require a sandbox, but the architecture should leave room for one.
-- The application must remain keyboard-friendly and usable during long agent sessions.
+**AI 味重的界面。** 具体表现为：玻璃拟态堆叠、渐变文字、紫色渐变、没有意义的超大圆角卡片网格、用 emoji 当图标、每张卡片都长一样、动效只是为了让页面"动起来"。任何一处如果让人产生"这是 AI 随手生成的"念头，就是失败的。
 
-## Success Criteria
+## Design Principles
 
-- A programmer can reopen a project and continue the correct agent session without reconstructing state.
-- Feature and bug workflows remain visually and physically distinguishable.
-- Model, command, permission, context, tool, and streaming states are understandable without reading logs.
-- The client remains calm and legible during long conversations and dense tool output.
+工具隐身，任务在前。设计不抢戏，用户的注意力应该落在代码、会话和文件上，而不是界面的装饰上。
+
+层次来自色调，不来自描边。用底色深浅和留白划分区域，而不是给每个卡片加边框和阴影。
+
+一致性优先于惊喜。同一个按钮在设置页和会话页必须长得一样；惊喜留给少数关键时刻，不铺满每一屏。
+
+彩色是信息，不是装饰。颜色只用来表达状态和分类，主体界面保持中性。
+
+每个状态都要设计过。默认、悬停、聚焦、选中、禁用、空、错误、加载——缺一个都算没做完。
+
+## Accessibility & Inclusion
+
+没有硬性合规要求。本轮按 WCAG AA 执行：正文与背景对比度不低于 4.5:1，大字号不低于 3:1，动效提供 `prefers-reduced-motion` 降级，聚焦态必须可见。
