@@ -4,7 +4,7 @@
 
 ## 如何续接（压缩后先读这里）
 
-1. 读 [PRODUCT.md](../../PRODUCT.md)（定位、边界、反参考）→ [DESIGN.md](../../DESIGN.md)（配色、字体、层次、组件规则）→ [reference-pi-desktop.md](./reference-pi-desktop.md)（参考项目拆解）。
+1. 读 [PRODUCT.md](../../PRODUCT.md)（定位、边界、反参考）→ [DESIGN.md](../../DESIGN.md)（配色、字体、层次、组件规则）→ [reference-pi-desktop.md](./reference-pi-desktop.md)（主参考项目拆解）→ [reference-dsh-effort-dial.md](./reference-dsh-effort-dial.md)（思考强度波场拆解）。
 2. 翻到本文件底部「进度日志」，读最后一条，确认上一批做到哪、验证到什么程度。
 3. 恢复环境：
    - 依赖已装过，需要时 `npm install --ignore-scripts`
@@ -20,9 +20,10 @@
 ### 恢复提示词（压缩后直接发这一段）
 
 ```text
-继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」和「进度日志」最后一条），
-再读 PRODUCT.md 和 DESIGN.md，然后从「待办清单」第 1 项开始做。
-字体、圆角、输入区叠层和 app icon 已经验收并提交，不要重做；从空态 / 错误态 / 加载态继续。
+继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
+再读 PRODUCT.md、DESIGN.md，然后从「待办清单」第 1 项「会话树弹窗 .session-tree-modal」开始做。
+字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定闪电和思考强度波场都已验收并提交，不要重做。
+当前 HEAD 是 4e4341c；工作树只有根目录未跟踪的用户原始文件 `闪电.svg`，不要删除或提交它。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
   npm run check
@@ -51,9 +52,9 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-02 批次 12 之后）
+## 当前状态（2026-10-02 批次 17 之后）
 
-- `styles.css` 3531 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
+- `styles.css` 3812 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
 - app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
@@ -74,8 +75,16 @@
 - 已提交：`45c39bc feat(desktop): refresh client UI and remove stale test/docs`
 - 已提交：`edcde8e feat(desktop): refine spacing typography and composer overlays`
 - 已提交：`247abae fix(desktop): replace app icon with transparent vector assets`
+- 已提交：`78ca5c0 feat(desktop): refine state feedback and effort dial`
+- 已提交：`25a6023 docs(desktop): record effort dial acceptance`
+- 已提交：`c34c20a feat(desktop): use selected lightning asset`
+- 已提交：`4e4341c docs(desktop): record lightning asset acceptance`
 
-批次 11 的 app icon、字体和 UI 调整已提交；详细过程见下方进度日志。
+批次 1-17 的 UI 调整均已提交；详细过程见下方进度日志。
+
+### 下一步
+
+从「待办清单」第 1 项开始：统一 `.session-tree-modal`。先检查 `App.tsx` 里的 `.session-tree-heading`、`.session-summary`、`.session-tree-list`、`.session-node`、`.session-node-rail`、`.session-node-copy`、`.session-node-meta`、`.session-tree-empty`，再对照 `DESIGN.md` 的浮层、导航、状态色和 spacing 规则逐项收敛。完成后必须截图检查节点缩进、当前节点、空态和窄窗。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -131,7 +140,7 @@
 - [x] `npm run typecheck --workspace=@codepiddy/desktop` 通过（2026-10-02 批次 8）
 - [x] `npm run build:codepiddy` 通过（2026-10-02 批次 8 复跑）
 - [x] 截图对比（2026-10-02：`.artifacts/ui-*.png`、`conv-*.png`、`spacing-*.png`，含 900px 窄窗）
-- [ ] 用户确认
+- [~] 用户持续确认中（批次 1-17 已逐项验收）
 
 ## 进度日志
 
@@ -392,7 +401,7 @@
 
 处理：
 
-- 用 `svg-precision-skill` 生成 12×12 实心闪电路径，输出设计源 `codepiddy-icons/lightning.svg`，并通过 `svg_cli.py validate`。
+- 用 `svg-precision-skill` 生成 12×12 实心闪电路径，输出设计源 `codepiddy-icons/lightning.svg`，并通过 `svg_cli.py validate`。此自绘版本已在批次 17 被用户选定素材替换。
 - `stream-stats.ts` 只返回数值文本，不再拼接 `⚡`。
 - `StreamStats.tsx` 新增内联 `StreamStatsGlyph`，使用 `currentColor` 和 `aria-hidden`；视觉图标与数值文本分离，读屏只读数值。
 - 统计行改为右对齐 flex，闪电与文字间隔 4px；图标颜色使用次墨色，保证小尺寸下可见。
@@ -449,7 +458,7 @@
 
 ## 未提交状态
 
-批次 12-17 已提交，工作树只剩用户放在根目录的原始 `闪电.svg` 未跟踪文件。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 12-17 已提交，工作树只剩用户放在根目录的原始 `闪电.svg` 未跟踪文件；不要删除或提交它。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
