@@ -22,6 +22,7 @@
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」和「进度日志」最后一条），
 再读 PRODUCT.md 和 DESIGN.md，然后从「待办清单」第 1 项开始做。
+字体、圆角、输入区叠层和 app icon 已经验收并提交，不要重做；从空态 / 错误态 / 加载态继续。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
   npm run check
@@ -38,7 +39,7 @@
 - `npm run check` 内部会跑 `biome check --write`，它会重排格式，diff 变大是正常的，不是改错了。
 - renderer 的类型检查**不在**根 `tsgo` 范围内，必须单独跑 `npm run typecheck --workspace=@codepiddy/desktop`。
 - demo 模式没有 IPC，文件树只会显示「目录读取失败」；要看文件面板必须开真实项目。
-- 本文件所在的工作区里还有约 900 个已 staged 的删除，来自更早那次「清理测试与非代码文件」，与 UI 改版无关，不要误以为是本次改动。
+- `.artifacts/` 是 gitignored，截图和中间产物只在本机存在；字体和 app icon 的生成流程已经写入本文件。
 
 ## 目标
 
@@ -50,10 +51,12 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-02 批次 10 之后）
+## 当前状态（2026-10-02 批次 11 之后）
 
-- `styles.css` 3479 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩 62 处硬编码 hex，基本就是令牌定义本身。
+- `styles.css` 3531 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
+- 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
+- app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
 - 图标全部走 `lucide-react@1.48.0`，renderer 里手写 `<svg>` 已清零。
 - 外壳：边到边分区，没有圆角外框、没有描边、没有浮动卡片；层次靠四层底色（`#ffffff` / `#f8f8f9` / `#f2f2f4` / `#e8e8eb`）和材质，而不是靠框。
 - 侧栏毛玻璃：Windows 用系统材质 `backgroundMaterial: "acrylic"`（build ≥ 22621）+ 45% tint + 上下 sheen；浏览器 demo 用渐变兜底。实现细节见批次 7。
@@ -64,9 +67,10 @@
 
 ### 本轮改动清单
 
-上一轮已提交：`45c39bc feat(desktop): refresh client UI and remove stale test/docs`。
+- 已提交：`45c39bc feat(desktop): refresh client UI and remove stale test/docs`
+- 已提交：`edcde8e feat(desktop): refine spacing typography and composer overlays`
 
-当前未提交（批次 8-10）：`DESIGN.md`、`docs/design/redesign-plan.md`、`packages/codepiddy-desktop/src/renderer/App.tsx`、`packages/codepiddy-desktop/src/renderer/styles.css`、`src/renderer/assets/fonts/`。根目录的 `maple/`、`monaspace/`、`config.json`、`LICENSE.txt` 是原始字体素材，等用户检查通过后再删除未使用部分。
+批次 11 的 app icon、字体和 UI 调整已提交；详细过程见下方进度日志。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -318,6 +322,21 @@
 
 浏览器验证：`document.fonts` 中 Monaspace 和 Maple 均为 `loaded`；发送与停止按钮的尺寸都是 28x28、圆角都是 9999px。`npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。截图：`.artifacts/font-radius-agent.png`、`.artifacts/font-radius-settings.png`。
 
+### 2026-10-02 批次 11：app icon 透明矢量化
+
+用户反馈：当前黑白 app icon 是图片直接放进 SVG 的，白色底板被烘进 PNG，出现明显的白色方块分层。
+
+处理：
+
+- 从黑白原图提取连通区域，保留主体外轮廓和中间的透明孔位，重新生成真正透明的 SVG path。
+- 正式 SVG 使用 `#17181a` 作为图形色，不包含背景 rect，也不包含 base64 图片。
+- `render-icon.mjs` 改为用 Playwright 渲染 SVG，生成 `1024/512/256/128/64/48/32/16` PNG，并直接写出多尺寸 ICO；不再依赖 Electron 的 nativeImage。
+- `public/codepiddy-icon.png` 换成 256px 透明版本。
+- 删除旧的彩色 v1/v2/v3、`codepiddy-icon-original.png` 和 `codepiddy-icon-generated-backup.png`。
+- 空态里的 `.empty-mark.app-icon-mark` 去掉灰色底托、圆角和阴影，避免图标再被框成一块。
+
+验证：新 SVG 通过 `svg_cli.py validate`；PNG 和 ICO 角落像素均为 `alpha=0`；没有白底方块。`npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。截图：`.artifacts/icon-appearance.png`、`.artifacts/codepiddy-icon-transparent-preview.png`。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. **空态 / 错误态 / 加载态**：目前只换了配色，形态没设计过（`.empty-state`、`.transcript-placeholder`、`.work-panel-empty`、`.provider-empty`）。
@@ -325,11 +344,10 @@
 3. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
 4. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
 5. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
-6. **用户验收**：改版整体效果还没让你确认过。
 
 ## 未提交状态
 
-批次 8 和批次 9 的 `DESIGN.md`、`docs/design/redesign-plan.md`、`App.tsx`、`styles.css` 还在工作区，**没有 commit**。上一轮的锁文件已经随 `45c39bc` 提交，后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 11 已随 app icon/字体/圆角调整提交；下一批开始前 `git status --short` 应为干净。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
@@ -342,8 +360,9 @@
 | 2026-10-02 | 北极星「精密仪器台」，色调分层，紧凑精密 | 用户选定 1A/3A/4A |
 | 2026-10-02 | 强调色从青绿 `#0f766e` 改为蓝 `#2563eb` | 用户明确表示不喜欢绿色、偏好蓝色 |
 | 2026-10-02 | 跳过 AI 生成的效果图环节 | 当前运行环境没有原生图像生成能力，`DESIGN.md` 即为视觉契约 |
+| 2026-10-02 | UI 字体采用 `Monaspace Argon + Maple Mono NF CN` | 用户要求英文和中文分别优化，且两份字体均适合作为技术工具字体 |
+| 2026-10-02 | app icon 使用透明黑白矢量，不再保留图片底模 | 用户确认原图白色背景造成分层 |
 
 ## 待用户确认
 
-- 字体与圆角效果：确认 `Monaspace Argon` 拉丁 / `Maple Mono NF CN` 中文的搭配、整体圆角，以及发送/停止按钮的圆形统一。
-- 用户确认后，删除未使用的原始字体文件与下载附带文件，只保留 `src/renderer/assets/fonts/` 中实际引用的 WOFF2 和许可文本。
+- 暂无

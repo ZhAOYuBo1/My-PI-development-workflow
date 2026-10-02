@@ -2596,6 +2596,13 @@ textarea:focus-visible,
   color: var(--cp-ink-secondary);
 }
 
+.empty-mark.app-icon-mark {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* ---- 按钮：统一 28px / 8px 圆角，取消悬停位移 ---- */
 .primary-button,
 .secondary-button,
