@@ -513,7 +513,7 @@
 
 ### 2026-10-03 批次 21：流星图标与目录整理
 
-- 将根目录用户素材 `流星.svg` 移到正式设计源目录：`codepiddy-icons/meteor.svg`。
+- 将根目录用户素材移到正式设计源目录：`codepiddy-icons/meteor.svg`；最终采用 `流星2.svg` 的水平镜像版本。
 - 删除不再使用的 `codepiddy-icons/lightning.svg`，避免同一图标存在多个来源。
 - `StreamStats.tsx` 改为通过 Vite `?url` 引用 `codepiddy-icons/meteor.svg`，token 速率前显示流星，文本仍只读数值。
 - 批次 19-20 已随 `b2644f5 feat(desktop): add per-turn changes and terminal` 提交；批次 21 已随 `b5e30b2 feat(desktop): use meteor stream icon` 提交。
