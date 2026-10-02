@@ -69,6 +69,7 @@
 
 - 已提交：`45c39bc feat(desktop): refresh client UI and remove stale test/docs`
 - 已提交：`edcde8e feat(desktop): refine spacing typography and composer overlays`
+- 已提交：`247abae fix(desktop): replace app icon with transparent vector assets`
 
 批次 11 的 app icon、字体和 UI 调整已提交；详细过程见下方进度日志。
 
@@ -347,7 +348,7 @@
 
 ## 未提交状态
 
-批次 11 已随 app icon/字体/圆角调整提交；下一批开始前 `git status --short` 应为干净。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 11 已随 `247abae` 提交；下一批开始前 `git status --short` 应为干净。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
