@@ -22,7 +22,7 @@ import type {
 	SettingsStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppIcon } from "./components/app-icon.tsx";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
 import { MessageContent } from "./components/message-content.tsx";
@@ -4344,42 +4344,61 @@ export function App() {
 										: ` · ${Math.round(sessionPanel.snapshot.contextUsage.percent)}%`}
 								</span>
 							) : null}
-							{sessionPanel.snapshot.isCompacting ? <strong>正在压缩上下文</strong> : null}
-							{sessionPanel.snapshot.isStreaming ? <strong>Agent 正在运行</strong> : null}
+							{sessionPanel.snapshot.isCompacting ? (
+								<strong className="summary-warning">正在压缩上下文</strong>
+							) : null}
+							{sessionPanel.snapshot.isStreaming ? (
+								<strong className="summary-active">Agent 正在运行</strong>
+							) : null}
 						</div>
 						<div className="session-tree-list">
 							{sessionPanel.snapshot.nodes.length === 0 ? (
-								<div className="session-tree-empty">当前会话还没有可展示的节点。</div>
-							) : (
-								sessionPanel.snapshot.nodes.map((node) => (
-									<div
-										className={`session-node ${node.isLeaf ? "current" : ""}`}
-										key={node.entryId}
-										style={{ marginLeft: Math.min(node.depth, 8) * 16 }}
-									>
-										<div className="session-node-rail">
-											<AppIcon name="branch" size={14} />
-										</div>
-										<div className="session-node-copy">
-											<div className="session-node-meta">
-												<span>{node.label || node.role || node.type}</span>
-												{node.isLeaf ? <strong>当前节点</strong> : null}
-												{node.timestamp ? <time>{new Date(node.timestamp).toLocaleString()}</time> : null}
-											</div>
-											<p>{node.text || node.type}</p>
-										</div>
-										{node.forkable ? (
-											<button
-												className="session-fork-button"
-												type="button"
-												disabled={sessionPanelLoading}
-												onClick={() => void forkAgentSession(node.entryId)}
-											>
-												Fork
-											</button>
-										) : null}
+								<div className="session-tree-empty">
+									<div className="state-mark state-mark-muted">
+										<AppIcon name="branch" size={18} />
 									</div>
-								))
+									<strong>当前会话还没有节点</strong>
+									<p>发送消息后，这里会显示可以回溯和分叉的会话路径。</p>
+								</div>
+							) : (
+								sessionPanel.snapshot.nodes.map((node) => {
+									const nodeLabel =
+										node.label ||
+										(node.role === "user" ? "你" : node.role === "assistant" ? "Pi" : node.role || node.type);
+									return (
+										<div
+											className={`session-node ${node.isLeaf ? "current" : ""}`}
+											key={node.entryId}
+											style={{ "--session-depth": Math.min(node.depth, 8) } as CSSProperties}
+										>
+											<div className="session-node-rail">
+												<AppIcon name="branch" size={14} />
+											</div>
+											<div className="session-node-copy">
+												<div className="session-node-meta">
+													<span>{nodeLabel}</span>
+													{node.isLeaf ? <strong>当前节点</strong> : null}
+													{node.timestamp ? (
+														<time>{new Date(node.timestamp).toLocaleString()}</time>
+													) : null}
+												</div>
+												<p>{node.text || node.type}</p>
+											</div>
+											{node.forkable ? (
+												<button
+													className="session-fork-button"
+													type="button"
+													disabled={sessionPanelLoading}
+													aria-label={`从${nodeLabel}节点创建分支`}
+													title="从此节点创建分支"
+													onClick={() => void forkAgentSession(node.entryId)}
+												>
+													{sessionPanelLoading ? "处理中…" : "Fork"}
+												</button>
+											) : null}
+										</div>
+									);
+								})
 							)}
 						</div>
 						<div className="session-tree-footer">
