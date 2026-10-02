@@ -428,7 +428,7 @@
 - 滑块继续只比轨道高出 2px，保持“落在轨道上”的关系，不变成一颗大球。
 - 滑块位置、填充宽度和刻度锚点共用 `--thinking-thumb` / `--thinking-inset`，避免尺寸调整后不同轴。
 
-待视觉复核。
+用户已验收，轨道尺寸保留 18px / 20px。
 
 ## 待办清单（按优先级，下一批从这里挑）
 
@@ -439,7 +439,7 @@
 
 ## 未提交状态
 
-批次 12-16 当前尚未提交；批次 16 把思考强度轨道调整为 18px / 20px。用户确认后再一起提交。参考仓库 `E:\mypi-refs\dsh-effort-dial` 也要在验收后删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 12-16 已随 `78ca5c0 feat(desktop): refine state feedback and effort dial` 提交，工作树应保持干净。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已在验收后删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
