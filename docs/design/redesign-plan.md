@@ -430,6 +430,16 @@
 
 用户已验收，轨道尺寸保留 18px / 20px。
 
+### 2026-10-02 批次 17：替换用户选定闪电
+
+用户提供根目录 `闪电.svg`，要求替换批次 14 的自绘闪电。
+
+- `codepiddy-icons/lightning.svg` 已替换为用户的黄黑闪电源文件，保留原始 1024 viewBox、五条路径和配色。
+- `StreamStatsGlyph` 同步改为内联同一组路径，缩放到 12×12px；统计文本仍保持纯数值。
+- 浏览器实测闪电在 12px 下轮廓清晰，未出现糊边或缺字。
+
+用户已验收，闪电替换随 `c34c20a feat(desktop): use selected lightning asset` 提交。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. **会话树弹窗**：`.session-tree-modal` 系列还没按新体系过一遍。
@@ -439,7 +449,7 @@
 
 ## 未提交状态
 
-批次 12-16 已随 `78ca5c0 feat(desktop): refine state feedback and effort dial` 提交，工作树应保持干净。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已在验收后删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 12-17 已提交，工作树只剩用户放在根目录的原始 `闪电.svg` 未跟踪文件。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
