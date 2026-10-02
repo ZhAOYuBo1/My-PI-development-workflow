@@ -308,7 +308,7 @@ Agent 工具调用的卡片是整个客户端最有辨识度的元素。它有�
 
 ### Stream Stats Glyph
 
-Token 速率前的闪电不能依赖字体字符。`codepiddy-icons/lightning.svg` 是用户选定的黄黑闪电源文件，React 中以 1024 viewBox 内联渲染并缩到 12px，保留原始五条路径与配色，并标记为装饰性内容。这样不会因 Monaspace / Maple 缺少符号而出现豆腐块，也保留图标自身的识别度。
+Token 速率前的流星不能依赖字体字符。`codepiddy-icons/meteor.svg` 是用户提供的正式源文件，渲染层通过 Vite 资源 URL 缩到 12px，保留原始 viewBox 与多彩配色，并标记为装饰性内容。这样不会因 Monaspace / Maple 缺少符号而出现豆腐块，也保留图标自身的识别度。
 
 ## 7. Do's and Don'ts
 

@@ -1469,7 +1469,13 @@ button { color: inherit; }
 .message-elapsed { font-size: 10px; color: var(--cp-ink-muted); font-variant-numeric: tabular-nums; }
 .message-collapse .chevron { font-size: 15px; }
 .stream-stats { display: flex; align-items: center; justify-content: flex-end; gap: var(--cp-space-xxs); margin-top: var(--cp-space-xs); color: var(--cp-ink-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.stream-stats-glyph { width: 12px; height: 12px; flex: none; }
+.stream-stats-glyph {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  object-fit: contain;
+}
 .transcript-runtime-status { display: flow-root; min-height: 38px; }
 .agent-activity {
   display: flex;

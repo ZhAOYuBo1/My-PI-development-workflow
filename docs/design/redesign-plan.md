@@ -23,7 +23,7 @@
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
 再读 PRODUCT.md、DESIGN.md。批次 18 的会话树弹窗已验收并提交；批次 19-20 的工作区多视图、变更持久化和内部终端修复已实现，先检查效果，验收后再提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定闪电和思考强度波场都已验收并提交，不要重做。
-当前 HEAD 是 b0f9385；批次 19-20 修改了 App.tsx、WorkPanel.tsx、work-panel.ts、styles.css、main/index.ts、preload/index.ts、shared/index.ts 和相关文档，等待验收；根目录未跟踪文件 `流星.svg` 不要删除或提交。
+当前 HEAD 是 b2644f5；批次 21 正在把 token 速度图标从闪电替换为用户提供的流星，并整理图标源文件位置。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
   npm run check
@@ -58,7 +58,7 @@
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
 - app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
-- 常规图标全部走 `lucide-react@1.48.0`；统计行的闪电是唯一自定义矢量例外，源文件为 `codepiddy-icons/lightning.svg`。
+- 常规图标全部走 `lucide-react@1.48.0`；统计行的流星是唯一自定义矢量例外，正式源文件为 `codepiddy-icons/meteor.svg`。
 - 外壳：边到边分区，没有圆角外框、没有描边、没有浮动卡片；层次靠四层底色（`#ffffff` / `#f8f8f9` / `#f2f2f4` / `#e8e8eb`）和材质，而不是靠框。
 - 侧栏毛玻璃：Windows 用系统材质 `backgroundMaterial: "acrylic"`（build ≥ 22621）+ 45% tint + 上下 sheen；浏览器 demo 用渐变兜底。实现细节见批次 7。
 - 配色分工：中性 chrome 打底 + 蓝色强调 `#2563eb`（只用于交互与选中）+ 三色语义（成功/警告/错误，淡底 + 同色文字，实心只给圆点与角标）。
@@ -511,6 +511,15 @@
 
 验证：`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；真实 Electron 关闭重启后，项目 + 工作项键仍能恢复 `a.txt` 历史，旧的无路径记录已归并回真实文件。
 
+### 2026-10-03 批次 21：流星图标与目录整理（待验收）
+
+- 将根目录用户素材 `流星.svg` 移到正式设计源目录：`codepiddy-icons/meteor.svg`。
+- 删除不再使用的 `codepiddy-icons/lightning.svg`，避免同一图标存在多个来源。
+- `StreamStats.tsx` 改为通过 Vite `?url` 引用 `codepiddy-icons/meteor.svg`，token 速率前显示流星，文本仍只读数值。
+- 批次 19-20 已随 `b2644f5 feat(desktop): add per-turn changes and terminal` 提交；批次 21 等待用户验收后提交。
+
+验证：`svg_cli.py validate` 无错误；`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；浏览器实测资源加载为 205×200 源图并渲染为 12×12。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
@@ -520,7 +529,7 @@
 
 ## 未提交状态
 
-批次 1-18 已提交。批次 19 修改了 `App.tsx`、`WorkPanel.tsx`、`work-panel.ts`、`styles.css`、`main/index.ts`、`ipc-validation.ts`、`preload/index.ts`、`shared/index.ts`、`DESIGN.md`、`reference-pi-desktop.md` 和本文件，等待用户验收后提交。工作树仍有用户放在根目录的原始 `流星.svg` 未跟踪文件；不要删除或提交它。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-20 已提交。批次 21 正在修改 `codepiddy-icons/meteor.svg`、删除旧 `codepiddy-icons/lightning.svg`、更新 `StreamStats.tsx` 和本文件，等待用户验收后提交。根目录不再保留原始 `流星.svg`；参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
