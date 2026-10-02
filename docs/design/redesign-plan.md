@@ -21,9 +21,9 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md，然后从「待办清单」第 1 项「会话树弹窗 .session-tree-modal」开始做。
+再读 PRODUCT.md、DESIGN.md。批次 18 的会话树弹窗已验收并提交，从「待办清单」第 2 项继续做文件面板。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定闪电和思考强度波场都已验收并提交，不要重做。
-当前 HEAD 是 4e4341c；工作树只有根目录未跟踪的用户原始文件 `闪电.svg`，不要删除或提交它。
+当前 HEAD 是 4473a98；工作树只有根目录未跟踪文件 `闪电.svg`，不要删除或提交。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
   npm run check
@@ -52,9 +52,9 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-02 批次 17 之后）
+## 当前状态（2026-10-02 批次 18 之后）
 
-- `styles.css` 3812 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
+- `styles.css` 3995 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
 - app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
@@ -69,6 +69,7 @@
 - 运行状态：Agent 运行中反馈已从输入区移到转录流末尾，使用三点错峰缩放动画，不再用浮起胶囊或转圈。
 - 流式统计：`⚡` 字体字符已移除，改为 12×12 内联 SVG，避免字体缺字时出现豆腐块。
 - 思考强度：滑块改为轻量 canvas 波场，低档慢而疏、高档快而密，最高档有短促落点扫光；拖拽加入轻微磁吸。
+- 会话树弹窗：标题与摘要合并成安静头部，节点按深度使用 token 缩进；当前节点使用蓝色淡底和半像素强调环，Fork 按钮在悬停/聚焦时出现；空态补齐状态标识和说明。
 
 ### 本轮改动清单
 
@@ -79,12 +80,13 @@
 - 已提交：`25a6023 docs(desktop): record effort dial acceptance`
 - 已提交：`c34c20a feat(desktop): use selected lightning asset`
 - 已提交：`4e4341c docs(desktop): record lightning asset acceptance`
+- 已提交：`4473a98 feat(desktop): refine session tree modal`
 
 批次 1-17 的 UI 调整均已提交；详细过程见下方进度日志。
 
 ### 下一步
 
-从「待办清单」第 1 项开始：统一 `.session-tree-modal`。先检查 `App.tsx` 里的 `.session-tree-heading`、`.session-summary`、`.session-tree-list`、`.session-node`、`.session-node-rail`、`.session-node-copy`、`.session-node-meta`、`.session-tree-empty`，再对照 `DESIGN.md` 的浮层、导航、状态色和 spacing 规则逐项收敛。完成后必须截图检查节点缩进、当前节点、空态和窄窗。
+从「待办清单」第 2 项开始：研究参考项目的文件面板能力，在现有 `WorkPanel` 上补齐文件状态、预览和后续 diff 入口，并在 Electron 中打开真实项目验证。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -449,16 +451,37 @@
 
 用户已验收，闪电替换随 `c34c20a feat(desktop): use selected lightning asset` 提交。
 
+### 2026-10-02 批次 18：会话树弹窗收敛
+
+改了 `App.tsx` 和 `styles.css`，没有改 IPC、数据模型或 Fork 行为。
+
+- 标题、摘要和树列表改成同一个安静浮层头部：去掉两段独立底色带，摘要改为弱墨色元信息，运行/压缩状态保留小面积语义色。
+- 节点缩进从内联 `marginLeft` 改为 `--session-depth` CSS 变量；桌面每级 16px，窄窗每级 12px。
+- 节点图标改为 24px 轻量 rail；当前节点使用 `--cp-accent-soft` 淡底和 `--cp-accent-ring` 半像素内环，层级和选中关系更清楚。
+- `user` / `assistant` 标签显示为“你” / “Pi”；Fork 按钮在 hover / focus-within 时出现，触屏下常显，按钮尺寸统一为 28px。
+- 空态补齐 `state-mark`、标题和下一步说明；长文本保持两行截断，节点和 Fork 不横向溢出。
+
+视觉验证：
+
+- 1440x900：弹窗 780px，节点、当前态和 Fork 对齐，无横向溢出。
+- 560x760：弹窗左右各留 24px，无横向溢出；时间戳在窄窗换行，不压住 Fork。
+- 长文本：两行截断，Fork 不挤压正文。
+- 空态：状态标识、标题和说明居中显示。
+
+验证：`npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。截图：`.artifacts/session-tree-hover.png`、`session-tree-long-text.png`、`session-tree-narrow.png`、`session-tree-empty.png`。
+
+用户已验收，随 `4473a98 feat(desktop): refine session tree modal` 提交。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
-1. **会话树弹窗**：`.session-tree-modal` 系列还没按新体系过一遍。
+1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
 2. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
 3. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
 4. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
 
 ## 未提交状态
 
-批次 12-17 已提交，工作树只剩用户放在根目录的原始 `闪电.svg` 未跟踪文件；不要删除或提交它。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-18 已提交。工作树仍有用户放在根目录的原始 `闪电.svg` 未跟踪文件；不要删除或提交它。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
