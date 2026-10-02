@@ -50,9 +50,10 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-02 批次 7 之后）
+## 当前状态（2026-10-02 批次 10 之后）
 
-- `styles.css` 3466 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩 62 处硬编码 hex，基本就是令牌定义本身。
+- `styles.css` 3479 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩 62 处硬编码 hex，基本就是令牌定义本身。
+- 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 图标全部走 `lucide-react@1.48.0`，renderer 里手写 `<svg>` 已清零。
 - 外壳：边到边分区，没有圆角外框、没有描边、没有浮动卡片；层次靠四层底色（`#ffffff` / `#f8f8f9` / `#f2f2f4` / `#e8e8eb`）和材质，而不是靠框。
 - 侧栏毛玻璃：Windows 用系统材质 `backgroundMaterial: "acrylic"`（build ≥ 22621）+ 45% tint + 上下 sheen；浏览器 demo 用渐变兜底。实现细节见批次 7。
@@ -61,11 +62,11 @@
 - 结构：`.transcript` 与输入框同属新的 `.conversation-column`，两者同宽（760px）同轴。
 - 输入区：最小 46px，随内容自动增高，超过 240px 转内部滚动。
 
-### 本轮改动清单（相对 HEAD，全部未提交）
+### 本轮改动清单
 
-新增：`PRODUCT.md`、`DESIGN.md`、`docs/design/`、`packages/codepiddy-desktop/src/renderer/components/app-icon.tsx`
+上一轮已提交：`45c39bc feat(desktop): refresh client UI and remove stale test/docs`。
 
-修改：`styles.css`、`App.tsx`、`components/WorkPanel.tsx`、`components/tool-icons.tsx`、`components/turn-group.ts`、`src/main/index.ts`、`packages/codepiddy-desktop/package.json`（新增 lucide）、根 `package.json`、`package-lock.json`、`README.md`、`.github/workflows/ci.yml`、`openspec/.../desktop-tool-collapse/spec.md`
+当前未提交（批次 8-10）：`DESIGN.md`、`docs/design/redesign-plan.md`、`packages/codepiddy-desktop/src/renderer/App.tsx`、`packages/codepiddy-desktop/src/renderer/styles.css`、`src/renderer/assets/fonts/`。根目录的 `maple/`、`monaspace/`、`config.json`、`LICENSE.txt` 是原始字体素材，等用户检查通过后再删除未使用部分。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -88,6 +89,7 @@
 - [x] 建立灰阶 / 语义色 / 圆角 / 字号 / 行高 / 字重 / 动效时长 token（2026-10-02：`styles.css` 顶部 `--cp-*` 全量建立）
 - [x] 9 个 `--cp-glass-*` 重映射为中性色调别名（去掉绿色调、内高光、模糊），引用点逐个迁移中
 - [x] 把剩下的裸 hex 收敛到 token（2026-10-02 批次 5：501 处 → 59 处，261 个不同值 → 19 个）
+- [x] 建立间距梯级并把 `gap / margin / padding / inset / 定位偏移` 全部改为 `--cp-space-*`（2026-10-02 批次 8）
 
 ### 阶段 2：图标系统
 
@@ -116,9 +118,10 @@
 
 ### 阶段 5：验收
 
-- [x] `npm run check` 通过（2026-10-02）
-- [x] `npm run build:codepiddy` 通过（2026-10-02）
-- [x] 截图对比（2026-10-02：`.artifacts/ui-*.png`、`conv-*.png`，含 900px 窄窗）
+- [x] `npm run check` 通过（2026-10-02 批次 8 复跑）
+- [x] `npm run typecheck --workspace=@codepiddy/desktop` 通过（2026-10-02 批次 8）
+- [x] `npm run build:codepiddy` 通过（2026-10-02 批次 8 复跑）
+- [x] 截图对比（2026-10-02：`.artifacts/ui-*.png`、`conv-*.png`、`spacing-*.png`，含 900px 窄窗）
 - [ ] 用户确认
 
 ## 进度日志
@@ -257,19 +260,76 @@
 
 注意：`CopyFromScreen` 这类 GDI 截屏抓不到 DWM 合成的材质，用截屏验证这个效果不可靠，只能靠肉眼。
 
+### 2026-10-02 批次 8：间距节奏收敛
+
+改了 `packages/codepiddy-desktop/src/renderer/styles.css` 和 `DESIGN.md`。
+
+问题不是缺少间距，而是同一组件有两套几何值：例如 `.composer` 先写 `18px / 13px / 15px`，末尾迁移层再覆盖成 `56px / 12px / 10px`；`.sidebar`、`.settings-page`、`.settings-card` 也有同类历史叠加。直接改几个随手值只会继续叠补丁，所以先建立间距令牌，再做全文件收敛。
+
+落地内容：
+
+- 新增 `--cp-space-micro` 到 `--cp-space-5xl`：`2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 40 / 48 / 64px`。`2px` 只用于光学微调，不作为常规布局间距。
+- 用 codemod 替换全部间距声明：`gap / row-gap / column-gap / margin / padding / inset / top / right / bottom / left` 共替换 507 处裸 px 值。
+- 归一规则：`7/9 -> 8`、`10/11/13/14 -> 12`、`15/18 -> 16`、`20/22/28 -> 24`、`31/34 -> 32`、`42 -> 40`、`52 -> 48`、`58 -> 64`；负值改成 `calc(-1 * var(--cp-space-*))`。
+- `DESIGN.md` 新增 Spacing 一节和 **The Space-Ladder Rule**：组件 CSS 不得出现梯级之外的裸 px 间距。
+
+扫描结果：间距声明里已无梯级外裸值；唯一命中的 `760px` 是消息列内容宽度，不是间距。impeccable 的 `detect.mjs --scope layout` 返回空集。
+
+视觉验证：
+
+- 1440x900：无横向溢出；侧栏 266px、内容头 56px、输入区 638px 宽并保持同轴。
+- 输入 5 行后：输入区从 96px 增至 167px，自动增高没有回归。
+- 900x700：无横向溢出；文件面板隐藏；输入区宽 578px、中心与转录列一致。
+- 设置页和 grown composer 截图正常。
+
+验证：`npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。截图：`.artifacts/spacing-desktop.png`、`.artifacts/spacing-composer-grown.png`、`.artifacts/spacing-settings.png`、`.artifacts/spacing-narrow.png`。
+
+### 2026-10-02 批次 9：修复「跳到最新消息」遮挡输入区
+
+用户反馈：`跳到最新消息` 落到会话列底部，和输入区重合，盖住了右侧的思考强度控件。
+
+根因：按钮是 `.conversation-column` 的直接子元素，但定位祖先实际是 `.transcript-stage`。`bottom: 12px` 因此按整个会话列计算，而输入区也在该列内，按钮自然落进输入区。
+
+改法：
+
+- `App.tsx` 新增 `.composer-shell`，把按钮和 `.composer` 包在同一容器。
+- `.composer-shell` 设为 `position: relative`，按钮改成相对输入区定位。
+- `.jump-to-latest` 用 `bottom: calc(100% + var(--cp-space-md))` 固定在输入区上方 12px；输入区随内容增高时按钮自动上移。
+- 按钮右边缘与输入区对齐。
+
+验证：默认输入区时按钮底边 780、输入区顶边 792；输入 5 行后按钮底边 709、输入区顶边 720；均保持约 12px 间距且不重叠。`npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。截图：`.artifacts/jump-fix-default.png`、`.artifacts/jump-fix-grown.png`。
+
+### 2026-10-02 批次 10：字体配对 + 圆角统一
+
+用户反馈：发送按钮在空输入和可发送状态之间会从圆形变成圆角方形；整体圆角偏方；当前系统字体不好看。素材目录是 `E:\mypi\maple` 和 `E:\mypi\monaspace`。
+
+字体结论：
+
+- `MonaspaceArgon` 只有 2,460 个字符，不含中文，适合作为拉丁/符号层。
+- `MapleMono-NF-CN` 有 33,091 个字符，包含中文、中文标点和扩展字符，适合作为 CJK 层。
+- 接入 `Monaspace Argon -> Maple Mono NF CN -> 系统回退`。只保留 Regular 400 和 SemiBold 600 两档，转成 WOFF2 后分别约 199 KB / 201 KB，以及 6.25 MB / 6.41 MB。
+- 字体和 OFL 许可放在 `src/renderer/assets/fonts/`。原始 `maple/`、`monaspace/` 暂时保留，等用户检查确认后再删除未用文件。
+
+圆角结论：
+
+- 新梯级为 `6 / 8 / 10 / 12 / 18 / 24px / full`，所有组件硬编码圆角收敛到令牌。
+- 发送、停止按钮统一为 `28px` 全圆；不再随 disabled/enabled 改变形状。
+- 输入区圆角 18px，卡片 12px，小控件 6-10px。
+
+浏览器验证：`document.fonts` 中 Monaspace 和 Maple 均为 `loaded`；发送与停止按钮的尺寸都是 28x28、圆角都是 9999px。`npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。截图：`.artifacts/font-radius-agent.png`、`.artifacts/font-radius-settings.png`。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
-1. **间距节奏**：参考项目用 4/6/8/12/16/24 的固定梯级；我们还有 7px / 9px / 11px / 13px 这类随手值，需要归一成梯级。
-2. **空态 / 错误态 / 加载态**：目前只换了配色，形态没设计过（`.empty-state`、`.transcript-placeholder`、`.work-panel-empty`、`.provider-empty`）。
-3. **会话树弹窗**：`.session-tree-modal` 系列还没按新体系过一遍。
-4. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
-5. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
-6. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
-7. **用户验收**：改版整体效果还没让你确认过。
+1. **空态 / 错误态 / 加载态**：目前只换了配色，形态没设计过（`.empty-state`、`.transcript-placeholder`、`.work-panel-empty`、`.provider-empty`）。
+2. **会话树弹窗**：`.session-tree-modal` 系列还没按新体系过一遍。
+3. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
+4. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
+5. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
+6. **用户验收**：改版整体效果还没让你确认过。
 
 ## 未提交状态
 
-本轮所有改动都在工作区，**没有 commit**。锁文件（`package-lock.json`）有改动，提交时 pre-commit 会拦，需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 8 和批次 9 的 `DESIGN.md`、`docs/design/redesign-plan.md`、`App.tsx`、`styles.css` 还在工作区，**没有 commit**。上一轮的锁文件已经随 `45c39bc` 提交，后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
@@ -285,4 +345,5 @@
 
 ## 待用户确认
 
-- 暂无
+- 字体与圆角效果：确认 `Monaspace Argon` 拉丁 / `Maple Mono NF CN` 中文的搭配、整体圆角，以及发送/停止按钮的圆形统一。
+- 用户确认后，删除未使用的原始字体文件与下载附带文件，只保留 `src/renderer/assets/fonts/` 中实际引用的 WOFF2 和许可文本。

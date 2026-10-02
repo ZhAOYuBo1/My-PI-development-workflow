@@ -22,42 +22,48 @@ colors:
   violet: "#7c3aed"
 typography:
   title:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+    fontFamily: '"Monaspace Argon", "Maple Mono NF CN", -apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif'
     fontSize: "16px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0em"
   body:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+    fontFamily: '"Monaspace Argon", "Maple Mono NF CN", -apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif'
     fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: "0em"
   label:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+    fontFamily: '"Monaspace Argon", "Maple Mono NF CN", -apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif'
     fontSize: "12px"
     fontWeight: 500
     lineHeight: 1.35
     letterSpacing: "0em"
   mono:
-    fontFamily: "ui-monospace, SFMono-Regular, Cascadia Mono, Consolas, Liberation Mono, monospace"
+    fontFamily: '"Monaspace Argon", "Maple Mono NF CN", ui-monospace, SFMono-Regular, Cascadia Mono, Consolas, Liberation Mono, monospace'
     fontSize: "12.5px"
     fontWeight: 400
     lineHeight: 1.55
 rounded:
-  xs: "4px"
-  sm: "6px"
-  md: "8px"
-  lg: "10px"
-  xl: "14px"
+  xs: "6px"
+  sm: "8px"
+  md: "10px"
+  lg: "12px"
+  xl: "18px"
+  2xl: "24px"
   full: "9999px"
 spacing:
+  micro: "2px"
   xxs: "4px"
   xs: "6px"
   sm: "8px"
   md: "12px"
   lg: "16px"
   xl: "24px"
+  2xl: "32px"
+  3xl: "40px"
+  4xl: "48px"
+  5xl: "64px"
 components:
   button-primary:
     backgroundColor: "{colors.accent}"
@@ -162,10 +168,10 @@ components:
 
 ## 3. Typography
 
-**Body Font:** `-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`（随系统，中文回退到苹方/微软雅黑）
-**Mono Font:** `ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace`
+**Body Font:** `"Monaspace Argon", "Maple Mono NF CN", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`
+**Mono Font:** 同一组合。Monaspace Argon 负责拉丁字符与符号，Maple Mono NF CN 负责中文和中文标点。
 
-**Character:** 只有一套字体家族。桌面工具的字体不需要表现个性，需要的是稳定、跨平台一致、中英文混排不掉行。字重承担层级，字号只做小幅度区分。等宽字体严格只留给代码、路径、命令和数值，不做装饰用途。
+**Character:** 这是一套两层等宽字体系统，不是传统 sans 正文。Monaspace 提供编码工具的骨架，Maple 保持中文在紧凑行高下的稳定字形。只带 Regular 400 和 SemiBold 600 两个 WOFF2 字重，避免把未使用的字重打进客户端。
 
 ### Hierarchy
 
@@ -178,7 +184,7 @@ components:
 
 ### Named Rules
 
-**The One Family Rule.** 不引入第二个字体家族。需要区分层级时改字重和颜色，不换字体。
+**The Two-Layer Font Rule.** UI 固定使用 `Monaspace Argon -> Maple Mono NF CN`。前者有字形时优先走前者，中文和前者没有的象形字符由后者接住。不要再引入第三种 UI 字体。
 
 **The Fixed Scale Rule.** 产品界面不使用 `clamp()` 流体字号。字号是固定的梯级，由全局 `--font-scale` 统一缩放。
 
@@ -210,7 +216,23 @@ components:
 
 **The No-Frame Rule.** 区域之间不加圆角外框。外壳是边到边的分区（左侧 rail、右侧内容、更右侧的 dock），靠底色和材质分层，不靠描边、圆角和投影把每一块包成卡片。描边只出现在浮层和输入控件上。
 
-## 5. Components
+## 5. Spacing
+
+间距使用固定的语义梯级：`2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 40 / 48 / 64px`。其中 `2px` 只允许用于图标、描边和光学对齐，不作为常规布局间距。
+
+相关控件用 `4-8px` 的紧凑间距归组，同一区块内的信息用 `8-12px` 分隔，不同区块之间用 `16-24px`，页面级留白用 `32-64px`。兄弟元素优先用 `gap`，不要用 margin 拼间距。
+
+**The Space-Ladder Rule.** 组件 CSS 中不得出现梯级之外的裸 px 间距。所有 `gap`、`margin`、`padding`、`inset` 和定位偏移都必须引用 `--cp-space-*` 令牌。
+
+## 6. Components
+
+### Radius Scale
+
+圆角梯级为 `6 / 8 / 10 / 12 / 18 / 24px`，全圆使用 `9999px`。相较上一版整体上调一档：小控件不再像方形，卡片与浮层保持比参考项目再克制一档，输入区使用 `18px`。
+
+发送、停止、附件和纯图标按钮统一使用全圆；普通按钮、输入框和列表行使用 `10px`，卡片使用 `12px`，浮层使用 `18px`。
+
+**The Shape-Means-Control Rule.** 同一个控件不能随 `disabled / enabled` 状态切换圆角。发送与停止按钮形态完全相同，只改底色、图标和可点击状态。
 
 ### Buttons
 
@@ -255,7 +277,7 @@ components:
 
 Agent 工具调用的卡片是整个客户端最有辨识度的元素。它有三种形态：运行中展开显示实时输出（左侧状态点呼吸、等宽输出区用内嵌底）、完成后折叠为单行摘要（图标 + 工具名 + 状态 + 耗时）、失败时保留错误红描边并默认展开。摘要行的信息密度要高，但行高不超过 32px。
 
-## 6. Do's and Don'ts
+## 7. Do's and Don'ts
 
 ### Do:
 
