@@ -21,9 +21,9 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 18 的会话树弹窗已验收并提交；批次 19-20 的工作区多视图、变更持久化和内部终端修复已实现，先检查效果，验收后再提交。
-字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定闪电和思考强度波场都已验收并提交，不要重做。
-当前 HEAD 是 b2644f5；批次 21 正在把 token 速度图标从闪电替换为用户提供的流星，并整理图标源文件位置。
+再读 PRODUCT.md、DESIGN.md。批次 1-21 已提交，工作树干净；从「待办清单」第 3 项 `styles.css` 结构清理开始。
+字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史和内部终端都已验收并提交，不要重做。
+当前 HEAD 以 `git log -1` 为准。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
   npm run check
@@ -511,25 +511,25 @@
 
 验证：`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；真实 Electron 关闭重启后，项目 + 工作项键仍能恢复 `a.txt` 历史，旧的无路径记录已归并回真实文件。
 
-### 2026-10-03 批次 21：流星图标与目录整理（待验收）
+### 2026-10-03 批次 21：流星图标与目录整理
 
 - 将根目录用户素材 `流星.svg` 移到正式设计源目录：`codepiddy-icons/meteor.svg`。
 - 删除不再使用的 `codepiddy-icons/lightning.svg`，避免同一图标存在多个来源。
 - `StreamStats.tsx` 改为通过 Vite `?url` 引用 `codepiddy-icons/meteor.svg`，token 速率前显示流星，文本仍只读数值。
-- 批次 19-20 已随 `b2644f5 feat(desktop): add per-turn changes and terminal` 提交；批次 21 等待用户验收后提交。
+- 批次 19-20 已随 `b2644f5 feat(desktop): add per-turn changes and terminal` 提交；批次 21 已随 `b5e30b2 feat(desktop): use meteor stream icon` 提交。
 
 验证：`svg_cli.py validate` 无错误；`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；浏览器实测资源加载为 205×200 源图并渲染为 12×12。
 
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
-2. [~] **工作区面板多视图**：批次 19 已实现并在真实 Electron 中验证，等待用户验收。
+2. [x] **工作区面板多视图**：批次 19-21 已实现并在真实 Electron 中验证，随 `b2644f5`、`b5e30b2` 提交。
 3. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
 4. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
 
 ## 未提交状态
 
-批次 1-20 已提交。批次 21 正在修改 `codepiddy-icons/meteor.svg`、删除旧 `codepiddy-icons/lightning.svg`、更新 `StreamStats.tsx` 和本文件，等待用户验收后提交。根目录不再保留原始 `流星.svg`；参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-21 已提交，工作树干净。根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
