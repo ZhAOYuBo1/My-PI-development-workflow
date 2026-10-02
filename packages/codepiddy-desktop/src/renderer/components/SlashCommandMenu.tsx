@@ -149,7 +149,11 @@ export function SlashCommandMenu({
 
 	if (!visible) {
 		if (query.trim() === "/" && commands.length === 0 && loading) {
-			return <div className="slash-menu slash-menu-loading">正在从 Pi 加载命令…</div>;
+			return (
+				<output className="slash-menu slash-menu-loading" aria-live="polite">
+					正在从 Pi 加载命令…
+				</output>
+			);
 		}
 		return null;
 	}

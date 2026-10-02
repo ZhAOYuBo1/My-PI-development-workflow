@@ -7,7 +7,30 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { ThinkingDialField } from "./ThinkingDialField.tsx";
 import { thinkingLevelLabel } from "./thinking-levels.ts";
+
+const DETENT_RADIUS = 0.22;
+const DETENT_LAG = 0.5;
+
+function magnetize(raw: number, count: number): number {
+	if (count < 2 || !Number.isFinite(raw)) return raw;
+	const anchor = Math.round(raw);
+	const delta = raw - anchor;
+	const distance = Math.abs(delta);
+	if (distance >= DETENT_RADIUS) return raw;
+	const reach = distance / DETENT_RADIUS;
+	const held = DETENT_RADIUS * (reach - DETENT_LAG * reach * (1 - reach));
+	return anchor + Math.sign(delta) * held;
+}
+
+function clampPosition(value: number, count: number): number {
+	return Math.max(0, Math.min(Math.max(0, count - 1), value));
+}
+
+function clampIndex(value: number, count: number): number {
+	return Math.max(0, Math.min(Math.max(0, count - 1), Math.round(value)));
+}
 
 export interface ThinkingControlProps {
 	/**
@@ -35,7 +58,7 @@ export interface ThinkingControlProps {
  */
 export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingControlProps) {
 	const [open, setOpen] = useState(false);
-	const [dragIndex, setDragIndex] = useState<number | null>(null);
+	const [dragPosition, setDragPosition] = useState<number | null>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const popoverRef = useRef<HTMLDivElement>(null);
 	const trackRef = useRef<HTMLDivElement>(null);
@@ -77,15 +100,16 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 		};
 	}, [open]);
 
-	const showIndex = dragIndex ?? (hasSelection ? committedIndex : 0);
+	const showPosition = dragPosition ?? (hasSelection ? committedIndex : 0);
+	const showIndex = clampIndex(showPosition, levels.length);
 
-	const indexFromClientX = useCallback(
+	const positionFromClientX = useCallback(
 		(clientX: number): number => {
 			const track = trackRef.current;
 			if (!track || levels.length < 2) return 0;
 			const rect = track.getBoundingClientRect();
 			const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(1, rect.width)));
-			return Math.round(ratio * (levels.length - 1));
+			return ratio * (levels.length - 1);
 		},
 		[levels.length],
 	);
@@ -95,12 +119,12 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 		event.preventDefault();
 		draggingRef.current = true;
 		event.currentTarget.setPointerCapture(event.pointerId);
-		setDragIndex(indexFromClientX(event.clientX));
+		setDragPosition(magnetize(positionFromClientX(event.clientX), levels.length));
 	};
 
 	const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
 		if (!draggingRef.current) return;
-		setDragIndex(indexFromClientX(event.clientX));
+		setDragPosition(magnetize(positionFromClientX(event.clientX), levels.length));
 	};
 
 	const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -109,8 +133,8 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 		if (event.currentTarget.hasPointerCapture(event.pointerId)) {
 			event.currentTarget.releasePointerCapture(event.pointerId);
 		}
-		const next = indexFromClientX(event.clientX);
-		setDragIndex(null);
+		const next = clampIndex(magnetize(positionFromClientX(event.clientX), levels.length), levels.length);
+		setDragPosition(null);
 		const level = levels[next];
 		if (level && level !== value) onChange(level);
 	};
@@ -147,7 +171,8 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 	if (levels.length === 0) return null;
 
 	const lastIndex = Math.max(1, levels.length - 1);
-	const percent = (showIndex / lastIndex) * 100;
+	const percent = clampPosition(showPosition, levels.length) / lastIndex;
+	const isTop = percent >= 0.999;
 
 	return (
 		<div className={`thinking-control${disabled ? " is-disabled" : ""}`}>
@@ -171,7 +196,7 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 						<>
 							<div
 								ref={trackRef}
-								className={`thinking-slider${draggingRef.current ? " is-dragging" : ""}`}
+								className={`thinking-slider${dragPosition !== null ? " is-dragging" : ""}${isTop ? " is-top" : ""}`}
 								role="slider"
 								tabIndex={0}
 								aria-label="思考强度"
@@ -187,11 +212,16 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 							>
 								<span
 									className="thinking-slider-fill"
-									style={{ width: `calc(8px + (100% - 16px) * ${percent / 100})` }}
+									style={{
+										width: `calc(var(--thinking-inset) + (100% - var(--thinking-thumb)) * ${percent})`,
+									}}
 								/>
+								<ThinkingDialField progress={percent} dragging={dragPosition !== null} top={isTop} />
 								<span
 									className="thinking-slider-thumb"
-									style={{ left: `calc(8px + (100% - 16px) * ${percent / 100})` }}
+									style={{
+										left: `calc(var(--thinking-inset) + (100% - var(--thinking-thumb)) * ${percent})`,
+									}}
 									aria-hidden="true"
 								/>
 							</div>
@@ -200,7 +230,9 @@ export function ThinkingControl({ levels, value, disabled, onChange }: ThinkingC
 									<span
 										className={`thinking-control-tick${index === showIndex ? " is-current" : ""}`}
 										key={level}
-										style={{ left: `calc(8px + (100% - 16px) * ${index / lastIndex})` }}
+										style={{
+											left: `calc(var(--thinking-inset) + (100% - var(--thinking-thumb)) * ${index / lastIndex})`,
+										}}
 									>
 										{thinkingLevelLabel(level)}
 									</span>

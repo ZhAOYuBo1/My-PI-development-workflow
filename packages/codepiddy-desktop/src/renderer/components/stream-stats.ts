@@ -38,7 +38,7 @@ export function extractUsageOutput(message: unknown): number | null {
 /** 流式中：只有字符增量，一律按估算并带“约”。 */
 export function formatStreamingStats(chars: number, elapsedMs: number): string {
 	const rate = formatOneDecimal(tokensPerSecond(estimateTokens(chars), elapsedMs));
-	return `⚡ 约 ${rate} tok/s · ${formatElapsed(elapsedMs)}`;
+	return `约 ${rate} tok/s · ${formatElapsed(elapsedMs)}`;
 }
 
 /**
@@ -48,7 +48,7 @@ export function formatStreamingStats(chars: number, elapsedMs: number): string {
 export function formatFinalStats(stats: FinalStreamStats): string {
 	const prefix = stats.estimated ? "约 " : "";
 	const count = `${prefix}${stats.tokens.toLocaleString()} tok`;
-	if (stats.elapsedMs === undefined) return `⚡ ${count}`;
+	if (stats.elapsedMs === undefined) return count;
 	const rate = formatOneDecimal(tokensPerSecond(stats.tokens, stats.elapsedMs));
-	return `⚡ ${prefix}${rate} tok/s · ${count} / ${formatElapsed(stats.elapsedMs)}`;
+	return `${prefix}${rate} tok/s · ${count} / ${formatElapsed(stats.elapsedMs)}`;
 }

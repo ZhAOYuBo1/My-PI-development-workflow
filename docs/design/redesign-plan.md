@@ -51,19 +51,23 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-02 批次 11 之后）
+## 当前状态（2026-10-02 批次 12 之后）
 
 - `styles.css` 3531 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
 - app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
-- 图标全部走 `lucide-react@1.48.0`，renderer 里手写 `<svg>` 已清零。
+- 常规图标全部走 `lucide-react@1.48.0`；统计行的闪电是唯一自定义矢量例外，源文件为 `codepiddy-icons/lightning.svg`。
 - 外壳：边到边分区，没有圆角外框、没有描边、没有浮动卡片；层次靠四层底色（`#ffffff` / `#f8f8f9` / `#f2f2f4` / `#e8e8eb`）和材质，而不是靠框。
 - 侧栏毛玻璃：Windows 用系统材质 `backgroundMaterial: "acrylic"`（build ≥ 22621）+ 45% tint + 上下 sheen；浏览器 demo 用渐变兜底。实现细节见批次 7。
 - 配色分工：中性 chrome 打底 + 蓝色强调 `#2563eb`（只用于交互与选中）+ 三色语义（成功/警告/错误，淡底 + 同色文字，实心只给圆点与角标）。
 - 字号：基线 13px，侧栏行 13px，内容区标题 14px，正文 14px，元信息 11-11.5px。
 - 结构：`.transcript` 与输入框同属新的 `.conversation-column`，两者同宽（760px）同轴。
 - 输入区：最小 46px，随内容自动增高，超过 240px 转内部滚动。
+- 状态组件：空态、文件错误/不可预览、目录树与文件预览加载态、Provider 空态、全局错误横幅、流式等待态已统一到 `state-mark` / 状态说明体系。
+- 运行状态：Agent 运行中反馈已从输入区移到转录流末尾，使用三点错峰缩放动画，不再用浮起胶囊或转圈。
+- 流式统计：`⚡` 字体字符已移除，改为 12×12 内联 SVG，避免字体缺字时出现豆腐块。
+- 思考强度：滑块改为轻量 canvas 波场，低档慢而疏、高档快而密，最高档有短促落点扫光；拖拽加入轻微磁吸。
 
 ### 本轮改动清单
 
@@ -119,7 +123,7 @@
 - [x] 消息气泡与工具卡（2026-10-02：气泡/代码块/终端/diff 改色调分层，正文 16px→14px）
 - [~] 右侧文件面板（配色已改，真实文件树未验证——demo 缺 IPC）
 - [x] 设置页（2026-10-02：标题 24px→16px，卡片标题→14px，正文 12.5px，权限行压到 54px）
-- [ ] 空态 / 错误态 / 加载态
+- [x] 空态 / 错误态 / 加载态（2026-10-02 批次 12：统一状态标识、说明文字、错误横幅与骨架加载）
 
 ### 阶段 5：验收
 
@@ -338,17 +342,104 @@
 
 验证：新 SVG 通过 `svg_cli.py validate`；PNG 和 ICO 角落像素均为 `alpha=0`；没有白底方块。`npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。截图：`.artifacts/icon-appearance.png`、`.artifacts/codepiddy-icon-transparent-preview.png`。
 
+### 2026-10-02 批次 12：空态 / 错误态 / 加载态
+
+改了 `App.tsx`、`SlashCommandMenu.tsx`、`WorkPanel.tsx`、`styles.css`，并在 `DESIGN.md` 新增 Empty / Error / Loading States 规则。
+
+落地内容：
+
+- 新增统一 `state-mark`：40px 方形、12px 圆角、无外边框，用内底色和图标色区分中性、会话与错误状态。原有透明 app icon 不套底托。
+- 项目未选择工作项、Agent Slot 未创建、会话无消息、设置页未发现 Skill 都增加对应状态标识和说明；会话空态使用蓝色轻底，表示下一步是输入。
+- 文件树加载改为可被读屏识别的 `output` 状态行；目录空/错误分别使用中性点与错误红点。
+- 文件预览加载改为四行骨架，不再显示一行“加载中”；文件读取失败与过大/二进制不可预览使用状态标识、标题和恢复说明。
+- 全局错误横幅从实心红改为红色 9% 淡底 + 20% 半像素内描边 + 警告图标，正文保持可读性，错误色只落在图标、标题和关闭按钮附近。
+- 常驻流式等待点补上“正在生成”说明；斜杠命令加载态补状态点与 `aria-live`。
+- 所有新增状态动效都有 `prefers-reduced-motion` 降级。
+
+视觉验证：
+
+- 1440x900 无项目首页、项目无选中工作项、Agent 未创建空态。
+- 1440x900 设置页 Skill 空态和文件管理器目录读取失败态。
+- 900x700 窄窗无横向溢出。
+- 截图：`.artifacts/state-before.png`、`state-empty-after.png`、`state-welcome.png`、`state-transcript-no-agent.png`、`state-provider-empty.png`、`state-narrow.png`。
+
+验证：`npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+
+### 2026-10-02 批次 13：运行反馈移到转录流末尾
+
+用户反馈：参考项目的回复运行状态直接贴在回复后面并有轻量动效；CodePIddy 当前是在输入区上方凸出一块，里面放转圈，视觉突兀。
+
+读参考实现后确认差异：
+
+- PI-Desktop 把 `WorkingIndicator` / `RunActivityIndicator` 放在转录内容的尾部 `transcript-runtime-status` 中，不在输入区。
+- 它的动效是三个 4px 圆点，每个延迟 120ms，做 `scale(.8) → scale(1)` 和透明度变化；外层是普通状态文本行，不是胶囊、卡片或 spinner。
+
+落地内容：
+
+- `agent-activity` 从 `.composer-shell` 移到 `.transcript` 末尾，新增 `.transcript-runtime-status` 状态行。
+- 删除旧 `.activity-spinner` 和旋转 keyframes，改为 `.activity-dots` 三点错峰缩放动画。
+- 状态行与消息正文同宽、同轴，普通运行使用次墨色；压缩、重试、等待、重连仍保留各自的语义色。
+- 排队数文案从 `queued` 改成“N 条排队”。
+- 流式回复里的占位点复用同一套动画，两个运行状态不再像两套组件。
+- demo 的 Coding Agent 增加运行中状态数据，方便后续视觉检查一直能看到该组件。
+- `DESIGN.md` 新增 Running Indicator 规则。
+
+验证：DOM 检查确认 `.agent-activity` 的 `insideTranscript=true`、`insideComposer=false`；截图 `.artifacts/activity-tail.png`、`activity-tail-frame-2.png` 显示两帧圆点动画不同，状态行位于回复末尾且与输入区分离。
+
+### 2026-10-02 批次 14：流式统计闪电矢量化
+
+用户反馈：token 速率前的 `⚡` 在当前字体中显示不出来，需要自己绘制。
+
+处理：
+
+- 用 `svg-precision-skill` 生成 12×12 实心闪电路径，输出设计源 `codepiddy-icons/lightning.svg`，并通过 `svg_cli.py validate`。
+- `stream-stats.ts` 只返回数值文本，不再拼接 `⚡`。
+- `StreamStats.tsx` 新增内联 `StreamStatsGlyph`，使用 `currentColor` 和 `aria-hidden`；视觉图标与数值文本分离，读屏只读数值。
+- 统计行改为右对齐 flex，闪电与文字间隔 4px；图标颜色使用次墨色，保证小尺寸下可见。
+- demo 的 Coding Agent 补了终值统计，方便持续检查该组件。
+
+验证：浏览器实测统计文本为 `25.0 tok/s · 150 tok / 6.0s`，闪电在 DOM 中为独立 SVG，实际尺寸 12×12，颜色 `rgb(74, 76, 80)`；截图 `.artifacts/lightning-ui.png`、`lightning-stats-crop.png`。
+
+### 2026-10-02 批次 15：思考强度波场
+
+用户要求参考 `https://github.com/WONGIII/dsh-effort-dial` 的思考强度滑块，但保持 CodePIddy 的浅色、克制风格。本地只读克隆在 `E:\mypi-refs\dsh-effort-dial`，审查版本 `39620be1a819f247078b83bfb88052a8f8d7d7fc`。拆解结论见 `docs/design/reference-dsh-effort-dial.md`，参考仓库验收后可删除。
+
+落地内容：
+
+- 新增 `ThinkingDialField.tsx`：弹层打开时 canvas 持续绘制从滑块向左行进的非对称波锋，并叠加少量流星。
+- 场强随档位提高而增加；普通档位保持蓝灰色低强度，最高档混入少量紫色并触发一次约 1.9 秒的落点扫光。
+- 轨道从 6px 提高到 14px，保持 16px 圆形滑块；蓝色填充只做场的底色，亮纹、颗粒和扫光由 canvas 负责。
+- 拖拽改为连续位置状态，并加入 `magnetize`：经过档位时轻微拖住，离开后释放，`onChange` 仍只在落点提交。
+- `prefers-reduced-motion` 下只绘制静态场；页面隐藏时停止 RAF。
+
+验证：
+
+- canvas 在 196×14 CSS 像素下正常绘制，非空 alpha 采样为 2253 个像素点。
+- 中档为低亮蓝色纹理；最高档出现清晰的像素波场和落点光晕。
+- 交互实测将档位拖到最右后成功提交为“极高”。
+- `npm run check`、renderer 类型检查、`npm run build:codepiddy` 全绿。
+- 截图：`.artifacts/thinking-dial-medium.png`、`thinking-dial-medium-track.png`、`thinking-dial-top.png`、`thinking-dial-top-track.png`。
+
+### 2026-10-02 批次 16：思考强度轨道加大一档
+
+用户反馈：滑块效果可以，但轨道太矮，不够圆润，需要适当加大。
+
+- 轨道高度从 14px 调到 18px，滑块直径从 16px 调到 20px。
+- 滑块继续只比轨道高出 2px，保持“落在轨道上”的关系，不变成一颗大球。
+- 滑块位置、填充宽度和刻度锚点共用 `--thinking-thumb` / `--thinking-inset`，避免尺寸调整后不同轴。
+
+待视觉复核。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
-1. **空态 / 错误态 / 加载态**：目前只换了配色，形态没设计过（`.empty-state`、`.transcript-placeholder`、`.work-panel-empty`、`.provider-empty`）。
-2. **会话树弹窗**：`.session-tree-modal` 系列还没按新体系过一遍。
-3. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
-4. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
-5. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
+1. **会话树弹窗**：`.session-tree-modal` 系列还没按新体系过一遍。
+2. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
+3. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
+4. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
 
 ## 未提交状态
 
-批次 11 已随 `247abae` 提交；下一批开始前 `git status --short` 应为干净。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 12-16 当前尚未提交；批次 16 把思考强度轨道调整为 18px / 20px。用户确认后再一起提交。参考仓库 `E:\mypi-refs\dsh-effort-dial` 也要在验收后删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 

@@ -499,7 +499,12 @@ button { color: inherit; }
    文件里 `.composer button` 与 `.composer button:not(:disabled)` 的特异性比
    `.thinking-control-trigger` 高，会把 border-radius 改成 50%、背景改成 var(--cp-ink)，
    触发按钮会退化成一个黑色胶囊。这里必须压过那两条，不能靠源码顺序。 */
-.thinking-control { position: relative; flex: 0 0 auto; }
+.thinking-control {
+  --thinking-thumb: 20px;
+  --thinking-inset: 10px;
+  position: relative;
+  flex: 0 0 auto;
+}
 .thinking-control.is-disabled { opacity: 0.55; }
 
 /* 几何（宽高、圆角、边框、内边距）必须与 disabled 无关地生效，所以这条不能带
@@ -560,31 +565,44 @@ button { color: inherit; }
   border-radius: var(--cp-radius-lg);
 }
 
-/* 轨道：细条而不是胶囊。原来 22px 高的圆角条加一个 38px 的带字 thumb，
-   整条轨道读起来像一颗药丸，而不是一个可拖的滑块。 */
+/* 轨道保留工具界面的薄感，但给场效果留出足够高度；滑块仍然只是略大于轨道。 */
 .thinking-slider {
   position: relative;
-  height: 6px;
+  height: 18px;
   margin: 0 var(--cp-space-sm);
-  border-radius: var(--cp-radius-xs);
-  background: rgb(23 24 26 / 15%);
+  border-radius: var(--cp-radius-full);
+  background: color-mix(in oklab, var(--cp-ink) 10%, var(--cp-surface));
+  box-shadow: inset 0 0 0 0.5px var(--cp-line-subtle);
   cursor: pointer;
   touch-action: none;
   user-select: none;
 }
-/* 6px 的轨道太难点，用一个不可见的加高命中区把可点范围撑到 24px */
+/* 14px 的轨道仍偏细，用一个不可见的加高命中区把可点范围撑到 30px。 */
 .thinking-slider::before { position: absolute; inset: calc(-1 * var(--cp-space-sm)) 0; content: ""; }
 .thinking-slider:focus-visible { outline: 2px solid var(--cp-accent-ring); outline-offset: 5px; }
 .thinking-slider.is-dragging { cursor: grabbing; }
+.thinking-slider.is-top { box-shadow: inset 0 0 0 0.5px var(--cp-accent-ring), 0 0 14px var(--cp-accent-soft); }
 
-/* 填充区到 thumb 为止。单色，因为渐变在这个界面上会读成一条装饰色带。 */
+/* 填充区是场的底色，亮度和运动由 canvas 单独叠加。 */
 .thinking-slider-fill {
   position: absolute;
+  z-index: 0;
   top: 0;
   bottom: 0;
   left: 0;
-  border-radius: var(--cp-radius-xs);
+  border-radius: inherit;
   background: var(--cp-accent);
+}
+
+.thinking-dial-field {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 /* thumb 是一个 16px 的圆点，不带文字。
@@ -592,19 +610,25 @@ button { color: inherit; }
    所以 0% 和 100% 时圆点仍然整个落在轨道内，不会顶出轨道或浮层边缘。 */
 .thinking-slider-thumb {
   position: absolute;
+  z-index: 2;
   top: 50%;
-  width: 16px;
-  height: 16px;
-  margin: calc(-1 * var(--cp-space-sm)) 0 0 calc(-1 * var(--cp-space-sm));
+  width: var(--thinking-thumb);
+  height: var(--thinking-thumb);
   border: 1px solid var(--cp-accent-ring);
   border-radius: var(--cp-radius-full);
   background: #fff;
   box-shadow: 0 1px 3px rgb(23 24 26 / 26%);
   pointer-events: none;
+  transform: translate(-50%, -50%);
   transition: box-shadow 130ms ease-out, transform 130ms ease-out;
 }
 .thinking-slider:hover .thinking-slider-thumb { box-shadow: 0 2px 5px rgb(23 24 26 / 32%); }
-.thinking-slider.is-dragging .thinking-slider-thumb { box-shadow: 0 3px 9px rgb(23 24 26 / 38%); transform: scale(1.12); }
+.thinking-slider.is-dragging .thinking-slider-thumb { box-shadow: 0 3px 9px rgb(23 24 26 / 38%), 0 0 0 4px var(--cp-accent-soft); transform: translate(-50%, -50%) scale(1.08); }
+.thinking-slider.is-top .thinking-slider-thumb {
+  border-color: color-mix(in oklab, var(--cp-accent) 52%, var(--cp-violet));
+  box-shadow: 0 1px 3px rgb(23 24 26 / 26%), 0 0 0 4px var(--cp-accent-soft),
+    0 0 16px color-mix(in oklab, var(--cp-violet) 24%, transparent);
+}
 
 /* 档位刻度：名字按各自的吸附点绝对定位。
    之前用 flex + space-between，那只对齐首尾两个盒子，中间几个名字和滑块吸附点是错开的。 */
@@ -635,6 +659,7 @@ button { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .thinking-control-caret { transition: none; }
+  .thinking-slider-thumb { transition: none; }
 }
 
 /* 工具栏右端一组：强度控件紧贴发送按钮。
@@ -1234,46 +1259,58 @@ button { color: inherit; }
 .turn-elapsed::before { content: "·"; margin: 0 var(--cp-space-xxs); }
 .message-elapsed { font-size: 10px; color: var(--cp-ink-muted); font-variant-numeric: tabular-nums; }
 .message-collapse .chevron { font-size: 15px; }
-.stream-stats { display: block; margin-top: var(--cp-space-xs); color: var(--cp-ink-muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.stream-stats { display: flex; align-items: center; justify-content: flex-end; gap: var(--cp-space-xxs); margin-top: var(--cp-space-xs); color: var(--cp-ink-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.stream-stats-glyph { width: 12px; height: 12px; flex: none; color: var(--cp-ink-secondary); }
+.transcript-runtime-status { display: flow-root; min-height: 38px; }
 .agent-activity {
   display: flex;
+  width: min(100%, 760px);
   align-items: center;
   gap: var(--cp-space-sm);
-  margin: calc(-1 * var(--cp-space-micro)) 0 var(--cp-space-xxs);
-  padding: var(--cp-space-xs) var(--cp-space-sm);
-  border-radius: var(--cp-radius-md);
-  background: var(--cp-surface-secondary);
+  margin: var(--cp-space-micro) auto var(--cp-space-sm);
+  padding: var(--cp-space-sm) 0 var(--cp-space-xxs);
   color: var(--cp-ink-secondary);
-  font-size: 11px;
+  font-size: 12.5px;
 }
-.agent-activity small { margin-left: auto; color: var(--cp-ink-faint); font-size: 9px; }
-.activity-spinner {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  border: 1.5px solid var(--cp-surface-inset);
-  border-top-color: var(--cp-accent);
+.agent-activity small { margin-left: auto; color: var(--cp-ink-faint); font-size: 10.5px; }
+.activity-dots {
+  display: inline-flex;
+  width: 18px;
+  height: 8px;
+  flex: 0 0 18px;
+  align-items: center;
+  gap: 3px;
+}
+.activity-dots > span {
+  width: 4px;
+  height: 4px;
+  flex: 0 0 4px;
   border-radius: var(--cp-radius-full);
-  animation: codepiddy-spin .75s linear infinite;
+  background: currentColor;
+  opacity: .35;
+  animation: codepiddy-activity-dot 1s var(--cp-ease) infinite;
 }
-.activity-compaction { background: var(--cp-surface-secondary); color: var(--cp-warning); }
-.activity-compaction .activity-spinner { border-top-color: var(--cp-warning); }
-.activity-retry { background: color-mix(in oklab, var(--cp-warning) 12%, transparent); color: var(--cp-warning); }
-.activity-retry .activity-spinner { border-top-color: var(--cp-warning); }
-.activity-waiting {
-  background: color-mix(in oklab, var(--cp-warning) 12%, transparent);
-  color: var(--cp-warning);
-}
+.activity-dots > span:nth-child(2) { animation-delay: 120ms; }
+.activity-dots > span:nth-child(3) { animation-delay: 240ms; }
+.activity-label { min-width: 0; overflow: hidden; color: inherit; text-overflow: ellipsis; white-space: nowrap; }
+.activity-compaction { color: var(--cp-violet); }
+.activity-retry,
+.activity-waiting { color: var(--cp-warning); }
+.activity-reconnecting { color: var(--cp-accent); }
 .message-assistant,
 .message-user,
 .tool-block { animation: codepiddy-message-in 180ms cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes codepiddy-spin { to { transform: rotate(360deg); } }
+@keyframes codepiddy-activity-dot {
+  0%, 60%, 100% { opacity: .35; transform: scale(.8); }
+  30% { opacity: 1; transform: scale(1); }
+}
 @keyframes codepiddy-message-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .activity-spinner { animation: none; }
+  .activity-dots > span,
+  .message-streaming-placeholder span { animation: none; opacity: .65; }
   .message-assistant,
   .message-user,
   .tool-block { animation: none; }
@@ -1368,18 +1405,11 @@ button { color: inherit; }
   height: 5px;
   border-radius: var(--cp-radius-full);
   background: var(--cp-accent);
-  animation: codepiddy-stream-pulse 1s ease-in-out infinite;
+  opacity: .35;
+  animation: codepiddy-activity-dot 1s var(--cp-ease) infinite;
 }
 .message-streaming-placeholder span:nth-child(2) { animation-delay: 120ms; }
 .message-streaming-placeholder span:nth-child(3) { animation-delay: 240ms; }
-@keyframes codepiddy-stream-pulse {
-  0%, 70%, 100% { opacity: .3; transform: translateY(0); }
-  35% { opacity: 1; transform: translateY(-2px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .message-streaming-placeholder span { animation: none; opacity: .65; }
-}
 
 .sr-only {
   position: absolute;
@@ -1533,8 +1563,6 @@ button { color: inherit; }
   .settings-card-heading { align-items: stretch; flex-direction: column; }
   .skill-settings-actions { justify-content: space-between; }
 }
-.activity-reconnecting { background: var(--cp-surface-secondary); color: var(--cp-accent); }
-.activity-reconnecting .activity-spinner { border-top-color: var(--cp-accent); }
 .tool-recovery-offer {
   display: flex;
   align-items: center;
@@ -2882,6 +2910,285 @@ textarea:focus-visible,
   box-shadow: 0 0 0 3px var(--cp-accent-soft);
 }
 
+/* ---- 空态 / 错误态 / 加载态：状态组件统一体系 ----------------------------
+   状态页不靠边框和大块色彩吸引注意力，而是用单个状态标识、短标题和可执行说明
+   建立层级。空态负责告诉用户下一步，错误态负责给出恢复路径，加载态用骨架或
+   轻量状态点表达进行中，避免把整块内容交给一个旋转图标。 */
+.empty-state,
+.transcript-placeholder {
+  gap: 0;
+  padding: var(--cp-space-3xl) var(--cp-space-xl);
+}
+
+.empty-state h1,
+.transcript-placeholder h2 {
+  margin: var(--cp-space-md) 0 var(--cp-space-xs);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.empty-state p,
+.transcript-placeholder p {
+  max-width: 380px;
+  margin: 0;
+  color: var(--cp-ink-muted);
+  font-size: 12.5px;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.empty-state > .primary-button,
+.transcript-placeholder .quick-start-button {
+  margin-top: var(--cp-space-lg);
+}
+
+.empty-mark.app-icon-mark {
+  width: 56px;
+  height: 56px;
+}
+
+.state-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--cp-radius-lg);
+  background: var(--cp-surface-secondary);
+  color: var(--cp-ink-muted);
+  box-shadow: inset 0 0 0 0.5px var(--cp-line-subtle);
+}
+
+.state-mark-conversation {
+  background: var(--cp-accent-soft);
+  color: var(--cp-accent);
+  box-shadow: inset 0 0 0 0.5px var(--cp-accent-ring);
+}
+
+.state-mark-error {
+  background: color-mix(in oklab, var(--cp-danger) 9%, transparent);
+  color: var(--cp-danger);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--cp-danger) 20%, transparent);
+}
+
+.provider-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-md);
+  border: 0;
+  border-radius: var(--cp-radius-md);
+  background: var(--cp-surface-secondary);
+  color: var(--cp-ink-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+  box-shadow: inset 0 0 0 0.5px var(--cp-line-subtle);
+}
+
+.provider-empty .app-svg-icon {
+  flex: none;
+  margin-top: var(--cp-space-micro);
+  color: var(--cp-ink-faint);
+}
+
+.file-tree-note {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-xs) var(--cp-space-md);
+  color: var(--cp-ink-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.file-tree-note::before {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: var(--cp-radius-full);
+  background: currentColor;
+  content: "";
+  opacity: 0.5;
+}
+
+.file-tree-note.is-loading::before {
+  background: var(--cp-accent);
+  opacity: 1;
+  animation: codepiddy-state-pulse 1.2s ease-in-out infinite;
+}
+
+.file-tree-note.is-empty {
+  color: var(--cp-ink-faint);
+}
+
+.file-tree-note.is-error {
+  color: var(--cp-danger);
+}
+
+.file-viewer-state {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  padding: var(--cp-space-xl) var(--cp-space-lg);
+}
+
+.file-viewer-skeleton {
+  display: grid;
+  width: min(240px, 100%);
+  gap: var(--cp-space-sm);
+}
+
+.file-viewer-skeleton > span {
+  height: 8px;
+  border-radius: var(--cp-radius-full);
+  background: color-mix(in oklab, var(--cp-ink) 7%, transparent);
+  animation: codepiddy-state-pulse 1.4s ease-in-out infinite;
+}
+
+.file-viewer-skeleton > span:nth-child(1) {
+  width: 72%;
+}
+
+.file-viewer-skeleton > span:nth-child(2) {
+  width: 100%;
+  animation-delay: 90ms;
+}
+
+.file-viewer-skeleton > span:nth-child(3) {
+  width: 84%;
+  animation-delay: 180ms;
+}
+
+.file-viewer-skeleton > span:nth-child(4) {
+  width: 56%;
+  animation-delay: 270ms;
+}
+
+.work-panel-empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: var(--cp-space-xl);
+  color: var(--cp-ink-muted);
+  text-align: center;
+}
+
+.work-panel-empty .state-mark {
+  margin-bottom: var(--cp-space-md);
+}
+
+.work-panel-empty.is-error .state-mark {
+  background: color-mix(in oklab, var(--cp-danger) 9%, transparent);
+  color: var(--cp-danger);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--cp-danger) 20%, transparent);
+}
+
+.work-panel-empty.is-warning .state-mark {
+  background: color-mix(in oklab, var(--cp-warning) 10%, transparent);
+  color: var(--cp-warning);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--cp-warning) 22%, transparent);
+}
+
+.work-panel-empty strong {
+  margin: 0 0 var(--cp-space-xs);
+  color: var(--cp-ink);
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.work-panel-empty p {
+  max-width: 220px;
+  margin: 0;
+  color: var(--cp-ink-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.slash-menu-loading {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-sm) var(--cp-space-md);
+  color: var(--cp-ink-muted);
+}
+
+.slash-menu-loading::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--cp-radius-full);
+  background: var(--cp-accent);
+  content: "";
+  animation: codepiddy-state-pulse 1.2s ease-in-out infinite;
+}
+
+.error-banner {
+  align-items: center;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-sm) var(--cp-space-md);
+  background: color-mix(in oklab, var(--cp-danger) 9%, var(--cp-surface));
+  color: var(--cp-danger);
+  box-shadow: var(--cp-elevation-float), inset 0 0 0 0.5px color-mix(in oklab, var(--cp-danger) 22%, transparent);
+  backdrop-filter: none;
+}
+
+.error-banner .app-svg-icon {
+  flex: none;
+}
+
+.error-banner > span {
+  min-width: 0;
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.error-banner button {
+  color: var(--cp-danger);
+}
+
+.message-streaming-placeholder {
+  gap: var(--cp-space-xxs);
+  min-height: 26px;
+  padding: var(--cp-space-xs) var(--cp-space-sm);
+  background: transparent;
+}
+
+.message-streaming-placeholder::after {
+  margin-left: var(--cp-space-micro);
+  color: var(--cp-ink-muted);
+  content: "正在生成";
+  font-size: 11.5px;
+}
+
+@keyframes codepiddy-state-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-tree-note.is-loading::before,
+  .file-viewer-skeleton > span,
+  .slash-menu-loading::before {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
 /* ---- 基线字号：正文 13px，各组件在其上显式设置 ----
    之前根字号是浏览器默认 16px，凡是没写 font-size 的地方（侧栏行、内容区标题）
    都跟着变成 16px，比导航还大一号。这里把基线定到 13px，再把需要更大的地方显式声明。 */
@@ -3404,32 +3711,6 @@ body {
 .composer .tool-recovery-offer > button:hover {
   background: color-mix(in oklab, var(--cp-warning) 10%, transparent);
   color: var(--cp-warning);
-}
-
-.agent-activity {
-  background: color-mix(in oklab, var(--cp-ink) 5%, transparent);
-  color: var(--cp-ink-secondary);
-}
-
-.activity-spinner {
-  border-color: color-mix(in oklab, currentColor 25%, transparent);
-  border-top-color: currentColor;
-}
-
-.activity-compaction {
-  background: color-mix(in oklab, var(--cp-violet) 10%, transparent);
-  color: var(--cp-violet);
-}
-
-.activity-retry,
-.activity-waiting {
-  background: color-mix(in oklab, var(--cp-warning) 10%, transparent);
-  color: var(--cp-warning);
-}
-
-.activity-reconnecting {
-  background: color-mix(in oklab, var(--cp-accent) 10%, transparent);
-  color: var(--cp-accent);
 }
 
 .permission-settings-error {

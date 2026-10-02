@@ -1081,6 +1081,7 @@ export function App() {
 							type: "assistant",
 							text: "已完成核心实现：\n\n```ts\nexport async function login(input: LoginInput) {\n  return authService.authenticate(input);\n}\n```\n\n基础测试已经通过，对应 OpenSpec tasks 和验证结果已更新。",
 							status: "complete",
+							streamStats: { tokens: 150, estimated: false, elapsedMs: 6000 },
 						},
 					],
 				}
@@ -1096,7 +1097,9 @@ export function App() {
 		}
 	});
 	const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-	const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>({});
+	const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>(
+		demoMode ? { "CODE-001": { label: "Pi 正在处理", kind: "working", queued: 0 } } : {},
+	);
 	const [pendingPermissionRequests, setPendingPermissionRequests] = useState<Record<string, PendingPermissionRequest>>(
 		{},
 	);
@@ -3610,7 +3613,10 @@ export function App() {
 											);
 										})}
 										{availableSkills.length === 0 ? (
-											<div className="provider-empty">未发现可用 Skill</div>
+											<div className="provider-empty">
+												<AppIcon name="sparkles" size={15} />
+												<span>未发现可用 Skill。将 Skill 放入项目或 Pi 的 skills 目录后刷新。</span>
+											</div>
 										) : null}
 									</div>
 								</section>
@@ -3762,6 +3768,9 @@ export function App() {
 								<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>
 									{items.length === 0 ? (
 										<div className="transcript-placeholder compact">
+											<div className="state-mark state-mark-conversation">
+												<AppIcon name="message-question" size={18} />
+											</div>
 											<h2>{slot.displayName}</h2>
 											<p>发送一条消息开始工作。Agent 会检查当前工作目录中实际存在的材料。</p>
 											{slot.kickoffPrompt ? (
@@ -3788,6 +3797,19 @@ export function App() {
 											}
 										/>
 									)}
+									{activity ? (
+										<div className="transcript-runtime-status">
+											<output className={`agent-activity activity-${activity.kind}`} aria-live="polite">
+												<span className="activity-dots" aria-hidden="true">
+													<span />
+													<span />
+													<span />
+												</span>
+												<span className="activity-label">{activity.label}</span>
+												{activity.queued > 0 ? <small>{activity.queued} 条排队</small> : null}
+											</output>
+										</div>
+									) : null}
 								</div>
 								<div className="composer-shell">
 									{showJumpToLatest ? (
@@ -3846,13 +3868,6 @@ export function App() {
 												<button type="button" onClick={() => void continueAfterToolFailure(slot)}>
 													让 Pi 继续处理
 												</button>
-											</div>
-										) : null}
-										{activity ? (
-											<div className={`agent-activity activity-${activity.kind}`}>
-												<span className="activity-spinner" aria-hidden="true" />
-												<span>{activity.label}</span>
-												{activity.queued > 0 ? <small>{activity.queued} queued</small> : null}
 											</div>
 										) : null}
 										{attachments.length > 0 ? (
@@ -4090,6 +4105,9 @@ export function App() {
 					) : (
 						<>
 							<div className="transcript-placeholder">
+								<div className="state-mark state-mark-muted">
+									<AppIcon name="plug" size={18} />
+								</div>
 								<h2>{slot.displayName}</h2>
 								<p>这个 Slot 尚未创建 Agent Instance。</p>
 							</div>
@@ -4156,8 +4174,8 @@ export function App() {
 		}
 		return (
 			<div className="empty-state">
-				<div className="empty-mark app-icon-mark">
-					<img src="./codepiddy-icon.png" alt="CodePIddy" />
+				<div className="state-mark state-mark-muted">
+					<AppIcon name="folder" size={18} />
 				</div>
 				<h1>{project.name}</h1>
 				<p>从左侧的新需求或修漏洞目录创建工作项。</p>
@@ -4284,6 +4302,7 @@ export function App() {
 			<main className="main-pane">
 				{error ? (
 					<div className="error-banner" role="alert">
+						<AppIcon name="warning" size={15} />
 						<span>{error}</span>
 						<button type="button" aria-label="关闭错误提示" onClick={() => setError(null)}>
 							<AppIcon name="close" />

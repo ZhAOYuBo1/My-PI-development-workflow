@@ -1,5 +1,5 @@
 import type { WorkspaceDirEntry, WorkspaceFileContent } from "@codepiddy/shared";
-import { ChevronRight, FileText, Folder } from "lucide-react";
+import { ChevronRight, CircleAlert, FileQuestion, FileText, Folder } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageContent } from "./message-content.tsx";
 import { extractPanelPath, formatPanelSize, type ProjectableToolItem } from "./work-panel.ts";
@@ -181,14 +181,23 @@ export const WorkPanel = memo(function WorkPanel({
 		const state = dirs[relative];
 		if (!state) {
 			return (
-				<div className="file-tree-note" style={{ paddingLeft: 12 + depth * 14 }} key={`${relative}:loading`}>
+				<output
+					className="file-tree-note is-loading"
+					style={{ paddingLeft: 12 + depth * 14 }}
+					key={`${relative}:loading`}
+				>
 					加载中…
-				</div>
+				</output>
 			);
 		}
 		if (state.entries.length === 0) {
 			return (
-				<div className="file-tree-note" style={{ paddingLeft: 12 + depth * 14 }} key={`${relative}:empty`}>
+				<div
+					className={`file-tree-note ${state.error ? "is-error" : "is-empty"}`}
+					style={{ paddingLeft: 12 + depth * 14 }}
+					key={`${relative}:empty`}
+					role={state.error ? "alert" : undefined}
+				>
 					{state.error ? "目录读取失败" : "空目录"}
 				</div>
 			);
@@ -233,10 +242,25 @@ export const WorkPanel = memo(function WorkPanel({
 	};
 
 	const renderPreview = (): React.ReactNode => {
-		if (!fileState || fileState.status === "loading") return <div className="file-tree-note">加载中…</div>;
+		if (!fileState || fileState.status === "loading") {
+			return (
+				<output className="file-viewer-state is-loading" aria-live="polite">
+					<span className="sr-only">正在读取文件</span>
+					<span className="file-viewer-skeleton" aria-hidden="true">
+						<span />
+						<span />
+						<span />
+						<span />
+					</span>
+				</output>
+			);
+		}
 		if (fileState.status === "error")
 			return (
-				<div className="work-panel-empty">
+				<div className="work-panel-empty is-error" role="alert">
+					<div className="state-mark state-mark-error">
+						<CircleAlert size={18} strokeWidth={2} aria-hidden="true" />
+					</div>
 					<strong>文件读取失败</strong>
 					<p>文件可能已被移动或删除，刷新目录树后重试。</p>
 				</div>
@@ -268,7 +292,10 @@ export const WorkPanel = memo(function WorkPanel({
 			);
 		}
 		return (
-			<div className="work-panel-empty">
+			<div className={`work-panel-empty ${content.kind === "tooLarge" ? "is-warning" : "is-muted"}`}>
+				<div className="state-mark">
+					<FileQuestion size={18} strokeWidth={2} aria-hidden="true" />
+				</div>
 				<strong>{content.kind === "tooLarge" ? "文件过大无法预览" : "二进制文件无法预览"}</strong>
 				<p>
 					{formatPanelSize(content.size)}
