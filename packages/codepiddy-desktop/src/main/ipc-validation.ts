@@ -20,6 +20,8 @@ import type {
 	SetAgentModelInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
+	TerminalStartInput,
+	TerminalWriteInput,
 } from "@codepiddy/shared";
 
 const AGENT_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
@@ -38,6 +40,14 @@ function text(value: unknown, label: string, maximum: number, allowEmpty = false
 	if (result.length > maximum) throw new Error(`${label} 超过最大长度 ${maximum}`);
 	if (result.includes("\0")) throw new Error(`${label} 包含非法字符`);
 	return result;
+}
+
+function rawText(value: unknown, label: string, maximum: number): string {
+	if (typeof value !== "string") throw new Error(`${label} 必须是字符串`);
+	if (!value.trim()) throw new Error(`${label} 不能为空`);
+	if (value.length > maximum) throw new Error(`${label} 超过最大长度 ${maximum}`);
+	if (value.includes("\0")) throw new Error(`${label} 包含非法字符`);
+	return value;
 }
 
 function role(value: unknown): AgentRole {
@@ -70,6 +80,12 @@ function workItemId(value: unknown): string {
 function agentInstanceId(value: unknown): string {
 	const result = text(value, "Agent Instance ID", 128);
 	if (!/^[a-zA-Z0-9-]+$/.test(result)) throw new Error("Agent Instance ID 格式无效");
+	return result;
+}
+
+function terminalId(value: unknown): string {
+	const result = text(value, "Terminal ID", 128);
+	if (!/^[a-zA-Z0-9-]+$/.test(result)) throw new Error("Terminal ID 格式无效");
 	return result;
 }
 
@@ -226,6 +242,26 @@ export function parseRoleSkillAssignmentsInput(value: unknown): SetRoleSkillAssi
 
 export function parseProjectId(value: unknown): string {
 	return projectId(value);
+}
+
+export function parseTerminalStartInput(value: unknown): TerminalStartInput {
+	const input = record(value, "Terminal Start");
+	return {
+		terminalId: terminalId(input.terminalId),
+		projectRoot: projectRoot(input.projectRoot),
+	};
+}
+
+export function parseTerminalWriteInput(value: unknown): TerminalWriteInput {
+	const input = record(value, "Terminal Write");
+	return {
+		terminalId: terminalId(input.terminalId),
+		data: rawText(input.data, "终端输入", 64_000),
+	};
+}
+
+export function parseTerminalId(value: unknown): string {
+	return terminalId(value);
 }
 
 export function parseBoundedText(value: unknown, label: string, maximum: number, allowEmpty = false): string {

@@ -333,12 +333,19 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 		if (!text && !(role === "user" && images.length > 0)) continue;
 		const createdAt = historyTimestamp(message);
 		if (role === "toolResult") {
+			const details = isRecord(message.details) ? message.details : null;
+			const patch =
+				details && typeof details.patch === "string"
+					? details.patch
+					: details && typeof details.diff === "string"
+						? details.diff
+						: null;
 			items.push({
 				id: typeof message.toolCallId === "string" ? message.toolCallId : `history-tool-${index}`,
 				type: "tool",
 				name: typeof message.toolName === "string" ? message.toolName : "tool",
 				args: "",
-				text,
+				text: patch || text,
 				status: "completed",
 				isError: message.isError === true,
 				...(createdAt ? { completedAt: Date.parse(createdAt) } : {}),
@@ -1079,7 +1086,41 @@ export function App() {
 						{
 							id: "demo-assistant",
 							type: "assistant",
-							text: "已完成核心实现：\n\n```ts\nexport async function login(input: LoginInput) {\n  return authService.authenticate(input);\n}\n```\n\n基础测试已经通过，对应 OpenSpec tasks 和验证结果已更新。",
+							text: "我会先检查现有工作区面板实现，再补上文件差异和命令输出视图。",
+							status: "complete",
+							streamStats: { tokens: 82, estimated: false, elapsedMs: 3200 },
+						},
+						{
+							id: "demo-tool-read-work-panel",
+							type: "tool",
+							name: "read",
+							args: '{"filePath":"packages/codepiddy-desktop/src/renderer/components/WorkPanel.tsx"}',
+							text: 'export const WorkPanel = memo(function WorkPanel({ projectRoot, toolItems }) {\n  const [fileState, setFileState] = useState<FileState | null>(null);\n  return <aside className="work-panel" aria-label="文件管理器" />;\n});',
+							status: "completed",
+							isError: false,
+						},
+						{
+							id: "demo-tool-edit-work-panel",
+							type: "tool",
+							name: "edit",
+							args: '{"filePath":"packages/codepiddy-desktop/src/renderer/components/WorkPanel.tsx","oldText":"<strong>文件管理器</strong>","newText":"工作区视图"}',
+							text: '@@ -1,6 +1,8 @@\n-<strong>文件管理器</strong>\n+<div className="work-panel-tabs">\n+  <button>文件</button>\n+  <button>更改</button>\n+  <button>运行</button>\n+</div>\n <div className="file-tree">',
+							status: "completed",
+							isError: false,
+						},
+						{
+							id: "demo-tool-run-check",
+							type: "tool",
+							name: "bash",
+							args: '{"command":"npm run check"}',
+							text: "> biome check --write --error-on-warnings .\nChecked 664 files in 504ms. No fixes applied.\n> tsgo --noEmit\n> check:browser-smoke",
+							status: "completed",
+							isError: false,
+						},
+						{
+							id: "demo-assistant-final",
+							type: "assistant",
+							text: "工作区面板已补齐文件、更改和运行视图。\n\n```ts\nconst entries = toolItems.map(projectToolToPanel).filter(Boolean);\n```\n\n基础检查已经通过，工作区导航和 diff 展示已更新。",
 							status: "complete",
 							streamStats: { tokens: 150, estimated: false, elapsedMs: 6000 },
 						},
@@ -2074,18 +2115,20 @@ export function App() {
 		if (!element || !activeAgentId) return;
 		scrollPositions.current[activeAgentId] = element.scrollTop;
 		localStorage.setItem("codepiddy:agent-scroll-positions", JSON.stringify(scrollPositions.current));
-		const existing = agentUiSaveTimers.current.get(activeAgentId);
-		if (existing) window.clearTimeout(existing);
-		const timer = window.setTimeout(() => {
-			void window.codepiddy.saveAgentUiState({
-				agentInstanceId: activeAgentId,
-				draft: drafts[activeAgentId] ?? "",
-				scrollTop: scrollPositions.current[activeAgentId] ?? 0,
-				unreadCount: unreadCounts[activeAgentId] ?? 0,
-			});
-			agentUiSaveTimers.current.delete(activeAgentId);
-		}, 200);
-		agentUiSaveTimers.current.set(activeAgentId, timer);
+		if ("codepiddy" in window) {
+			const existing = agentUiSaveTimers.current.get(activeAgentId);
+			if (existing) window.clearTimeout(existing);
+			const timer = window.setTimeout(() => {
+				void window.codepiddy.saveAgentUiState({
+					agentInstanceId: activeAgentId,
+					draft: drafts[activeAgentId] ?? "",
+					scrollTop: scrollPositions.current[activeAgentId] ?? 0,
+					unreadCount: unreadCounts[activeAgentId] ?? 0,
+				});
+				agentUiSaveTimers.current.delete(activeAgentId);
+			}, 200);
+			agentUiSaveTimers.current.set(activeAgentId, timer);
+		}
 		const awayFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight > 160;
 		setShowJumpToLatest(awayFromBottom);
 		updateTranscriptViewport();
@@ -3670,6 +3713,11 @@ export function App() {
 			const toolRecoveryOffer = agentId ? toolRecoveryOffers[agentId] : undefined;
 			const sessionSnapshot = agentId ? agentSessionSnapshots[agentId] : undefined;
 			const canAbort = Boolean(agentId && (activity || slot.status === "running" || slot.status === "waiting"));
+			const latestTurn = groupTranscriptIntoTurns(items).at(-1);
+			const latestTurnToolItems =
+				latestTurn?.entries
+					.map((entry) => entry.item)
+					.filter((item): item is Extract<TranscriptItem, { type: "tool" }> => item.type === "tool") ?? [];
 			return (
 				<div className="agent-pane">
 					<header className="content-header">
@@ -4096,9 +4144,11 @@ export function App() {
 							{workPanelVisible && project ? (
 								<WorkPanel
 									projectRoot={project.rootPath}
-									toolItems={items.filter(
-										(item): item is Extract<TranscriptItem, { type: "tool" }> => item.type === "tool",
-									)}
+									workItemId={selectedWorkItem.id}
+									agentRole={selection.role}
+									turnId={latestTurn?.id ?? "turn-0"}
+									turnStartedAt={latestTurn?.startedAt}
+									toolItems={latestTurnToolItems}
 								/>
 							) : null}
 						</div>

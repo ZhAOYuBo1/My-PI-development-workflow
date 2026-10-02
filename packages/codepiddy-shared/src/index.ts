@@ -248,9 +248,13 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	searchProjectFiles(projectRoot: string, query: string): Promise<string[]>;
 	listWorkspaceDir(projectRoot: string, relativeDir: string): Promise<WorkspaceDirEntry[]>;
 	readWorkspaceFile(projectRoot: string, relativePath: string): Promise<WorkspaceFileContent>;
+	startTerminal(input: TerminalStartInput): Promise<TerminalSessionInfo>;
+	writeTerminal(input: TerminalWriteInput): Promise<void>;
+	killTerminal(terminalId: string): Promise<void>;
 	getProjectWriteLeaseStatus(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	clearStaleProjectWriteLease(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	onAgentEvent(listener: (event: AgentClientEvent) => void): () => void;
+	onTerminalEvent(listener: (event: TerminalClientEvent) => void): () => void;
 }
 
 export interface PendingPermissionRequest extends AgentInstanceLocator {
@@ -281,6 +285,29 @@ export interface WorkspaceFileContent {
 	content?: string;
 	/** kind 为 image 时的 dataUrl。 */
 	dataUrl?: string;
+}
+
+export interface TerminalStartInput {
+	terminalId: string;
+	projectRoot: string;
+}
+
+export interface TerminalWriteInput {
+	terminalId: string;
+	data: string;
+}
+
+export interface TerminalSessionInfo {
+	terminalId: string;
+	shell: string;
+	cwd: string;
+}
+
+export interface TerminalClientEvent {
+	terminalId: string;
+	type: "data" | "error" | "exit";
+	data?: string;
+	exitCode?: number | null;
 }
 
 export interface ExtensionUiResponseInput extends AgentInstanceLocator {

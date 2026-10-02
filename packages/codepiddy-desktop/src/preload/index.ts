@@ -15,6 +15,9 @@ import type {
 	SetAgentModelInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
+	TerminalClientEvent,
+	TerminalStartInput,
+	TerminalWriteInput,
 } from "@codepiddy/shared";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -76,6 +79,10 @@ const channels = {
 	searchProjectFiles: "codepiddy:project:files:search",
 	listWorkspaceDir: "codepiddy:workspace:dir:list",
 	readWorkspaceFile: "codepiddy:workspace:file:read",
+	startTerminal: "codepiddy:terminal:start",
+	writeTerminal: "codepiddy:terminal:write",
+	killTerminal: "codepiddy:terminal:kill",
+	terminalEvent: "codepiddy:terminal:event",
 	sendAgentPrompt: "codepiddy:agent:prompt",
 } as const;
 
@@ -128,6 +135,9 @@ const api: CodePIddyClientApi = {
 		ipcRenderer.invoke(channels.listWorkspaceDir, projectRoot, relativeDir),
 	readWorkspaceFile: (projectRoot: string, relativePath: string) =>
 		ipcRenderer.invoke(channels.readWorkspaceFile, projectRoot, relativePath),
+	startTerminal: (input: TerminalStartInput) => ipcRenderer.invoke(channels.startTerminal, input),
+	writeTerminal: (input: TerminalWriteInput) => ipcRenderer.invoke(channels.writeTerminal, input),
+	killTerminal: (terminalId: string) => ipcRenderer.invoke(channels.killTerminal, terminalId),
 	getSettingsStatus: () => ipcRenderer.invoke(channels.settingsStatus),
 	getPiRuntimeStatus: () => ipcRenderer.invoke(channels.piRuntimeStatus),
 	checkPiRuntimeUpdate: () => ipcRenderer.invoke(channels.piRuntimeCheck),
@@ -152,6 +162,11 @@ const api: CodePIddyClientApi = {
 		const handler = (_event: Electron.IpcRendererEvent, event: AgentClientEvent) => listener(event);
 		ipcRenderer.on(channels.agentEvent, handler);
 		return () => ipcRenderer.removeListener(channels.agentEvent, handler);
+	},
+	onTerminalEvent: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, event: TerminalClientEvent) => listener(event);
+		ipcRenderer.on(channels.terminalEvent, handler);
+		return () => ipcRenderer.removeListener(channels.terminalEvent, handler);
 	},
 };
 

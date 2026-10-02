@@ -21,9 +21,9 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 18 的会话树弹窗已验收并提交，从「待办清单」第 2 项继续做文件面板。
+再读 PRODUCT.md、DESIGN.md。批次 18 的会话树弹窗已验收并提交；批次 19-20 的工作区多视图、变更持久化和内部终端修复已实现，先检查效果，验收后再提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定闪电和思考强度波场都已验收并提交，不要重做。
-当前 HEAD 是 4473a98；工作树只有根目录未跟踪文件 `闪电.svg`，不要删除或提交。
+当前 HEAD 是 b0f9385；批次 19-20 修改了 App.tsx、WorkPanel.tsx、work-panel.ts、styles.css、main/index.ts、preload/index.ts、shared/index.ts 和相关文档，等待验收；根目录未跟踪文件 `流星.svg` 不要删除或提交。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
   npm run check
@@ -52,9 +52,9 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-02 批次 18 之后）
+## 当前状态（2026-10-03 批次 20 待验收）
 
-- `styles.css` 3995 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
+- `styles.css` 4477 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
 - app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
@@ -70,6 +70,7 @@
 - 流式统计：`⚡` 字体字符已移除，改为 12×12 内联 SVG，避免字体缺字时出现豆腐块。
 - 思考强度：滑块改为轻量 canvas 波场，低档慢而疏、高档快而密，最高档有短促落点扫光；拖拽加入轻微磁吸。
 - 会话树弹窗：标题与摘要合并成安静头部，节点按深度使用 token 缩进；当前节点使用蓝色淡底和半像素强调环，Fork 按钮在悬停/聚焦时出现；空态补齐状态标识和说明。
+- 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并显示左侧文件列表 + 右侧完整 diff，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
 
 ### 本轮改动清单
 
@@ -81,12 +82,13 @@
 - 已提交：`c34c20a feat(desktop): use selected lightning asset`
 - 已提交：`4e4341c docs(desktop): record lightning asset acceptance`
 - 已提交：`4473a98 feat(desktop): refine session tree modal`
+- 待验收：工作区面板 `文件 / 更改 / 终端`（批次 19-20）
 
-批次 1-17 的 UI 调整均已提交；详细过程见下方进度日志。
+批次 1-18 的 UI 调整均已提交；详细过程见下方进度日志。
 
 ### 下一步
 
-从「待办清单」第 2 项开始：研究参考项目的文件面板能力，在现有 `WorkPanel` 上补齐文件状态、预览和后续 diff 入口，并在 Electron 中打开真实项目验证。
+等待用户验收批次 19-20。通过后提交代码和文档，再从「待办清单」第 3 项继续做 `styles.css` 的结构清理。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -132,7 +134,7 @@
 - [x] 会话列表 / 项目树（2026-10-02 批次 1+4：侧栏 rail 底色、选中行白底抬起、状态色走语义色）
 - [x] 输入区与工具栏（2026-10-02：实色面板，控件无边框，发送键改强调色，停止键改中性底 + 红图标）
 - [x] 消息气泡与工具卡（2026-10-02：气泡/代码块/终端/diff 改色调分层，正文 16px→14px）
-- [~] 右侧文件面板（配色已改，真实文件树未验证——demo 缺 IPC）
+- [x] 右侧工作区面板（2026-10-02 批次 19：文件 / 更改 / 终端三视图，已在真实 Electron 项目验证）
 - [x] 设置页（2026-10-02：标题 24px→16px，卡片标题→14px，正文 12.5px，权限行压到 54px）
 - [x] 空态 / 错误态 / 加载态（2026-10-02 批次 12：统一状态标识、说明文字、错误横幅与骨架加载）
 
@@ -142,7 +144,7 @@
 - [x] `npm run typecheck --workspace=@codepiddy/desktop` 通过（2026-10-02 批次 8）
 - [x] `npm run build:codepiddy` 通过（2026-10-02 批次 8 复跑）
 - [x] 截图对比（2026-10-02：`.artifacts/ui-*.png`、`conv-*.png`、`spacing-*.png`，含 900px 窄窗）
-- [~] 用户持续确认中（批次 1-17 已逐项验收）
+- [~] 用户持续确认中（批次 1-18 已验收，批次 19 待验收）
 
 ## 进度日志
 
@@ -472,16 +474,53 @@
 
 用户已验收，随 `4473a98 feat(desktop): refine session tree modal` 提交。
 
+### 2026-10-02 批次 19：工作区面板多视图（待验收）
+
+参考 `PI-Desktop` 的 `WorkPanel / FilesTab / ReviewTab`，但只落地宿主自有的三个视图，不复制插件体系，不新增 IPC 或数据模型。
+
+改了：
+
+- `WorkPanel.tsx`：顶部新增 `文件 / 更改 / 终端` 标签，文件预览从左右分栏改为整块面板切换；更改改为文件列表 + 完整 diff；终端改为内嵌 PowerShell 会话。
+- `work-panel.ts`：复用并扩展既有 tool 投影，补齐路径推断、ANSI 清理、diff 行解析和 `+ / −` 统计。
+- `styles.css`：工作面板改成 token 化标签、树行、全宽预览、文件级 diff 和终端；删除旧的重复迁移规则。
+- `main/index.ts`、`preload/index.ts`、`shared/index.ts`：新增终端会话 IPC，工作目录固定为当前项目根，窗口销毁/关闭项目/退出应用时回收子进程。
+- 变更历史：按项目 + 工作项写入客户端 localStorage，最近 80 条；兼容读取旧的 Agent 实例键。重启客户端或更新 Pi 核心后先显示持久化结果，再与当前会话的 live tool 事件按 ID 合并。
+- 更改视图只取最新一轮（一条用户消息到该轮最后一条 AI 回复）；持久化键继续细分到 Agent 角色和轮次，旧的项目级记录会按轮次开始时间做一次迁移筛选。
+- `App.tsx`：demo 数据补入 read/edit/bash 工具项，修复 demo 中滚动保存 UI 状态时的 IPC 缺失报错。
+- `DESIGN.md` / `reference-pi-desktop.md`：记录工作区视图规则和参考项目拆解。
+
+验证：
+
+- 浏览器 demo：文件、更改、终端三视图切换正常；桌面 1440 无横向溢出，1160 窄窗仍可用。
+- 真实 Electron：文件树可展开，`design.md` Markdown 预览正常；更改视图显示文件列表和绿色/红色行级 diff；终端启动 PowerShell 并成功执行 `Get-Location`，输出可选择复制，`cd` 后工作目录同步。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+- 截图：`.artifacts/work-panel-files.png`、`work-panel-changes.png`、`work-panel-terminal.png`、`work-panel-narrow.png`、`electron-work-panel-files.png`、`electron-work-panel-file-preview.png`、`electron-work-panel-changes.png`、`electron-work-panel-terminal.png`。
+
+### 2026-10-03 批次 20：修正更改历史与终端交互
+
+用户反馈：重启后更改历史仍可能丢失；某些 `edit` 记录显示为没有路径的“文件变更”；终端不能正常选择和复制，`cd` 后目录显示不同步。
+
+根因与修改：
+
+- Pi 当前 `edit` 参数使用 `file_path + edits[]`，旧投影只识别 `filePath/path + oldText/newText`，于是路径为空，并把成功提示误当成 diff。
+- 现在优先从 `edits[].oldText/newText` 生成行级 diff；路径优先读 `file_path`，其次从成功提示的 `in <path>` 恢复。
+- 读取历史 toolResult 时优先使用 `details.patch` / `details.diff`，因此升级前已经发生的编辑也能在重新加载会话后恢复真实 diff。
+- 无法识别路径的记录不再进入“更改”列表；旧的无路径持久化记录会在加载时尝试恢复路径。
+- 变更历史改为按`项目路径 + 工作项 ID`存储在客户端 localStorage，最近 80 条；旧的 Agent 实例键只作为迁移回退。Pi 核心和会话数据格式都没有被修改。
+- 内部终端输出改为可选择复制的只读文本区；每次命令后用壳子侧的标记读取真实 `PowerShell` 工作目录并更新提示。增加上下键命令历史、`Ctrl+L` 清空和 `Ctrl+C` 清空当前输入。
+
+验证：`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；真实 Electron 关闭重启后，项目 + 工作项键仍能恢复 `a.txt` 历史，旧的无路径记录已归并回真实文件。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
-2. **文件面板真实验证**：需要在 Electron 里打开真实项目看文件树行、预览、拖拽调宽。
+2. [~] **工作区面板多视图**：批次 19 已实现并在真实 Electron 中验证，等待用户验收。
 3. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
 4. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
 
 ## 未提交状态
 
-批次 1-18 已提交。工作树仍有用户放在根目录的原始 `闪电.svg` 未跟踪文件；不要删除或提交它。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-18 已提交。批次 19 修改了 `App.tsx`、`WorkPanel.tsx`、`work-panel.ts`、`styles.css`、`main/index.ts`、`ipc-validation.ts`、`preload/index.ts`、`shared/index.ts`、`DESIGN.md`、`reference-pi-desktop.md` 和本文件，等待用户验收后提交。工作树仍有用户放在根目录的原始 `流星.svg` 未跟踪文件；不要删除或提交它。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 

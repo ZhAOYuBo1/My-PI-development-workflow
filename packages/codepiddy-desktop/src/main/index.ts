@@ -1,3 +1,4 @@
+import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
 import { copyFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -40,8 +41,10 @@ import type {
 	SendAgentPromptInput,
 	SetAgentModelInput,
 	SetAgentThinkingInput,
+	TerminalClientEvent,
+	TerminalSessionInfo,
 } from "@codepiddy/shared";
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, webContents } from "electron";
 import {
 	assertPathInside,
 	parseAgentLocator,
@@ -63,6 +66,9 @@ import {
 	parseSendAgentPromptInput,
 	parseSetAgentModelInput,
 	parseSetAgentThinkingInput,
+	parseTerminalId,
+	parseTerminalStartInput,
+	parseTerminalWriteInput,
 } from "./ipc-validation.ts";
 import { loadPiBuiltinCommands, mergePiCommands } from "./pi-builtin-commands.ts";
 import { type InstalledPiRuntime, PiRuntimeUpdater } from "./pi-runtime-updater.ts";
@@ -129,8 +135,88 @@ const channels = {
 	searchProjectFiles: "codepiddy:project:files:search",
 	listWorkspaceDir: "codepiddy:workspace:dir:list",
 	readWorkspaceFile: "codepiddy:workspace:file:read",
+	startTerminal: "codepiddy:terminal:start",
+	writeTerminal: "codepiddy:terminal:write",
+	killTerminal: "codepiddy:terminal:kill",
+	terminalEvent: "codepiddy:terminal:event",
 	sendAgentPrompt: "codepiddy:agent:prompt",
 } as const;
+
+interface TerminalSession {
+	terminalId: string;
+	projectRoot: string;
+	ownerId: number;
+	shell: string;
+	cwd: string;
+	child: ChildProcessWithoutNullStreams;
+}
+
+const terminalSessions = new Map<string, TerminalSession>();
+const terminalOwnerCleanupRegistered = new Set<number>();
+
+function resolveTerminalShell(): { command: string; args: string[]; label: string } {
+	if (process.platform === "win32") {
+		if (spawnSync("where.exe", ["pwsh.exe"], { windowsHide: true }).status === 0) {
+			const version = spawnSync(
+				"pwsh.exe",
+				["-NoLogo", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"],
+				{ encoding: "utf8", windowsHide: true },
+			).stdout.trim();
+			return {
+				command: "pwsh.exe",
+				args: ["-NoLogo", "-NoProfile", "-NoExit", "-Command", "-"],
+				label: version ? `PowerShell ${version}` : "PowerShell",
+			};
+		}
+		return {
+			command: "powershell.exe",
+			args: ["-NoLogo", "-NoProfile", "-NoExit", "-Command", "-"],
+			label: "Windows PowerShell",
+		};
+	}
+	const command = process.env.SHELL || "/bin/bash";
+	return { command, args: ["-l"], label: path.basename(command) };
+}
+
+function sendTerminalEvent(session: TerminalSession, event: Omit<TerminalClientEvent, "terminalId">): void {
+	const owner = webContents.fromId(session.ownerId);
+	if (!owner || owner.isDestroyed()) return;
+	owner.send(channels.terminalEvent, { terminalId: session.terminalId, ...event } satisfies TerminalClientEvent);
+}
+
+function stopTerminalSession(terminalId: string): void {
+	const session = terminalSessions.get(terminalId);
+	if (!session) return;
+	terminalSessions.delete(terminalId);
+	session.child.kill();
+}
+
+function stopOwnerTerminals(ownerId: number): void {
+	for (const [terminalId, session] of terminalSessions) {
+		if (session.ownerId === ownerId) stopTerminalSession(terminalId);
+	}
+}
+
+function stopProjectTerminals(projectRoot: string): void {
+	const key = process.platform === "win32" ? path.resolve(projectRoot).toLowerCase() : path.resolve(projectRoot);
+	for (const [terminalId, session] of terminalSessions) {
+		const sessionKey =
+			process.platform === "win32"
+				? path.resolve(session.projectRoot).toLowerCase()
+				: path.resolve(session.projectRoot);
+		if (sessionKey === key) stopTerminalSession(terminalId);
+	}
+}
+
+function stopAllTerminals(): void {
+	for (const terminalId of [...terminalSessions.keys()]) stopTerminalSession(terminalId);
+}
+
+function requireTerminalSession(terminalId: string, ownerId: number): TerminalSession {
+	const session = terminalSessions.get(terminalId);
+	if (!session || session.ownerId !== ownerId) throw new Error("终端会话不存在或已结束");
+	return session;
+}
 
 function roleLabel(role: AgentRole): string {
 	if (role === "requirement-analysis") return "需求分析 Agent";
@@ -1256,6 +1342,7 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.closeProject, async (_event, rawProjectRoot: unknown) => {
 		const projectRoot = requireOpenProjectRoot(rawProjectRoot);
 		const project = await openProject(projectRoot);
+		stopProjectTerminals(projectRoot);
 		await agentManager.stopProject(project.id);
 		openedProjects.delete(rootKey(projectRoot));
 		await recentProjects.clearActiveProject(projectRoot);
@@ -1374,6 +1461,68 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.readWorkspaceFile, (_event, rawProjectRoot: unknown, rawPath: unknown) =>
 		readWorkspaceFile(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawPath, "文件路径", 1000)),
 	);
+	ipcMain.handle(channels.startTerminal, async (event, raw: unknown): Promise<TerminalSessionInfo> => {
+		const input = parseTerminalStartInput(raw);
+		const projectRoot = requireOpenProjectRoot(input.projectRoot);
+		stopTerminalSession(input.terminalId);
+		const resolved = resolveTerminalShell();
+		const child = spawn(resolved.command, resolved.args, {
+			cwd: projectRoot,
+			env: { ...process.env, TERM: "xterm-256color" },
+			windowsHide: true,
+			stdio: ["pipe", "pipe", "pipe"],
+		});
+		await new Promise<void>((resolve, reject) => {
+			const onError = (error: Error): void => reject(error);
+			child.once("spawn", () => {
+				child.off("error", onError);
+				resolve();
+			});
+			child.once("error", onError);
+		});
+		const session: TerminalSession = {
+			terminalId: input.terminalId,
+			projectRoot,
+			ownerId: event.sender.id,
+			shell: resolved.label,
+			cwd: projectRoot,
+			child,
+		};
+		terminalSessions.set(input.terminalId, session);
+		const ownerId = event.sender.id;
+		if (!terminalOwnerCleanupRegistered.has(ownerId)) {
+			terminalOwnerCleanupRegistered.add(ownerId);
+			event.sender.once("destroyed", () => {
+				terminalOwnerCleanupRegistered.delete(ownerId);
+				stopOwnerTerminals(ownerId);
+			});
+		}
+		child.stdout.on("data", (data: Buffer) =>
+			sendTerminalEvent(session, { type: "data", data: data.toString("utf8") }),
+		);
+		child.stderr.on("data", (data: Buffer) =>
+			sendTerminalEvent(session, { type: "data", data: data.toString("utf8") }),
+		);
+		child.on("error", (error) => {
+			sendTerminalEvent(session, { type: "error", data: error.message });
+			terminalSessions.delete(input.terminalId);
+		});
+		child.on("exit", (code) => {
+			sendTerminalEvent(session, { type: "exit", exitCode: code });
+			terminalSessions.delete(input.terminalId);
+		});
+		return { terminalId: input.terminalId, shell: resolved.label, cwd: projectRoot };
+	});
+	ipcMain.handle(channels.writeTerminal, (event, raw: unknown) => {
+		const input = parseTerminalWriteInput(raw);
+		const session = requireTerminalSession(input.terminalId, event.sender.id);
+		session.child.stdin.write(`${input.data}\n`);
+	});
+	ipcMain.handle(channels.killTerminal, (event, rawTerminalId: unknown) => {
+		const terminalId = parseTerminalId(rawTerminalId);
+		requireTerminalSession(terminalId, event.sender.id);
+		stopTerminalSession(terminalId);
+	});
 	ipcMain.handle(channels.settingsStatus, () => settingsStore.status());
 	ipcMain.handle(channels.piRuntimeStatus, () => piRuntimeUpdater.status());
 	ipcMain.handle(channels.piRuntimeCheck, () => piRuntimeUpdater.checkLatest());
@@ -1519,6 +1668,7 @@ if (!hasSingleInstanceLock) {
 			if (shutdownStarted) return;
 			event.preventDefault();
 			shutdownStarted = true;
+			stopAllTerminals();
 			void agentManager.stopAll().finally(() => {
 				recentProjects.close();
 				app.quit();

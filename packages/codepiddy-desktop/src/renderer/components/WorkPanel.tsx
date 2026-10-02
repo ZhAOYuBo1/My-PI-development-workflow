@@ -1,12 +1,58 @@
 import type { WorkspaceDirEntry, WorkspaceFileContent } from "@codepiddy/shared";
-import { ChevronRight, CircleAlert, FileQuestion, FileText, Folder } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	Check,
+	ChevronLeft,
+	ChevronRight,
+	CircleAlert,
+	Copy,
+	CornerDownLeft,
+	FileDiff,
+	FileQuestion,
+	Files,
+	FileText,
+	Folder,
+	LocateFixed,
+	type LucideIcon,
+	RefreshCw,
+	Search,
+	SquareTerminal,
+	Trash2,
+	WrapText,
+} from "lucide-react";
+import {
+	type CSSProperties,
+	memo,
+	type MouseEvent as ReactMouseEvent,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { MessageContent } from "./message-content.tsx";
-import { extractPanelPath, formatPanelSize, type ProjectableToolItem } from "./work-panel.ts";
+import {
+	extractPanelPath,
+	formatPanelSize,
+	inferPanelPathFromText,
+	type PanelDiffLine,
+	type ProjectableToolItem,
+	panelDiffLines,
+	projectToolToPanel,
+	stripAnsi,
+	summarizePanelDiff,
+	type WorkPanelEntry,
+} from "./work-panel.ts";
 
 const PANEL_MIN_WIDTH = 280;
 const PANEL_MAX_WIDTH = 720;
 const PANEL_DEFAULT_WIDTH = 480;
+const DIFF_LINE_LIMIT = 800;
+const CHANGE_HISTORY_LIMIT = 80;
+const CHANGE_BODY_LIMIT = 160_000;
+const CWD_MARKER = "__CODEPIDDY_CWD__";
+
+type WorkPanelTab = "files" | "changes" | "terminal";
 
 function clampWidth(value: number): number {
 	return Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, Math.round(value)));
@@ -24,10 +70,550 @@ function isMarkdownPath(path: string): boolean {
 	return /\.(?:md|markdown)$/i.test(path);
 }
 
+function basename(path: string): string {
+	return path.split("/").filter(Boolean).at(-1) ?? path;
+}
+
+function dirname(path: string): string {
+	const parts = path.split("/").filter(Boolean);
+	parts.pop();
+	return parts.join("/");
+}
+
+function projectRelativePath(path: string, projectRoot: string): string {
+	const normalizedPath = path.replace(/\\/g, "/");
+	const normalizedRoot = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+	return normalizedPath.toLowerCase().startsWith(`${normalizedRoot.toLowerCase()}/`)
+		? normalizedPath.slice(normalizedRoot.length + 1)
+		: normalizedPath;
+}
+
+function workItemChangeHistoryStorageKey(projectRoot: string, workItemId: string, agentRole: string): string {
+	return `codepiddy.work-panel.changes.${projectRoot.replace(/\\/g, "/").toLowerCase()}.${workItemId}.${agentRole}`;
+}
+
+function changeHistoryStorageKey(projectRoot: string, workItemId: string, agentRole: string, turnId: string): string {
+	return `${workItemChangeHistoryStorageKey(projectRoot, workItemId, agentRole)}.${turnId}`;
+}
+
+function isPersistedChangeEntry(value: unknown): value is WorkPanelEntry {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const entry = value as Record<string, unknown>;
+	return (
+		typeof entry.id === "string" &&
+		typeof entry.toolName === "string" &&
+		typeof entry.title === "string" &&
+		(entry.path === null || typeof entry.path === "string") &&
+		typeof entry.timestamp === "number" &&
+		(entry.view === "file" || entry.view === "terminal" || entry.view === "review") &&
+		typeof entry.renderName === "string" &&
+		typeof entry.body === "string" &&
+		typeof entry.isError === "boolean" &&
+		typeof entry.running === "boolean"
+	);
+}
+
+function loadPersistedChangeEntries(
+	projectRoot: string,
+	workItemId: string,
+	agentRole: string,
+	turnId: string,
+	turnStartedAt: string | undefined,
+): WorkPanelEntry[] {
+	try {
+		const raw = window.localStorage.getItem(changeHistoryStorageKey(projectRoot, workItemId, agentRole, turnId));
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		const turnStart = turnStartedAt ? Date.parse(turnStartedAt) : Number.NaN;
+		const entries = parsed
+			.filter(isPersistedChangeEntry)
+			.map((entry) => ({
+				...entry,
+				path: entry.path ?? inferPanelPathFromText(entry.body),
+				running: false,
+			}))
+			.filter((entry): entry is WorkPanelEntry & { path: string } => entry.path !== null);
+		return Number.isFinite(turnStart) ? entries.filter((entry) => entry.timestamp >= turnStart) : entries;
+	} catch {
+		return [];
+	}
+}
+
+function loadLegacyChangeEntries(
+	projectRoot: string,
+	workItemId: string,
+	agentRole: string,
+	turnStartedAt: string | undefined,
+): WorkPanelEntry[] {
+	try {
+		const raw =
+			window.localStorage.getItem(workItemChangeHistoryStorageKey(projectRoot, workItemId, agentRole)) ??
+			window.localStorage.getItem(
+				`codepiddy.work-panel.changes.${projectRoot.replace(/\\/g, "/").toLowerCase()}.${workItemId}`,
+			);
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		const turnStart = turnStartedAt ? Date.parse(turnStartedAt) : Number.NaN;
+		return parsed
+			.filter(isPersistedChangeEntry)
+			.map((entry) => ({ ...entry, path: entry.path ?? inferPanelPathFromText(entry.body), running: false }))
+			.filter((entry): entry is WorkPanelEntry & { path: string } => entry.path !== null)
+			.filter((entry) => !Number.isFinite(turnStart) || entry.timestamp >= turnStart);
+	} catch {
+		return [];
+	}
+}
+
+function persistChangeEntries(
+	projectRoot: string,
+	workItemId: string,
+	agentRole: string,
+	turnId: string,
+	entries: WorkPanelEntry[],
+): void {
+	try {
+		const compact = entries
+			.filter((entry) => !entry.running && entry.view !== "terminal" && entry.path !== null)
+			.slice(-CHANGE_HISTORY_LIMIT)
+			.map((entry) => ({ ...entry, running: false, body: entry.body.slice(0, CHANGE_BODY_LIMIT) }));
+		window.localStorage.setItem(
+			changeHistoryStorageKey(projectRoot, workItemId, agentRole, turnId),
+			JSON.stringify(compact),
+		);
+	} catch {}
+}
+
+function mergeChangeEntries(live: WorkPanelEntry[], persisted: WorkPanelEntry[]): WorkPanelEntry[] {
+	const merged = new Map<string, WorkPanelEntry>();
+	for (const entry of persisted) merged.set(entry.id, entry);
+	for (const entry of live) merged.set(entry.id, entry);
+	return [...merged.values()].sort((left, right) => left.timestamp - right.timestamp).slice(-CHANGE_HISTORY_LIMIT);
+}
+
+function stripCwdMarker(value: string): { text: string; cwd: string | null } {
+	const marker = new RegExp(`(?:^|\\r?\\n)${CWD_MARKER}([^\\r\\n]*)\\r?\\n?`, "g");
+	let cwd: string | null = null;
+	const text = value.replace(marker, (_match, captured: string) => {
+		cwd = captured.trim();
+		return "\n";
+	});
+	const inline = text.indexOf(CWD_MARKER);
+	if (inline === -1) return { text, cwd };
+	const tail = text.slice(inline + CWD_MARKER.length);
+	const lineEnd = tail.search(/[\r\n]/);
+	cwd = (lineEnd === -1 ? tail : tail.slice(0, lineEnd)).trim();
+	return {
+		text: `${text.slice(0, inline)}${lineEnd === -1 ? "" : text.slice(inline + CWD_MARKER.length + lineEnd)}`,
+		cwd,
+	};
+}
+
 function PanelGlyph({ kind }: { kind: "dir" | "file" }) {
 	const Icon = kind === "dir" ? Folder : FileText;
 	return <Icon className="file-tree-icon" size={14} strokeWidth={2} aria-hidden="true" />;
 }
+
+function PanelIconButton({
+	label,
+	active = false,
+	disabled = false,
+	onClick,
+	children,
+}: {
+	label: string;
+	active?: boolean;
+	disabled?: boolean;
+	onClick(): void;
+	children: ReactNode;
+}) {
+	return (
+		<button
+			type="button"
+			className={`work-panel-icon-button${active ? " active" : ""}`}
+			aria-label={label}
+			title={label}
+			aria-pressed={active || undefined}
+			disabled={disabled}
+			onClick={onClick}
+		>
+			{children}
+		</button>
+	);
+}
+
+function WorkPanelEmpty({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
+	return (
+		<div className="work-panel-empty">
+			<div className="state-mark">
+				<Icon size={18} strokeWidth={2} aria-hidden="true" />
+			</div>
+			<strong>{title}</strong>
+			<p>{description}</p>
+		</div>
+	);
+}
+
+interface ChangeFileGroup {
+	key: string;
+	path: string | null;
+	displayPath: string;
+	name: string;
+	entries: WorkPanelEntry[];
+}
+
+interface NumberedDiffLine extends PanelDiffLine {
+	lineNumber: number | null;
+}
+
+function buildChangeFileGroups(entries: WorkPanelEntry[], projectRoot: string): ChangeFileGroup[] {
+	const groups = new Map<string, ChangeFileGroup>();
+	for (const entry of entries) {
+		const key = entry.path ?? `unknown:${entry.id}`;
+		const existing = groups.get(key);
+		if (existing) {
+			existing.entries.push(entry);
+			continue;
+		}
+		const path = entry.path;
+		groups.set(key, {
+			key,
+			path,
+			displayPath: path ? projectRelativePath(path, projectRoot) : "历史记录未保存文件路径",
+			name: path ? basename(projectRelativePath(path, projectRoot)) : "文件变更",
+			entries: [entry],
+		});
+	}
+	return [...groups.values()];
+}
+
+function numberedDiffLines(lines: PanelDiffLine[]): NumberedDiffLine[] {
+	let oldLine = 0;
+	let newLine = 0;
+	return lines.map((line) => {
+		if (line.type === "hunk") {
+			const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line.text);
+			if (match) {
+				oldLine = Number.parseInt(match[1]!, 10);
+				newLine = Number.parseInt(match[2]!, 10);
+			}
+			return { ...line, lineNumber: null };
+		}
+		if (line.type === "add") {
+			newLine += 1;
+			return { ...line, lineNumber: newLine };
+		}
+		if (line.type === "remove") {
+			oldLine += 1;
+			return { ...line, lineNumber: oldLine };
+		}
+		oldLine += 1;
+		newLine += 1;
+		return { ...line, lineNumber: newLine };
+	});
+}
+
+function diffLineClass(type: PanelDiffLine["type"]): string {
+	if (type === "add") return "diff-line add";
+	if (type === "remove") return "diff-line remove";
+	if (type === "hunk") return "diff-line hunk";
+	return "diff-line context";
+}
+
+const ChangeBrowser = memo(function ChangeBrowser({
+	groups,
+	selectedKey,
+	split,
+	onSelect,
+	onOpenFile,
+}: {
+	groups: ChangeFileGroup[];
+	selectedKey: string | null;
+	split: boolean;
+	onSelect(key: string): void;
+	onOpenFile(path: string): void;
+}) {
+	const selected = selectedKey ? groups.find((group) => group.key === selectedKey) : split ? groups[0] : undefined;
+	const lines = useMemo(
+		() => numberedDiffLines(selected?.entries.flatMap((entry) => panelDiffLines(entry)) ?? []),
+		[selected],
+	);
+	const summary = useMemo(() => summarizePanelDiff(lines), [lines]);
+	const visibleLines = lines.slice(0, DIFF_LINE_LIMIT);
+
+	const fileList = (
+		<div className="change-file-list" role="listbox" aria-label="更改的文件">
+			{groups.map((group) => {
+				const groupLines = group.entries.flatMap((entry) => panelDiffLines(entry));
+				const groupSummary = summarizePanelDiff(groupLines);
+				const active = group.key === selected?.key;
+				return (
+					<button
+						key={group.key}
+						type="button"
+						role="option"
+						aria-selected={active}
+						className={`change-file-item${active ? " active" : ""}`}
+						title={group.displayPath}
+						onClick={() => onSelect(group.key)}
+					>
+						<FileText size={14} strokeWidth={2} aria-hidden="true" />
+						<span className="change-file-copy">
+							<strong>{group.name}</strong>
+							<small>{group.displayPath}</small>
+						</span>
+						<span className="diff-counts">
+							{groupSummary.additions > 0 ? (
+								<span className="diff-count-add">+{groupSummary.additions}</span>
+							) : null}
+							{groupSummary.deletions > 0 ? (
+								<span className="diff-count-del">−{groupSummary.deletions}</span>
+							) : null}
+						</span>
+					</button>
+				);
+			})}
+		</div>
+	);
+
+	if (!selected) return fileList;
+
+	const diffViewer = (
+		<div className="change-diff-viewer">
+			<header className="change-diff-header">
+				{!split ? (
+					<PanelIconButton label="返回更改文件列表" onClick={() => onSelect("")}>
+						<ChevronLeft size={15} strokeWidth={2} />
+					</PanelIconButton>
+				) : null}
+				<span className="file-viewer-title">
+					<strong title={selected.displayPath}>{selected.name}</strong>
+					<small title={selected.displayPath}>{selected.displayPath}</small>
+				</span>
+				<span className="diff-counts">
+					{summary.additions > 0 ? <span className="diff-count-add">+{summary.additions}</span> : null}
+					{summary.deletions > 0 ? <span className="diff-count-del">−{summary.deletions}</span> : null}
+				</span>
+				{selected.path ? (
+					<PanelIconButton label="在文件中打开" onClick={() => onOpenFile(selected.path!)}>
+						<FileText size={14} strokeWidth={2} />
+					</PanelIconButton>
+				) : null}
+			</header>
+			<div className="change-diff-body">
+				{visibleLines.length > 0 ? (
+					<div className="diff-view">
+						{visibleLines.map((line, index) => (
+							<div className={diffLineClass(line.type)} key={`${line.type}-${index}`}>
+								<span className="diff-line-number" aria-hidden="true">
+									{line.lineNumber ?? ""}
+								</span>
+								<span className="diff-line-sign" aria-hidden="true">
+									{line.type === "add" ? "+" : line.type === "remove" ? "−" : line.type === "hunk" ? "" : " "}
+								</span>
+								<span className="diff-line-text">{line.text || " "}</span>
+							</div>
+						))}
+					</div>
+				) : (
+					<p className="work-change-note">没有可展示的行级差异。</p>
+				)}
+				{lines.length > visibleLines.length ? (
+					<p className="work-change-note">仅显示前 {DIFF_LINE_LIMIT} 行差异。</p>
+				) : null}
+			</div>
+		</div>
+	);
+
+	if (!split) return selectedKey ? diffViewer : fileList;
+	return (
+		<div className="change-browser">
+			{fileList}
+			{diffViewer}
+		</div>
+	);
+});
+
+const TerminalPane = memo(function TerminalPane({ projectRoot }: { projectRoot: string }) {
+	const [terminalId] = useState(() => crypto.randomUUID());
+	const [output, setOutput] = useState("");
+	const [input, setInput] = useState("");
+	const [shell, setShell] = useState("终端");
+	const [cwd, setCwd] = useState(projectRoot);
+	const [commandHistory, setCommandHistory] = useState<string[]>([]);
+	const [status, setStatus] = useState<"starting" | "ready" | "exited" | "error">("starting");
+	const [error, setError] = useState<string | null>(null);
+	const outputRef = useRef<HTMLTextAreaElement | null>(null);
+	const inputRef = useRef<HTMLInputElement | null>(null);
+	const streamBufferRef = useRef("");
+	const historyIndexRef = useRef(-1);
+
+	useEffect(() => {
+		if (!("codepiddy" in window)) {
+			setError("终端只在桌面客户端中可用。");
+			setStatus("error");
+			return;
+		}
+		let disposed = false;
+		const off = window.codepiddy.onTerminalEvent((event) => {
+			if (event.terminalId !== terminalId) return;
+			if (event.type === "data" && event.data) {
+				const combined = `${streamBufferRef.current}${event.data}`;
+				const lastNewline = combined.lastIndexOf("\n");
+				if (lastNewline === -1) {
+					streamBufferRef.current = combined;
+					return;
+				}
+				streamBufferRef.current = combined.slice(lastNewline + 1);
+				const { text, cwd: nextCwd } = stripCwdMarker(combined.slice(0, lastNewline + 1));
+				if (nextCwd) setCwd(nextCwd);
+				setOutput((current) => `${current}${stripAnsi(text)}`.slice(-200_000));
+			} else if (event.type === "error") {
+				setError(event.data || "终端进程出错。");
+				setStatus("error");
+			} else if (event.type === "exit") {
+				if (streamBufferRef.current) {
+					const { text } = stripCwdMarker(streamBufferRef.current);
+					streamBufferRef.current = "";
+					setOutput((current) => `${current}${stripAnsi(text)}`.slice(-200_000));
+				}
+				setStatus("exited");
+			}
+		});
+		void window.codepiddy
+			.startTerminal({ terminalId, projectRoot })
+			.then((info) => {
+				if (disposed) return;
+				setShell(info.shell);
+				setCwd(info.cwd);
+				setStatus("ready");
+				requestAnimationFrame(() => inputRef.current?.focus());
+			})
+			.catch((caught: unknown) => {
+				if (disposed) return;
+				setError(caught instanceof Error ? caught.message : "启动终端失败。");
+				setStatus("error");
+			});
+		return () => {
+			disposed = true;
+			off();
+			void window.codepiddy.killTerminal(terminalId).catch(() => undefined);
+		};
+	}, [projectRoot, terminalId]);
+
+	useEffect(() => {
+		if (!output) return;
+		const element = outputRef.current;
+		if (element) element.scrollTop = element.scrollHeight;
+	}, [output]);
+
+	async function submitCommand(): Promise<void> {
+		const command = input.trim();
+		if (!command || status !== "ready") return;
+		setInput("");
+		setCommandHistory((current) => (current.at(-1) === command ? current : [...current, command].slice(-100)));
+		historyIndexRef.current = -1;
+		try {
+			await window.codepiddy.writeTerminal({
+				terminalId,
+				data: shell.startsWith("PowerShell")
+					? `${command}; Write-Output "${CWD_MARKER}$((Get-Location).Path)"`
+					: `${command}; printf '\\n${CWD_MARKER}%s\\n' "$PWD"`,
+			});
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "写入终端失败。");
+		} finally {
+			inputRef.current?.focus();
+		}
+	}
+
+	const prompt = shell.startsWith("PowerShell") ? `PS ${cwd}>` : `${cwd}$`;
+	return (
+		<div className="terminal-pane">
+			<div className="terminal-toolbar">
+				<span className={`terminal-status is-${status}`}>
+					<span className="terminal-status-dot" aria-hidden="true" />
+					{shell}
+				</span>
+				<span className="terminal-cwd" title={cwd}>
+					{cwd}
+				</span>
+				<PanelIconButton
+					label="清空终端"
+					onClick={() => {
+						setOutput("");
+						inputRef.current?.focus();
+					}}
+				>
+					<Trash2 size={14} strokeWidth={2} />
+				</PanelIconButton>
+			</div>
+			<textarea
+				ref={outputRef}
+				className="terminal-output"
+				value={output}
+				readOnly
+				spellCheck={false}
+				wrap="off"
+				aria-label="终端输出"
+			/>
+			<form
+				className="terminal-input-row"
+				onSubmit={(event) => {
+					event.preventDefault();
+					void submitCommand();
+				}}
+			>
+				<span className="terminal-prompt">{prompt}</span>
+				<input
+					ref={inputRef}
+					value={input}
+					onChange={(event) => setInput(event.target.value)}
+					spellCheck={false}
+					autoComplete="off"
+					disabled={status !== "ready"}
+					aria-label="终端命令"
+					onKeyDown={(event) => {
+						if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l") {
+							event.preventDefault();
+							setOutput("");
+							return;
+						}
+						if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+							const inputElement = event.currentTarget;
+							if (inputElement.selectionStart !== inputElement.selectionEnd) return;
+							if (!input) return;
+							event.preventDefault();
+							setInput("");
+							historyIndexRef.current = -1;
+							return;
+						}
+						if (event.key === "ArrowUp") {
+							if (commandHistory.length === 0) return;
+							event.preventDefault();
+							const next = Math.min(historyIndexRef.current + 1, commandHistory.length - 1);
+							historyIndexRef.current = next;
+							setInput(commandHistory[commandHistory.length - 1 - next] ?? "");
+							return;
+						}
+						if (event.key === "ArrowDown") {
+							if (historyIndexRef.current < 0) return;
+							event.preventDefault();
+							const next = historyIndexRef.current - 1;
+							historyIndexRef.current = next;
+							setInput(next < 0 ? "" : (commandHistory[commandHistory.length - 1 - next] ?? ""));
+						}
+					}}
+				/>
+				<button type="submit" disabled={status !== "ready" || !input.trim()} aria-label="运行命令">
+					<CornerDownLeft size={14} strokeWidth={2} />
+				</button>
+			</form>
+			{error ? <p className="terminal-error">{error}</p> : null}
+		</div>
+	);
+});
 
 interface DirState {
 	entries: WorkspaceDirEntry[];
@@ -38,21 +624,74 @@ type FileState = { status: "loading" } | { status: "ready"; content: WorkspaceFi
 
 export const WorkPanel = memo(function WorkPanel({
 	projectRoot,
+	workItemId,
+	agentRole,
+	turnId,
+	turnStartedAt,
 	toolItems,
 }: {
 	projectRoot: string;
+	workItemId: string;
+	agentRole: string;
+	turnId: string;
+	turnStartedAt?: string;
 	toolItems: ProjectableToolItem[];
 }) {
 	const [width, setWidth] = useState(loadPanelWidth);
+	const [activeView, setActiveView] = useState<WorkPanelTab>("files");
 	const [dirs, setDirs] = useState<Record<string, DirState>>({});
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	const [query, setQuery] = useState("");
 	const [searchResults, setSearchResults] = useState<string[] | null>(null);
 	const [fileState, setFileState] = useState<FileState | null>(null);
 	const [reloadSeq, setReloadSeq] = useState(0);
+	const [wrapLines, setWrapLines] = useState(true);
+	const [copiedViewer, setCopiedViewer] = useState(false);
+	const [selectedChangeKey, setSelectedChangeKey] = useState<string | null>(null);
+	const [terminalMounted, setTerminalMounted] = useState(false);
+	const historyKey = changeHistoryStorageKey(projectRoot, workItemId, agentRole, turnId);
+	const [changeHistory, setChangeHistory] = useState<{ key: string; entries: WorkPanelEntry[] }>(() => ({
+		key: historyKey,
+		entries: loadPersistedChangeEntries(projectRoot, workItemId, agentRole, turnId, turnStartedAt),
+	}));
 	// null = 跟随最新工具产物；"" = 显式回到文件树。
 	const [manualPath, setManualPath] = useState<string | null>(null);
 	const loadedRef = useRef<Set<string>>(new Set());
+
+	const projectedEntries = useMemo(
+		() => toolItems.map(projectToolToPanel).filter((entry): entry is WorkPanelEntry => entry !== null),
+		[toolItems],
+	);
+	const liveChangeEntries = useMemo(
+		() => projectedEntries.filter((entry) => entry.view === "review" || entry.toolName.toLowerCase() === "write"),
+		[projectedEntries],
+	);
+	const persistedHistory = changeHistory.key === historyKey ? changeHistory.entries : [];
+	const legacyHistory = useMemo(
+		() =>
+			persistedHistory.length === 0 && liveChangeEntries.length === 0
+				? loadLegacyChangeEntries(projectRoot, workItemId, agentRole, turnStartedAt)
+				: [],
+		[agentRole, liveChangeEntries.length, persistedHistory.length, projectRoot, turnStartedAt, workItemId],
+	);
+	const persistedChangeEntries = persistedHistory.length > 0 ? persistedHistory : legacyHistory;
+	const changeEntries = useMemo(
+		() => mergeChangeEntries(liveChangeEntries, persistedChangeEntries),
+		[liveChangeEntries, persistedChangeEntries],
+	);
+	const changeGroups = useMemo(() => buildChangeFileGroups(changeEntries, projectRoot), [changeEntries, projectRoot]);
+
+	useEffect(() => {
+		setChangeHistory({
+			key: historyKey,
+			entries: loadPersistedChangeEntries(projectRoot, workItemId, agentRole, turnId, turnStartedAt),
+		});
+	}, [agentRole, historyKey, projectRoot, turnId, turnStartedAt, workItemId]);
+
+	useEffect(() => {
+		if (!("codepiddy" in window) || changeHistory.key !== historyKey) return;
+		persistChangeEntries(projectRoot, workItemId, agentRole, turnId, changeEntries);
+	}, [agentRole, changeEntries, changeHistory.key, historyKey, projectRoot, turnId, workItemId]);
 
 	// 跟随：最近一条成功的文件工具决定自动打开的路径。
 	const followPath = useMemo(() => {
@@ -69,6 +708,10 @@ export const WorkPanel = memo(function WorkPanel({
 	const loadDir = useCallback(
 		async (relative: string) => {
 			if (loadedRef.current.has(relative)) return;
+			if (!("codepiddy" in window)) {
+				setDirs((current) => ({ ...current, [relative]: { entries: [], error: true } }));
+				return;
+			}
 			loadedRef.current.add(relative);
 			try {
 				const entries = await window.codepiddy.listWorkspaceDir(projectRoot, relative);
@@ -84,18 +727,28 @@ export const WorkPanel = memo(function WorkPanel({
 	// 工作区切换：重置全部浏览状态。
 	useEffect(() => {
 		loadedRef.current = new Set();
+		setActiveView("files");
 		setDirs({});
 		setExpanded(new Set());
 		setManualPath(null);
 		setFileState(null);
 		setQuery("");
 		setSearchResults(null);
+		setWrapLines(true);
+		setCopiedViewer(false);
+		setSelectedChangeKey(null);
+		setTerminalMounted(false);
 		void loadDir("");
-		// loadDir 自身的依赖里有 projectRoot，工作区切换时 loadDir 会换新引用，这里跟着重跑。
 	}, [loadDir]);
 
+	useEffect(() => {
+		setSelectedChangeKey((current) =>
+			current && changeGroups.some((group) => group.key === current) ? current : (changeGroups[0]?.key ?? null),
+		);
+	}, [changeGroups]);
+
 	// 选中文件（含跟随打开）时展开祖先目录并读文件。
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reloadSeq 不参与读取，只作为「刷新」按钮的重跑信号（见 setReloadSeq）
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reloadSeq 不参与读取，只作为「刷新」按钮的重跑信号
 	useEffect(() => {
 		if (!activePath) {
 			setFileState(null);
@@ -110,6 +763,10 @@ export const WorkPanel = memo(function WorkPanel({
 		}
 		setExpanded((current) => new Set([...current, ...ancestors]));
 		for (const dir of ancestors) void loadDir(dir);
+		if (!("codepiddy" in window)) {
+			setFileState({ status: "error" });
+			return;
+		}
 		let cancelled = false;
 		setFileState({ status: "loading" });
 		window.codepiddy
@@ -130,6 +787,10 @@ export const WorkPanel = memo(function WorkPanel({
 		const keyword = query.trim();
 		if (!keyword) {
 			setSearchResults(null);
+			return;
+		}
+		if (!("codepiddy" in window)) {
+			setSearchResults([]);
 			return;
 		}
 		const timer = window.setTimeout(() => {
@@ -155,7 +816,7 @@ export const WorkPanel = memo(function WorkPanel({
 	);
 
 	const startResize = useCallback(
-		(event: React.MouseEvent) => {
+		(event: ReactMouseEvent) => {
 			event.preventDefault();
 			const startX = event.clientX;
 			const startWidth = width;
@@ -177,13 +838,37 @@ export const WorkPanel = memo(function WorkPanel({
 		[width],
 	);
 
-	const renderDir = (relative: string, depth: number): React.ReactNode => {
+	function refreshFiles(): void {
+		const reopen = [...expanded, ""];
+		loadedRef.current = new Set();
+		setDirs({});
+		setReloadSeq((seq) => seq + 1);
+		for (const dir of reopen) void loadDir(dir);
+	}
+
+	function openFile(path: string): void {
+		setActiveView("files");
+		setManualPath(path);
+	}
+
+	async function copyViewerValue(): Promise<void> {
+		const value =
+			fileState?.status === "ready" && fileState.content.kind === "text" ? fileState.content.content : activePath;
+		if (!value) return;
+		try {
+			await navigator.clipboard.writeText(value);
+			setCopiedViewer(true);
+			window.setTimeout(() => setCopiedViewer(false), 1400);
+		} catch {}
+	}
+
+	const renderDir = (relative: string, depth: number): ReactNode => {
 		const state = dirs[relative];
 		if (!state) {
 			return (
 				<output
 					className="file-tree-note is-loading"
-					style={{ paddingLeft: 12 + depth * 14 }}
+					style={{ "--tree-depth": depth } as CSSProperties}
 					key={`${relative}:loading`}
 				>
 					加载中…
@@ -194,7 +879,7 @@ export const WorkPanel = memo(function WorkPanel({
 			return (
 				<div
 					className={`file-tree-note ${state.error ? "is-error" : "is-empty"}`}
-					style={{ paddingLeft: 12 + depth * 14 }}
+					style={{ "--tree-depth": depth } as CSSProperties}
 					key={`${relative}:empty`}
 					role={state.error ? "alert" : undefined}
 				>
@@ -211,7 +896,8 @@ export const WorkPanel = memo(function WorkPanel({
 						<button
 							type="button"
 							className="file-tree-row"
-							style={{ paddingLeft: 12 + depth * 14 }}
+							data-kind="dir"
+							style={{ "--tree-depth": depth } as CSSProperties}
 							onClick={() => toggleDir(child)}
 						>
 							<span className={`file-tree-caret${open ? " open" : ""}`} aria-hidden="true">
@@ -229,7 +915,8 @@ export const WorkPanel = memo(function WorkPanel({
 					key={child}
 					type="button"
 					className={`file-tree-row${activePath === child ? " active" : ""}`}
-					style={{ paddingLeft: 12 + depth * 14 + 16 }}
+					data-kind="file"
+					style={{ "--tree-depth": depth } as CSSProperties}
 					onClick={() => setManualPath(child)}
 					title={child}
 				>
@@ -241,7 +928,7 @@ export const WorkPanel = memo(function WorkPanel({
 		});
 	};
 
-	const renderPreview = (): React.ReactNode => {
+	const renderPreview = (): ReactNode => {
 		if (!fileState || fileState.status === "loading") {
 			return (
 				<output className="file-viewer-state is-loading" aria-live="polite">
@@ -280,7 +967,7 @@ export const WorkPanel = memo(function WorkPanel({
 					</div>
 				);
 			return (
-				<div className="file-lines">
+				<div className={`file-lines${wrapLines ? " wrapped" : ""}`}>
 					{content.content.split("\n").map((line, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: 文件视图的行身份就是行号，内容不会重排；按内容做 key 反而会因重复行/空行撞 key
 						<div className="file-line" key={`line-${index}`}>
@@ -305,41 +992,60 @@ export const WorkPanel = memo(function WorkPanel({
 		);
 	};
 
-	return (
-		<aside className="work-panel" aria-label="文件管理器" style={{ width }}>
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: 纯鼠标拖拽手柄，补键盘调整宽度属于新功能，不在本次改动范围 */}
-			<div className="work-panel-resize" onMouseDown={startResize} title="拖拽调整宽度" />
-			<div className="work-panel-headbar">
-				<strong>文件管理器</strong>
-				{manualPath !== null ? (
-					<button type="button" className="work-panel-follow" onClick={() => setManualPath(null)}>
-						跟随最新
-					</button>
-				) : null}
-				<button
-					type="button"
-					className="work-panel-follow"
-					onClick={() => {
-						const reopen = [...expanded, ""];
-						loadedRef.current = new Set();
-						setDirs({});
-						setReloadSeq((seq) => seq + 1);
-						for (const dir of reopen) void loadDir(dir);
-					}}
-				>
-					刷新
-				</button>
-			</div>
-			<div className="work-panel-search">
-				<input
-					type="search"
-					value={query}
-					placeholder="按文件名搜索…"
-					aria-label="按文件名搜索"
-					onChange={(event) => setQuery(event.target.value)}
-				/>
-			</div>
-			<div className={`file-columns${activePath ? " split" : ""}`}>
+	const renderFilesView = (): ReactNode => {
+		if (activePath) {
+			const textContent =
+				fileState?.status === "ready" && fileState.content.kind === "text" ? fileState.content.content : null;
+			return (
+				<div className="work-panel-view file-browser">
+					<div className="file-viewer">
+						<div className="file-viewer-header">
+							<PanelIconButton label="返回文件树" onClick={() => setManualPath("")}>
+								<ChevronLeft size={15} strokeWidth={2} />
+							</PanelIconButton>
+							<span className="file-viewer-title">
+								<strong title={activePath}>{basename(activePath)}</strong>
+								<small title={activePath}>{dirname(activePath) || "."}</small>
+							</span>
+							<div className="file-viewer-actions">
+								{textContent !== null ? (
+									<PanelIconButton
+										label={wrapLines ? "关闭自动换行" : "开启自动换行"}
+										active={wrapLines}
+										onClick={() => setWrapLines((current) => !current)}
+									>
+										<WrapText size={14} strokeWidth={2} />
+									</PanelIconButton>
+								) : null}
+								<PanelIconButton
+									label={textContent !== null ? "复制文件内容" : "复制文件路径"}
+									onClick={() => void copyViewerValue()}
+								>
+									{copiedViewer ? <Check size={14} strokeWidth={2} /> : <Copy size={14} strokeWidth={2} />}
+								</PanelIconButton>
+								{fileState?.status === "ready" ? (
+									<span className="file-viewer-size">{formatPanelSize(fileState.content.size)}</span>
+								) : null}
+							</div>
+						</div>
+						<div className="file-viewer-body">{renderPreview()}</div>
+					</div>
+				</div>
+			);
+		}
+
+		return (
+			<div className="work-panel-view file-browser">
+				<div className="work-panel-search">
+					<Search size={14} strokeWidth={2} aria-hidden="true" />
+					<input
+						type="search"
+						value={query}
+						placeholder="按文件名搜索…"
+						aria-label="按文件名搜索"
+						onChange={(event) => setQuery(event.target.value)}
+					/>
+				</div>
 				<div className="file-tree">
 					{query.trim() && searchResults !== null ? (
 						searchResults.length === 0 ? (
@@ -350,6 +1056,8 @@ export const WorkPanel = memo(function WorkPanel({
 									key={rel}
 									type="button"
 									className={`file-tree-row${activePath === rel ? " active" : ""}`}
+									data-kind="file"
+									style={{ "--tree-depth": 0 } as CSSProperties}
 									onClick={() => setManualPath(rel)}
 									title={rel}
 								>
@@ -362,26 +1070,99 @@ export const WorkPanel = memo(function WorkPanel({
 						renderDir("", 0)
 					)}
 				</div>
-				{activePath ? (
-					<div className="file-viewer">
-						<div className="file-viewer-header">
+			</div>
+		);
+	};
+
+	const renderChangesView = (): ReactNode => {
+		if (changeGroups.length === 0) {
+			return (
+				<WorkPanelEmpty
+					icon={FileDiff}
+					title="本轮还没有文件更改"
+					description="Agent 执行 edit 或 write 后，文件差异会显示在这里。"
+				/>
+			);
+		}
+		return (
+			<div className="work-panel-view change-view">
+				<div className="work-panel-summary">
+					<span>{changeGroups.length} 个文件</span>
+				</div>
+				<ChangeBrowser
+					groups={changeGroups}
+					selectedKey={selectedChangeKey}
+					split={width >= 430}
+					onSelect={setSelectedChangeKey}
+					onOpenFile={openFile}
+				/>
+			</div>
+		);
+	};
+
+	const renderTerminalView = (): ReactNode => <TerminalPane projectRoot={projectRoot} />;
+
+	const tabItems = [
+		{ id: "files" as const, label: "文件", icon: Files, count: null },
+		{ id: "changes" as const, label: "更改", icon: FileDiff, count: changeGroups.length },
+		{ id: "terminal" as const, label: "终端", icon: SquareTerminal, count: null },
+	];
+
+	return (
+		<aside className="work-panel" aria-label="工作区面板" style={{ width }}>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: 纯鼠标拖拽手柄，键盘调整宽度属于后续独立功能 */}
+			<div className="work-panel-resize" onMouseDown={startResize} title="拖拽调整宽度" />
+			<header className="work-panel-headbar">
+				<div className="work-panel-tabs" role="tablist" aria-label="工作区视图">
+					{tabItems.map((tab) => {
+						const Icon = tab.icon;
+						const selected = activeView === tab.id;
+						return (
 							<button
+								key={tab.id}
 								type="button"
-								className="file-viewer-back"
-								aria-label="关闭预览"
-								title="关闭预览"
-								onClick={() => setManualPath("")}
+								role="tab"
+								id={`work-panel-tab-${tab.id}`}
+								aria-selected={selected}
+								aria-controls={`work-panel-surface-${tab.id}`}
+								className={`work-panel-tab${selected ? " active" : ""}`}
+								onClick={() => {
+									setActiveView(tab.id);
+									if (tab.id === "terminal") setTerminalMounted(true);
+								}}
 							>
-								×
+								<Icon size={13} strokeWidth={2} aria-hidden="true" />
+								<span>{tab.label}</span>
+								{tab.count !== null && tab.count > 0 ? (
+									<span className="work-panel-tab-count">{tab.count}</span>
+								) : null}
 							</button>
-							<span className="file-viewer-path" title={activePath}>
-								{activePath}
-							</span>
-							{fileState?.status === "ready" ? (
-								<span className="file-viewer-size">{formatPanelSize(fileState.content.size)}</span>
-							) : null}
-						</div>
-						<div className="file-viewer-body">{renderPreview()}</div>
+						);
+					})}
+				</div>
+				<div className="work-panel-actions">
+					{activeView === "files" && manualPath !== null ? (
+						<PanelIconButton label="跟随最新文件" onClick={() => setManualPath(null)}>
+							<LocateFixed size={14} strokeWidth={2} />
+						</PanelIconButton>
+					) : null}
+					{activeView === "files" ? (
+						<PanelIconButton label="刷新文件树" onClick={refreshFiles}>
+							<RefreshCw size={14} strokeWidth={2} />
+						</PanelIconButton>
+					) : null}
+				</div>
+			</header>
+			<div
+				className="work-panel-body"
+				id={`work-panel-surface-${activeView}`}
+				role="tabpanel"
+				aria-labelledby={`work-panel-tab-${activeView}`}
+			>
+				{activeView === "files" ? renderFilesView() : activeView === "changes" ? renderChangesView() : null}
+				{terminalMounted ? (
+					<div className={`work-panel-view terminal-view${activeView === "terminal" ? "" : " is-hidden"}`}>
+						{renderTerminalView()}
 					</div>
 				) : null}
 			</div>
