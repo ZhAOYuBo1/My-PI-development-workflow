@@ -2,6 +2,9 @@ import type {
 	AgentClientEvent,
 	AgentInstanceLocator,
 	ArchiveWorkItemInput,
+	AuthClientEvent,
+	AuthMethodType,
+	AuthProviderSummary,
 	CodePIddyClientApi,
 	CreateAgentInput,
 	CreateWorkItemInput,
@@ -37,6 +40,12 @@ const channels = {
 	newAgentSession: "codepiddy:agent:session:new",
 	switchAgentSession: "codepiddy:agent:session:switch",
 	deleteAgentSession: "codepiddy:agent:session:delete",
+	listAuthProviders: "codepiddy:auth:providers",
+	startAuthLogin: "codepiddy:auth:login:start",
+	respondAuthPrompt: "codepiddy:auth:login:respond",
+	cancelAuthLogin: "codepiddy:auth:login:cancel",
+	logoutAuthProvider: "codepiddy:auth:logout",
+	authEvent: "codepiddy:auth:event",
 	resetAgent: "codepiddy:agent:reset",
 	activateAgent: "codepiddy:agent:activate",
 	agentEvent: "codepiddy:agent:event",
@@ -144,6 +153,23 @@ const api: CodePIddyClientApi = {
 	switchAgentSession: (input: SwitchAgentSessionInput) => ipcRenderer.invoke(channels.switchAgentSession, input),
 	deleteAgentSession: (input: SwitchAgentSessionInput) => ipcRenderer.invoke(channels.deleteAgentSession, input),
 	forkAgentSession: (input: ForkAgentSessionInput) => ipcRenderer.invoke(channels.forkAgentSession, input),
+	listAuthProviders: (): Promise<AuthProviderSummary[]> => ipcRenderer.invoke(channels.listAuthProviders),
+	startAuthLogin: (input: { providerId: string; authType: AuthMethodType }): Promise<string> =>
+		ipcRenderer.invoke(channels.startAuthLogin, input),
+	respondAuthPrompt: (input: {
+		requestId: string;
+		promptId: string;
+		value?: string;
+		cancelled?: boolean;
+	}): Promise<void> => ipcRenderer.invoke(channels.respondAuthPrompt, input),
+	cancelAuthLogin: (requestId: string): Promise<void> => ipcRenderer.invoke(channels.cancelAuthLogin, requestId),
+	logoutAuthProvider: (providerId: string): Promise<void> =>
+		ipcRenderer.invoke(channels.logoutAuthProvider, providerId),
+	onAuthEvent: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, event: AuthClientEvent) => listener(event);
+		ipcRenderer.on(channels.authEvent, handler);
+		return () => ipcRenderer.removeListener(channels.authEvent, handler);
+	},
 	resetAgent: (input: ResetAgentInput) => ipcRenderer.invoke(channels.resetAgent, input),
 	respondToExtensionUi: (input: ExtensionUiResponseInput) => ipcRenderer.invoke(channels.respondToExtensionUi, input),
 	getPendingPermissionRequest: (input: AgentInstanceLocator) =>

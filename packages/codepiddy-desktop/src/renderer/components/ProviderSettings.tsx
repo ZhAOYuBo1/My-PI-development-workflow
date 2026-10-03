@@ -1,6 +1,7 @@
 import type { ProviderApi, ProviderInput, ProviderModelSummary, ProviderSummary } from "@codepiddy/shared";
 import { KeyRound, Pencil, Plus, Server, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { SelectMenu } from "./select-menu.tsx";
 
 const demoMode = import.meta.env.DEV && new URLSearchParams(window.location.search).has("demo");
 
@@ -65,7 +66,7 @@ function draftFrom(provider: ProviderSummary): Draft {
 	};
 }
 
-export function ProviderSettings() {
+export function ProviderSettings({ onOpenAuth }: { onOpenAuth?: (mode: "login" | "logout") => void }) {
 	const [providers, setProviders] = useState<ProviderSummary[] | null>(demoMode ? DEMO_PROVIDERS : null);
 	const [draft, setDraft] = useState<Draft | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -161,6 +162,12 @@ export function ProviderSettings() {
 					</p>
 				</div>
 				<div className="skill-settings-actions">
+					<button className="secondary-button" type="button" onClick={() => onOpenAuth?.("login")}>
+						登录 Provider
+					</button>
+					<button className="secondary-button" type="button" onClick={() => onOpenAuth?.("logout")}>
+						退出登录
+					</button>
 					<button
 						className="secondary-button"
 						type="button"
@@ -232,19 +239,15 @@ export function ProviderSettings() {
 								onChange={(event) => setDraft({ ...draft, id: event.target.value })}
 							/>
 						</label>
-						<label className="settings-field">
+						<div className="settings-field">
 							<span>API 类型</span>
-							<select
+							<SelectMenu
+								label="API 类型"
 								value={draft.api}
-								onChange={(event) => setDraft({ ...draft, api: event.target.value as ProviderApi })}
-							>
-								{Object.entries(API_LABELS).map(([value, label]) => (
-									<option value={value} key={value}>
-										{label}
-									</option>
-								))}
-							</select>
-						</label>
+								options={Object.entries(API_LABELS).map(([value, label]) => ({ value, label }))}
+								onChange={(value) => setDraft({ ...draft, api: value as ProviderApi })}
+							/>
+						</div>
 						<label className="settings-field">
 							<span>Base URL</span>
 							<input

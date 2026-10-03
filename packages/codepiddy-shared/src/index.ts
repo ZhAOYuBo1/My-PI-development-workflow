@@ -216,6 +216,52 @@ export interface ForkAgentSessionResult {
 	snapshot: AgentSessionSnapshot;
 }
 
+export type AuthMethodType = "api_key" | "oauth";
+
+export interface AuthMethodSummary {
+	type: AuthMethodType;
+	name: string;
+	isSubscription?: boolean;
+}
+
+export interface AuthProviderSummary {
+	id: string;
+	name: string;
+	configured: boolean;
+	statusLabel?: string;
+	methods: AuthMethodSummary[];
+}
+
+export interface AuthPromptOption {
+	id: string;
+	label: string;
+	description?: string;
+}
+
+export interface AuthPromptRequest {
+	promptId: string;
+	type: "text" | "secret" | "select" | "manual_code";
+	message: string;
+	placeholder?: string;
+	options?: AuthPromptOption[];
+}
+
+export type AuthClientEvent =
+	| { type: "prompt"; requestId: string; prompt: AuthPromptRequest }
+	| { type: "info"; requestId: string; message: string; links?: Array<{ url: string; label?: string }> }
+	| { type: "auth_url"; requestId: string; url: string; instructions?: string }
+	| {
+			type: "device_code";
+			requestId: string;
+			userCode: string;
+			verificationUri: string;
+			intervalSeconds?: number;
+			expiresInSeconds?: number;
+	  }
+	| { type: "progress"; requestId: string; message: string }
+	| { type: "complete"; requestId: string }
+	| { type: "error"; requestId: string; error: string };
+
 export interface AgentClientEvent {
 	agentInstanceId: string;
 	projectId: string;
@@ -240,6 +286,17 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	switchAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSwitchResult>;
 	deleteAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSummary[]>;
 	forkAgentSession(input: ForkAgentSessionInput): Promise<ForkAgentSessionResult>;
+	listAuthProviders(): Promise<AuthProviderSummary[]>;
+	startAuthLogin(input: { providerId: string; authType: AuthMethodType }): Promise<string>;
+	respondAuthPrompt(input: {
+		requestId: string;
+		promptId: string;
+		value?: string;
+		cancelled?: boolean;
+	}): Promise<void>;
+	cancelAuthLogin(requestId: string): Promise<void>;
+	logoutAuthProvider(providerId: string): Promise<void>;
+	onAuthEvent(listener: (event: AuthClientEvent) => void): () => void;
 	resetAgent(input: ResetAgentInput): Promise<ProjectSummary>;
 	respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void>;
 	getPendingPermissionRequest(input: AgentInstanceLocator): Promise<PendingPermissionRequest | null>;

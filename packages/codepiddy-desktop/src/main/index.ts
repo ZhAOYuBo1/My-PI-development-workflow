@@ -32,6 +32,7 @@ import type {
 	AgentSessionSummary,
 	AgentSessionSwitchResult,
 	ArchiveWorkItemInput,
+	AuthMethodType,
 	CreateAgentInput,
 	ExtensionUiResponseInput,
 	ForkAgentSessionInput,
@@ -78,10 +79,11 @@ import {
 	parseTerminalStartInput,
 	parseTerminalWriteInput,
 } from "./ipc-validation.ts";
+import { PiAuthManager } from "./pi-auth.ts";
 import { loadPiBuiltinCommands, mergePiCommands } from "./pi-builtin-commands.ts";
 import { type InstalledPiRuntime, PiRuntimeUpdater } from "./pi-runtime-updater.ts";
 import { RecentProjectStore } from "./recent-project-store.ts";
-import { AppSettingsStore } from "./settings-store.ts";
+import { AppSettingsStore, resolvePiAgentDir } from "./settings-store.ts";
 import { SingleFlightMap } from "./single-flight.ts";
 import { discoverAgentSkills, resolveBuiltinSkillsDirectory, resolveRoleSkillPaths } from "./skill-catalog.ts";
 import { readWindowsTerminalProfile, type TerminalCursorStyle } from "./windows-terminal.ts";
@@ -98,6 +100,12 @@ const channels = {
 	newAgentSession: "codepiddy:agent:session:new",
 	switchAgentSession: "codepiddy:agent:session:switch",
 	deleteAgentSession: "codepiddy:agent:session:delete",
+	listAuthProviders: "codepiddy:auth:providers",
+	startAuthLogin: "codepiddy:auth:login:start",
+	respondAuthPrompt: "codepiddy:auth:login:respond",
+	cancelAuthLogin: "codepiddy:auth:login:cancel",
+	logoutAuthProvider: "codepiddy:auth:logout",
+	authEvent: "codepiddy:auth:event",
 	resetAgent: "codepiddy:agent:reset",
 	activateAgent: "codepiddy:agent:activate",
 	agentEvent: "codepiddy:agent:event",
@@ -685,7 +693,7 @@ class AgentManager {
 			this.piRuntimeUpdater.getLaunchRuntime()?.packageDir ??
 			(app.isPackaged
 				? path.join(this.repositoryRoot, "coding-agent-package")
-				: path.join(this.repositoryRoot, "packages", "coding-agent"));
+				: path.join(this.repositoryRoot, "packages", "coding-agent-runtime"));
 		// stock Pi 的 `get_commands` 只返回扩展与 Skill，不含内置命令，所以内置项
 		// 一律走 `loadPiBuiltinCommands` —— 它直接读当前运行的那份 Pi 的
 		// slash-commands.js，不碰 Pi 源码，因此用户从 npm 升级后菜单依然是全的。
@@ -1116,15 +1124,6 @@ class AgentManager {
 			shell.showItemInFolder(exportedPath);
 			return { message: `Session 已导出：${exportedPath}` };
 		}
-		if (input.name === "login" || input.name === "logout") {
-			// 这两个命令原本依赖我们对 Pi 源码的私有补丁（`get_auth_providers` /
-			// `login_provider` / `logout_provider`）。补丁已整体删除，所以外壳不再
-			// 拥有发起 OAuth 登录的通路 —— 扩展 API 只能*注册* OAuth provider，
-			// 不能*发起*登录。菜单里不再列出这两个命令，这里只回答手动输入的情况。
-			return {
-				message: `/${input.name} 不可用：CodePIddy 不再修改 Pi 源码，因此无法代你发起 OAuth 登录。\n\n请改用以下方式配置 Provider：\n· API Key：写入环境变量，或放入 Pi 的 auth.json（~/.pi/agent/auth.json）\n· 恢复某个已登录的 Pi：重启 CodePIddy 后 Pi 会自行读取已有凭据`,
-			};
-		}
 		if (input.name === "trust") {
 			return { message: "CodePIddy 以 --approve 模式启动当前 Pi 项目；项目资源已在本次运行中允许加载。" };
 		}
@@ -1193,7 +1192,8 @@ class AgentManager {
 	private async startProcess(agent: StoredAgentInstance): Promise<PiRpcProcess> {
 		const packaged = app.isPackaged;
 		const updatedRuntime = this.piRuntimeUpdater.getLaunchRuntime();
-		const compiledRuntime = packaged || updatedRuntime !== null;
+		const externalCli = Boolean(process.env.CODEPIDDY_PI_CLI);
+		const compiledRuntime = packaged || updatedRuntime !== null || !externalCli;
 		const extensionRoot = packaged
 			? path.join(this.repositoryRoot, "extensions")
 			: path.join(app.getAppPath(), "dist", "runtime-extensions");
@@ -1202,7 +1202,7 @@ class AgentManager {
 			updatedRuntime?.cliPath ??
 			(packaged
 				? path.join(this.repositoryRoot, "coding-agent-package", "dist", "bundle", "cli.js")
-				: path.join(this.repositoryRoot, "packages", "coding-agent", "src", "cli.ts"));
+				: path.join(this.repositoryRoot, "packages", "coding-agent-runtime", "dist", "bundle", "cli.js"));
 		const nodeExecutable = process.env.CODEPIDDY_NODE_EXECUTABLE ?? (packaged ? process.execPath : "node");
 		const [tavilyApiKey, roleSkillAssignments] = await Promise.all([
 			this.settingsStore.getTavilyApiKey(),
@@ -1225,7 +1225,10 @@ class AgentManager {
 				...(compiledRuntime
 					? {
 							PI_PACKAGE_DIR:
-								updatedRuntime?.packageDir ?? path.join(this.repositoryRoot, "coding-agent-package"),
+								updatedRuntime?.packageDir ??
+								(packaged
+									? path.join(this.repositoryRoot, "coding-agent-package")
+									: path.join(this.repositoryRoot, "packages", "coding-agent-runtime")),
 						}
 					: {}),
 				PI_PERMISSION_SYSTEM_CONFIG_PATH: path.join(this.runtimeRoot, "permissions", "extension.json"),
@@ -1233,7 +1236,7 @@ class AgentManager {
 				PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR: path.join(this.runtimeRoot, "permissions", "policy"),
 				CODEPIDDY_TAVILY_MCP_ENTRY: packaged
 					? path.join(this.repositoryRoot, "mcp", "tavily-search.js")
-					: updatedRuntime
+					: compiledRuntime
 						? path.join(extensionRoot, "tavily-search.js")
 						: path.join(this.repositoryRoot, "packages", "codepiddy-tavily-search-mcp", "src", "index.ts"),
 				...(packaged
@@ -1573,6 +1576,7 @@ function registerIpcHandlers(
 	settingsStore: AppSettingsStore,
 	recentProjects: RecentProjectStore,
 	piRuntimeUpdater: PiRuntimeUpdater,
+	piAuthManager: PiAuthManager,
 ): void {
 	const openedProjects = new Map<string, string>();
 	const rootKey = (projectRoot: string): string =>
@@ -1717,6 +1721,34 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.forkAgentSession, (_event, raw: unknown) =>
 		agentManager.forkSession(parseForkAgentSessionInput(raw)),
 	);
+	ipcMain.handle(channels.listAuthProviders, () => piAuthManager.listProviders());
+	ipcMain.handle(channels.startAuthLogin, (_event, raw: unknown) => {
+		if (!isRecord(raw)) throw new Error("登录参数无效");
+		const providerId = typeof raw.providerId === "string" ? raw.providerId.trim() : "";
+		const authType: AuthMethodType | null =
+			raw.authType === "api_key" || raw.authType === "oauth" ? raw.authType : null;
+		if (!providerId || !authType) throw new Error("登录参数无效");
+		return piAuthManager.startLogin(providerId, authType);
+	});
+	ipcMain.handle(channels.respondAuthPrompt, (_event, raw: unknown) => {
+		if (!isRecord(raw)) throw new Error("登录响应无效");
+		const requestId = typeof raw.requestId === "string" ? raw.requestId : "";
+		const promptId = typeof raw.promptId === "string" ? raw.promptId : "";
+		if (!requestId || !promptId) throw new Error("登录响应无效");
+		piAuthManager.respondPrompt({
+			requestId,
+			promptId,
+			...(typeof raw.value === "string" ? { value: raw.value } : {}),
+			...(raw.cancelled === true ? { cancelled: true } : {}),
+		});
+	});
+	ipcMain.handle(channels.cancelAuthLogin, (_event, raw: unknown) => {
+		if (typeof raw === "string") piAuthManager.cancelLogin(raw);
+	});
+	ipcMain.handle(channels.logoutAuthProvider, (_event, raw: unknown) => {
+		if (typeof raw !== "string" || !raw.trim()) throw new Error("Provider ID 无效");
+		return piAuthManager.logout(raw.trim());
+	});
 	ipcMain.handle(channels.resetAgent, async (_event, raw: unknown) => {
 		const input = parseResetAgentInput(raw);
 		input.projectRoot = requireOpenProjectRoot(input.projectRoot);
@@ -1949,7 +1981,7 @@ if (!hasSingleInstanceLock) {
 		});
 		const bundledManifestPath = app.isPackaged
 			? path.join(repositoryRoot, "coding-agent-package", "package.json")
-			: path.join(repositoryRoot, "packages", "coding-agent", "package.json");
+			: path.join(repositoryRoot, "packages", "coding-agent-runtime", "package.json");
 		const bundledManifest = JSON.parse(await readFile(bundledManifestPath, "utf8")) as { version: string };
 		const piRuntimeUpdater = new PiRuntimeUpdater({
 			userDataPath: app.getPath("userData"),
@@ -1960,7 +1992,24 @@ if (!hasSingleInstanceLock) {
 		});
 		await piRuntimeUpdater.initialize();
 		const agentManager = new AgentManager(app.getPath("userData"), repositoryRoot, settingsStore, piRuntimeUpdater);
-		registerIpcHandlers(agentManager, settingsStore, recentProjects, piRuntimeUpdater);
+		const piAuthManager = new PiAuthManager({
+			helperPath: app.isPackaged
+				? path.join(repositoryRoot, "extensions", "pi-auth-helper.mjs")
+				: path.join(app.getAppPath(), "dist", "runtime-extensions", "pi-auth-helper.mjs"),
+			nodeExecutable: process.env.CODEPIDDY_NODE_EXECUTABLE ?? (app.isPackaged ? process.execPath : "node"),
+			agentDir: resolvePiAgentDir(),
+			resolvePackageDir: async () =>
+				piRuntimeUpdater.getLaunchRuntime()?.packageDir ??
+				path.join(
+					repositoryRoot,
+					app.isPackaged ? "coding-agent-package" : path.join("packages", "coding-agent-runtime"),
+				),
+			onEvent: (event) => {
+				if (event.type === "auth_url") void shell.openExternal(event.url);
+				mainWindow?.webContents.send(channels.authEvent, event);
+			},
+		});
+		registerIpcHandlers(agentManager, settingsStore, recentProjects, piRuntimeUpdater, piAuthManager);
 		mainWindow = createWindow(recentProjects);
 		mainWindow.on("closed", () => {
 			mainWindow = null;

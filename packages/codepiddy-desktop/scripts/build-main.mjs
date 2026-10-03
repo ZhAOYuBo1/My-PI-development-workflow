@@ -1,4 +1,5 @@
 import path from "node:path";
+import { cp } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
@@ -68,3 +69,8 @@ await Promise.all([
     sourcemap: true,
   }),
 ]);
+
+await cp(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "pi-auth-helper.mjs"),
+  path.join("dist", "runtime-extensions", "pi-auth-helper.mjs"),
+);

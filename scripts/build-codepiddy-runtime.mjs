@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -11,7 +11,7 @@ await rm(outputRoot, { force: true, recursive: true });
 await mkdir(path.join(outputRoot, "extensions"), { recursive: true });
 await mkdir(path.join(outputRoot, "mcp"), { recursive: true });
 await mkdir(path.join(outputRoot, "skills"), { recursive: true });
-await mkdir(path.join(outputRoot, "dependencies", "@earendil-works", "chord"), { recursive: true });
+await mkdir(path.join(outputRoot, "dependencies"), { recursive: true });
 
 const common = {
 	absWorkingDir: repositoryRoot,
@@ -62,32 +62,19 @@ await Promise.all([
 		{ recursive: true },
 	),
 	cp(
-		path.join(repositoryRoot, "packages", "coding-agent", "dist"),
+		path.join(repositoryRoot, "packages", "codepiddy-desktop", "scripts", "pi-auth-helper.mjs"),
+		path.join(outputRoot, "extensions", "pi-auth-helper.mjs"),
+	),
+	cp(
+		path.join(repositoryRoot, "packages", "coding-agent-runtime", "dist"),
 		path.join(outputRoot, "coding-agent-package", "dist"),
 		{ recursive: true },
 	),
 	cp(
-		path.join(repositoryRoot, "packages", "coding-agent", "package.json"),
+		path.join(repositoryRoot, "packages", "coding-agent-runtime", "package.json"),
 		path.join(outputRoot, "coding-agent-package", "package.json"),
 	),
-	cp(path.join(repositoryRoot, "packages", "chord", "dist"), path.join(outputRoot, "dependencies", "@earendil-works", "chord", "dist"), {
-		recursive: true,
-	}),
-	cp(path.join(repositoryRoot, "packages", "chord", "package.json"), path.join(outputRoot, "dependencies", "@earendil-works", "chord", "package.json")),
 	cp(path.join(repositoryRoot, "node_modules", "npm"), path.join(outputRoot, "npm"), { recursive: true }),
-	cp(path.join(repositoryRoot, "node_modules", "jiti"), path.join(outputRoot, "dependencies", "jiti"), { recursive: true }),
-	cp(
-		path.join(repositoryRoot, "node_modules", "@silvia-odwyer", "photon-node"),
-		path.join(outputRoot, "dependencies", "@silvia-odwyer", "photon-node"),
-		{ recursive: true },
-	),
 ]);
-
-const jitiPackagePath = path.join(outputRoot, "dependencies", "jiti", "package.json");
-const jitiPackage = JSON.parse(await readFile(jitiPackagePath, "utf8"));
-delete jitiPackage.devDependencies;
-delete jitiPackage.scripts;
-delete jitiPackage.packageManager;
-await writeFile(jitiPackagePath, `${JSON.stringify(jitiPackage, null, 2)}\n`, "utf8");
 
 console.log(`Prepared packaged runtime at ${outputRoot}`);

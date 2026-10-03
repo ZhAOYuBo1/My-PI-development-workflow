@@ -105,7 +105,7 @@ function normalizeProviderModel(value: unknown): ProviderModelSummary | null {
  * 环境变量名由 APP_NAME 推导为 PI_CODING_AGENT_DIR，缺省是 ~/.pi/agent。
  * 抄这里而不是引 Pi 的源码，外壳对 npm 版 Pi 升级免疫。
  */
-function resolvePiAgentDir(): string {
+export function resolvePiAgentDir(): string {
 	const configured = process.env.PI_CODING_AGENT_DIR?.trim();
 	return configured ? path.resolve(configured) : path.join(homedir(), ".pi", "agent");
 }

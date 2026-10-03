@@ -4,6 +4,7 @@
 	"type": "module",
 	"workspaces": [
 		"packages/*",
+		"!packages/coding-agent-runtime",
 		"packages/session-backends/*"
 	],
 	"scripts": {
@@ -48,7 +49,7 @@
 		"release:major": "node scripts/release.mjs major",
 		"release:fix-links": "node scripts/release-notes.mjs fix-github-releases",
 		"prepare": "husky",
-		"build:codepiddy-runtime": "npm run build --workspace=@earendil-works/chord && npm run build --workspace=@earendil-works/pi-tui && npm run build --workspace=@earendil-works/pi-telemetry && npm run build:offline --workspace=@earendil-works/pi-ai && npm run build --workspace=@earendil-works/pi-agent-core && npm run build --workspace=@earendil-works/pi-protocol && npm run build --workspace=@earendil-works/pi-client && npm run build --workspace=@earendil-works/pi-server && npm run build --workspace=@earendil-works/pi-coding-agent && node scripts/build-codepiddy-runtime.mjs",
+		"build:codepiddy-runtime": "node scripts/build-codepiddy-runtime.mjs",
 		"prepare:codepiddy-package": "npm run build:codepiddy-runtime && npm run build:codepiddy",
 		"package:codepiddy:dir": "npm run prepare:codepiddy-package && npm run package:dir --workspace=@codepiddy/desktop",
 		"package:codepiddy": "npm run prepare:codepiddy-package && npm run package:win --workspace=@codepiddy/desktop"

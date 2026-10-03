@@ -10,6 +10,10 @@ import type {
 	AgentSkillSummary,
 	AgentSlotSummary,
 	AgentStatus,
+	AuthClientEvent,
+	AuthMethodType,
+	AuthPromptRequest,
+	AuthProviderSummary,
 	LaneKind,
 	PendingPermissionRequest,
 	PermissionDefaults,
@@ -32,6 +36,7 @@ import { MessageContent } from "./components/message-content.tsx";
 import { ProviderSettings } from "./components/ProviderSettings.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { StreamStats } from "./components/StreamStats.tsx";
+import { SelectMenu } from "./components/select-menu.tsx";
 import { estimateTokens, extractUsageOutput, type FinalStreamStats, formatElapsed } from "./components/stream-stats.ts";
 import { ThinkingControl } from "./components/ThinkingControl.tsx";
 import { ToolCallCard } from "./components/ToolCallCard.tsx";
@@ -404,14 +409,76 @@ function formatMessageTime(value: string | undefined): string | null {
 	return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+function normalizeMessageForkText(value: string): string {
+	return value.replace(/\s+/g, " ").trim();
+}
+
+function buildTurnForkEntryMap(
+	items: TranscriptItem[],
+	snapshot: AgentSessionSnapshot | undefined,
+): Map<string, string> {
+	const result = new Map<string, string>();
+	if (!snapshot) return result;
+	const candidates = snapshot.nodes
+		.filter((node) => node.forkable && node.role === "user" && normalizeMessageForkText(node.text))
+		.map((node) => ({
+			entryId: node.entryId,
+			text: normalizeMessageForkText(node.text),
+			timestamp: node.timestamp ? Date.parse(node.timestamp) : Number.NaN,
+		}));
+	const used = new Set<string>();
+	let currentTurnEntryId: string | null = null;
+	for (const item of items) {
+		if (item.type === "assistant") {
+			if (currentTurnEntryId) result.set(item.id, currentTurnEntryId);
+			continue;
+		}
+		if (item.type !== "user") continue;
+		const text = normalizeMessageForkText(item.text);
+		if (!text) {
+			currentTurnEntryId = null;
+			continue;
+		}
+		const itemTimestamp = item.createdAt ? Date.parse(item.createdAt) : Number.NaN;
+		const matches = candidates
+			.filter((candidate) => !used.has(candidate.entryId) && candidate.text === text)
+			.sort((left, right) => {
+				const leftDistance =
+					Number.isFinite(itemTimestamp) && Number.isFinite(left.timestamp)
+						? Math.abs(left.timestamp - itemTimestamp)
+						: Number.POSITIVE_INFINITY;
+				const rightDistance =
+					Number.isFinite(itemTimestamp) && Number.isFinite(right.timestamp)
+						? Math.abs(right.timestamp - itemTimestamp)
+						: Number.POSITIVE_INFINITY;
+				return leftDistance - rightDistance;
+			});
+		const match = matches[0];
+		if (!match) {
+			currentTurnEntryId = null;
+			continue;
+		}
+		used.add(match.entryId);
+		currentTurnEntryId = match.entryId;
+		result.set(item.id, match.entryId);
+	}
+	return result;
+}
+
 const TranscriptMessage = memo(function TranscriptMessage({
 	item,
 	assistantModel,
 	showStats,
+	forkEntryId,
+	forkPending,
+	onFork,
 }: {
 	item: Extract<TranscriptItem, { type: "user" | "assistant" | "system" }>;
 	assistantModel?: string;
 	showStats: boolean;
+	forkEntryId?: string;
+	forkPending?: boolean;
+	onFork?(entryId: string): void;
 }) {
 	const [copied, setCopied] = useState(false);
 	const messageTime = formatMessageTime(item.createdAt);
@@ -441,83 +508,102 @@ const TranscriptMessage = memo(function TranscriptMessage({
 	return (
 		<div className={`message message-${item.type} ${item.type === "assistant" ? `message-${item.status}` : ""}`}>
 			<div className="message-body">
-				<div className="message-role-label">
-					{item.type === "assistant" ? <span className="pi-response-dot" /> : null}
-					<strong>
-						{item.type === "assistant"
-							? `Pi${assistantModel ? ` · ${assistantModel}` : ""}`
-							: item.type === "user"
-								? "你"
-								: "系统"}
-					</strong>
-					{item.type === "assistant" && assistantStatus ? (
-						<span className={`message-status status-${item.status}`}>{assistantStatus}</span>
-					) : null}
-					{messageTime ? <time>{messageTime}</time> : null}
-					{elapsedText ? <span className="message-elapsed">用时 {elapsedText}</span> : null}
-				</div>
-				{item.type === "assistant" && item.thinking ? (
-					<details className="thinking-block">
-						<summary>思考过程</summary>
-						<p>{item.thinking}</p>
-					</details>
-				) : null}
-				{item.type === "user" && item.images?.length ? (
-					<div className="message-image-grid">
-						{item.images.map((image) => (
-							<img
-								key={image.id}
-								src={`data:${image.mimeType};base64,${image.data}`}
-								alt={image.name}
-								title={image.name}
-							/>
-						))}
+				<div className={item.type === "user" ? "message-user-bubble" : "message-content-block"}>
+					<div className="message-role-label">
+						{item.type === "assistant" ? <span className="pi-response-dot" /> : null}
+						<strong>
+							{item.type === "assistant"
+								? `Pi${assistantModel ? ` · ${assistantModel}` : ""}`
+								: item.type === "user"
+									? "你"
+									: "系统"}
+						</strong>
+						{item.type === "assistant" && assistantStatus ? (
+							<span className={`message-status status-${item.status}`}>{assistantStatus}</span>
+						) : null}
+						{messageTime ? <time>{messageTime}</time> : null}
+						{elapsedText ? <span className="message-elapsed">用时 {elapsedText}</span> : null}
 					</div>
-				) : null}
-				{item.type === "assistant" && item.status === "streaming" && !item.text ? (
-					<output className="message-streaming-placeholder" aria-live="polite">
-						<span className="sr-only">Pi 正在生成回复</span>
-						<span aria-hidden="true" />
-						<span aria-hidden="true" />
-						<span aria-hidden="true" />
-					</output>
-				) : systemOutputIsLong ? (
-					<details className="system-output-fold">
-						<summary>
-							<span>系统输出</span>
-							<small>{item.text.length.toLocaleString()} 字符</small>
-						</summary>
-						<div className="system-output-content">
-							<MessageContent text={item.text} />
+					{item.type === "assistant" && item.thinking ? (
+						<details className="thinking-block">
+							<summary>思考过程</summary>
+							<p>{item.thinking}</p>
+						</details>
+					) : null}
+					{item.type === "user" && item.images?.length ? (
+						<div className="message-image-grid">
+							{item.images.map((image) => (
+								<img
+									key={image.id}
+									src={`data:${image.mimeType};base64,${image.data}`}
+									alt={image.name}
+									title={image.name}
+								/>
+							))}
 						</div>
-					</details>
-				) : item.text ? (
-					<MessageContent text={item.text} />
-				) : null}
-				{item.type === "user" && item.delivery ? (
-					<small className="message-delivery">
-						{item.delivery === "steer" ? "已追加到当前运行" : "已排队等待"}
-					</small>
-				) : null}
-				{item.type === "assistant" && showStats ? (
-					<StreamStats
-						status={item.status}
-						text={item.text}
-						streamStartedAt={item.streamStartedAt}
-						streamStats={item.streamStats}
-					/>
-				) : null}
-				{item.text ? (
-					<button
-						className="message-copy"
-						type="button"
-						aria-label="复制消息"
-						title={copied ? "已复制" : "复制消息"}
-						onClick={() => void copyMessage()}
-					>
-						<AppIcon name="copy" size={14} />
-						<span>{copied ? "已复制" : "复制"}</span>
-					</button>
+					) : null}
+					{item.type === "assistant" && item.status === "streaming" && !item.text ? (
+						<output className="message-streaming-placeholder" aria-live="polite">
+							<span className="sr-only">Pi 正在生成回复</span>
+							<span aria-hidden="true" />
+							<span aria-hidden="true" />
+							<span aria-hidden="true" />
+						</output>
+					) : systemOutputIsLong ? (
+						<details className="system-output-fold">
+							<summary>
+								<span>系统输出</span>
+								<small>{item.text.length.toLocaleString()} 字符</small>
+							</summary>
+							<div className="system-output-content">
+								<MessageContent text={item.text} />
+							</div>
+						</details>
+					) : item.text ? (
+						<MessageContent text={item.text} />
+					) : null}
+					{item.type === "user" && item.delivery ? (
+						<small className="message-delivery">
+							{item.delivery === "steer" ? "已追加到当前运行" : "已排队等待"}
+						</small>
+					) : null}
+					{item.type === "assistant" && showStats ? (
+						<StreamStats
+							status={item.status}
+							text={item.text}
+							streamStartedAt={item.streamStartedAt}
+							streamStats={item.streamStats}
+						/>
+					) : null}
+				</div>
+				{item.text || (item.type === "user" && forkEntryId) ? (
+					<div className="message-actions">
+						{item.type === "assistant" && forkEntryId ? (
+							<button
+								className="message-action message-fork"
+								type="button"
+								aria-label="从这一轮 Fork"
+								title="从这一轮 Fork"
+								disabled={forkPending}
+								onClick={() => onFork?.(forkEntryId)}
+							>
+								<AppIcon name="branch" size={14} />
+								<span>{forkPending ? "Fork 中…" : "Fork"}</span>
+							</button>
+						) : null}
+						{item.text ? (
+							<button
+								className="message-action message-copy"
+								type="button"
+								aria-label="复制消息"
+								title={copied ? "已复制" : "复制消息"}
+								onClick={() => void copyMessage()}
+							>
+								<AppIcon name="copy" size={14} />
+								<span>{copied ? "已复制" : "复制"}</span>
+							</button>
+						) : null}
+					</div>
 				) : null}
 			</div>
 		</div>
@@ -531,6 +617,9 @@ const TranscriptTurns = memo(function TranscriptTurns({
 	running,
 	collapsedRounds,
 	onToggleRound,
+	forkEntryIds,
+	forkingEntryId,
+	onFork,
 }: {
 	items: TranscriptItem[];
 	assistantModel?: string;
@@ -539,6 +628,9 @@ const TranscriptTurns = memo(function TranscriptTurns({
 	running: boolean;
 	collapsedRounds: Record<string, boolean>;
 	onToggleRound(id: string, collapsed: boolean): void;
+	forkEntryIds: Map<string, string>;
+	forkingEntryId: string | null;
+	onFork(entryId: string): void;
 }) {
 	const turns = groupTranscriptIntoTurns(items);
 	const latestTurnId = turns[turns.length - 1]?.id;
@@ -548,6 +640,9 @@ const TranscriptTurns = memo(function TranscriptTurns({
 				const key = `${idPrefix}:${turn.id}`;
 				// 一轮一折：只折中间过程，用户消息与最终结果常显。最新轮运行中展开，结束后默认收起。
 				const { head, middle, tail } = splitTurnEntries(turn);
+				const finalAssistantIds = new Set(
+					tail.filter((entry) => entry.item.type === "assistant").map((entry) => entry.item.id),
+				);
 				const collapsed = resolveTurnCollapsed(collapsedRounds[key], {
 					isLatest: turn.id === latestTurnId,
 					running,
@@ -562,6 +657,17 @@ const TranscriptTurns = memo(function TranscriptTurns({
 								item={entry}
 								assistantModel={assistantModel}
 								showStats={entry.type === "assistant" && !hasLaterAssistant(items, index)}
+								forkEntryId={
+									entry.type === "assistant" && finalAssistantIds.has(entry.id)
+										? forkEntryIds.get(entry.id)
+										: undefined
+								}
+								forkPending={
+									entry.type === "assistant" &&
+									finalAssistantIds.has(entry.id) &&
+									forkEntryIds.get(entry.id) === forkingEntryId
+								}
+								onFork={onFork}
 							/>
 						)}
 					</div>
@@ -999,7 +1105,7 @@ const demoSessionSnapshot: AgentSessionSnapshot = {
 			parentId: null,
 			type: "message",
 			role: "user",
-			text: "按照 design.md 和 tasks.md 实现登录功能。",
+			text: "按照交接文档实现登录功能，并给出关键修改。",
 			timestamp: "2026-09-17T02:10:00.000Z",
 			depth: 0,
 			isLeaf: false,
@@ -1141,6 +1247,17 @@ export function App() {
 	const [agentActionsOpen, setAgentActionsOpen] = useState<string | null>(null);
 	const [sessionPanel, setSessionPanel] = useState<SessionPanelState | null>(null);
 	const [sessionPanelLoading, setSessionPanelLoading] = useState(false);
+	const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
+	const [authDialogMode, setAuthDialogMode] = useState<"login" | "logout" | null>(null);
+	const [authProviders, setAuthProviders] = useState<AuthProviderSummary[]>([]);
+	const [authProviderId, setAuthProviderId] = useState<string | null>(null);
+	const [authMethod, setAuthMethod] = useState<AuthMethodType | null>(null);
+	const [authRequestId, setAuthRequestId] = useState<string | null>(null);
+	const [authPrompt, setAuthPrompt] = useState<AuthPromptRequest | null>(null);
+	const [authPromptValue, setAuthPromptValue] = useState("");
+	const [authMessage, setAuthMessage] = useState<string | null>(null);
+	const [authError, setAuthError] = useState<string | null>(null);
+	const [authBusy, setAuthBusy] = useState(false);
 	const [writeLeaseDialog, setWriteLeaseDialog] = useState<ProjectWriteLeaseStatus | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
@@ -2164,6 +2281,37 @@ export function App() {
 	}, [sessionNotice]);
 
 	useEffect(() => {
+		if (!authDialogMode || !("codepiddy" in window)) return;
+		const off = window.codepiddy.onAuthEvent((event: AuthClientEvent) => {
+			if (event.requestId !== authRequestId) return;
+			if (event.type === "prompt") {
+				setAuthPrompt(event.prompt);
+				setAuthPromptValue(event.prompt.options?.[0]?.id ?? "");
+			} else if (event.type === "info" || event.type === "progress") {
+				setAuthMessage(event.message);
+			} else if (event.type === "auth_url") {
+				setAuthMessage(event.instructions ?? `请在浏览器中打开：${event.url}`);
+			} else if (event.type === "device_code") {
+				setAuthMessage(`在 ${event.verificationUri} 输入代码：${event.userCode}`);
+			} else if (event.type === "complete") {
+				setAuthMessage("登录成功。");
+				setAuthRequestId(null);
+				setAuthPrompt(null);
+				setSessionNotice("Provider 登录成功");
+				void window.codepiddy
+					.listAuthProviders()
+					.then(setAuthProviders)
+					.catch(() => undefined);
+			} else if (event.type === "error") {
+				setAuthError(event.error);
+				setAuthRequestId(null);
+				setAuthPrompt(null);
+			}
+		});
+		return off;
+	}, [authDialogMode, authRequestId]);
+
+	useEffect(() => {
 		const element = transcriptRef.current;
 		if (!element || !activeAgentId) {
 			setShowJumpToLatest(false);
@@ -2944,35 +3092,135 @@ export function App() {
 		}
 	}
 
-	async function forkAgentSession(entryId: string): Promise<void> {
-		if (!sessionPanel) return;
+	function closeAuthDialog(): void {
+		if (authRequestId && "codepiddy" in window) void window.codepiddy.cancelAuthLogin(authRequestId);
+		setAuthDialogMode(null);
+		setAuthRequestId(null);
+		setAuthPrompt(null);
+		setAuthPromptValue("");
+		setAuthMessage(null);
+		setAuthError(null);
+	}
+
+	async function openAuthDialog(mode: "login" | "logout", providerArg?: string): Promise<void> {
+		if (demoMode || !("codepiddy" in window)) {
+			setError("Provider 登录只在桌面客户端中可用。");
+			return;
+		}
+		setAuthDialogMode(mode);
+		setAuthBusy(true);
+		setAuthError(null);
+		setAuthMessage(null);
+		setAuthPrompt(null);
+		setAuthPromptValue("");
+		setAuthRequestId(null);
+		try {
+			const providers = await window.codepiddy.listAuthProviders();
+			const candidates = mode === "logout" ? providers.filter((provider) => provider.configured) : providers;
+			setAuthProviders(candidates);
+			const selected =
+				candidates.find((provider) => provider.id === providerArg) ??
+				candidates.find((provider) => provider.configured) ??
+				candidates[0];
+			setAuthProviderId(selected?.id ?? null);
+			setAuthMethod(selected?.methods[0]?.type ?? null);
+			if (candidates.length === 0) {
+				setAuthError(mode === "logout" ? "没有已登录的 Provider。" : "Pi 当前没有可登录的 Provider。");
+			}
+		} catch (caught) {
+			setAuthError(caught instanceof Error ? caught.message : "读取 Provider 失败");
+		} finally {
+			setAuthBusy(false);
+		}
+	}
+
+	async function startAuthLogin(): Promise<void> {
+		const provider = authProviders.find((candidate) => candidate.id === authProviderId);
+		if (!provider || !authMethod || !("codepiddy" in window)) return;
+		setAuthBusy(true);
+		setAuthError(null);
+		setAuthMessage("正在准备登录…");
+		try {
+			const requestId = await window.codepiddy.startAuthLogin({ providerId: provider.id, authType: authMethod });
+			setAuthRequestId(requestId);
+		} catch (caught) {
+			setAuthError(caught instanceof Error ? caught.message : "启动登录失败");
+			setAuthMessage(null);
+		} finally {
+			setAuthBusy(false);
+		}
+	}
+
+	async function submitAuthPrompt(): Promise<void> {
+		if (!authRequestId || !authPrompt || !("codepiddy" in window)) return;
+		setAuthBusy(true);
+		try {
+			await window.codepiddy.respondAuthPrompt({
+				requestId: authRequestId,
+				promptId: authPrompt.promptId,
+				value: authPromptValue,
+			});
+			setAuthPrompt(null);
+			setAuthPromptValue("");
+		} catch (caught) {
+			setAuthError(caught instanceof Error ? caught.message : "提交登录信息失败");
+		} finally {
+			setAuthBusy(false);
+		}
+	}
+
+	async function logoutAuthProvider(): Promise<void> {
+		if (!authProviderId || !("codepiddy" in window)) return;
+		setAuthBusy(true);
+		setAuthError(null);
+		try {
+			await window.codepiddy.logoutAuthProvider(authProviderId);
+			setAuthMessage("已退出该 Provider。");
+			setAuthProviders((current) =>
+				current.map((provider) =>
+					provider.id === authProviderId ? { ...provider, configured: false, statusLabel: undefined } : provider,
+				),
+			);
+		} catch (caught) {
+			setAuthError(caught instanceof Error ? caught.message : "退出登录失败");
+		} finally {
+			setAuthBusy(false);
+		}
+	}
+
+	async function forkAgentSession(entryId: string, target?: AgentInstanceLocator): Promise<void> {
+		const locator =
+			target ??
+			(sessionPanel
+				? {
+						agentInstanceId: sessionPanel.agentInstanceId,
+						projectId: sessionPanel.projectId,
+						workItemId: sessionPanel.workItemId,
+						role: sessionPanel.role,
+					}
+				: null);
+		if (!locator) return;
 		setSessionPanelLoading(true);
+		setForkingEntryId(entryId);
 		setError(null);
 		try {
-			const result = await window.codepiddy.forkAgentSession({
-				agentInstanceId: sessionPanel.agentInstanceId,
-				projectId: sessionPanel.projectId,
-				workItemId: sessionPanel.workItemId,
-				role: sessionPanel.role,
-				entryId,
-			});
+			if (demoMode) {
+				setSessionPanel(null);
+				setSessionNotice("已从该节点创建分支，原消息已填回输入框");
+				return;
+			}
+			const result = await window.codepiddy.forkAgentSession({ ...locator, entryId });
 			if (result.cancelled) return;
-			const sessions = await window.codepiddy.listAgentSessions({
-				agentInstanceId: sessionPanel.agentInstanceId,
-				projectId: sessionPanel.projectId,
-				workItemId: sessionPanel.workItemId,
-				role: sessionPanel.role,
-			});
-			setSessionPanel((current) => (current ? { ...current, snapshot: result.snapshot, sessions } : current));
-			setAgentSessionSnapshots((current) => ({ ...current, [sessionPanel.agentInstanceId]: result.snapshot }));
-			setDrafts((current) => ({ ...current, [sessionPanel.agentInstanceId]: result.selectedText }));
-			const modelSelection = await window.codepiddy.getAgentModelSelection({
-				agentInstanceId: sessionPanel.agentInstanceId,
-				projectId: sessionPanel.projectId,
-				workItemId: sessionPanel.workItemId,
-				role: sessionPanel.role,
-			});
-			setModelSelections((current) => ({ ...current, [sessionPanel.agentInstanceId]: modelSelection }));
+			const sessions = await window.codepiddy.listAgentSessions(locator);
+			setSessionPanel((current) =>
+				current && current.agentInstanceId === locator.agentInstanceId
+					? { ...current, snapshot: result.snapshot, sessions }
+					: current,
+			);
+			setAgentSessionSnapshots((current) => ({ ...current, [locator.agentInstanceId]: result.snapshot }));
+			setDrafts((current) => ({ ...current, [locator.agentInstanceId]: result.selectedText }));
+			const modelSelection = await window.codepiddy.getAgentModelSelection(locator);
+			setModelSelections((current) => ({ ...current, [locator.agentInstanceId]: modelSelection }));
 			setSessionPanel(null);
 			setSessionNotice("已从该节点创建分支，原消息已填回输入框");
 			window.requestAnimationFrame(() => composerInputRef.current?.focus());
@@ -2980,6 +3228,7 @@ export function App() {
 			setError(caught instanceof Error ? caught.message : "Fork 会话失败");
 		} finally {
 			setSessionPanelLoading(false);
+			setForkingEntryId(null);
 		}
 	}
 
@@ -3936,7 +4185,7 @@ export function App() {
 						</section>
 
 						<div className="settings-section-slot" hidden={settingsSection !== "providers"}>
-							<ProviderSettings />
+							<ProviderSettings onOpenAuth={(mode) => void openAuthDialog(mode)} />
 						</div>
 						<div className="settings-section-slot" hidden={settingsSection !== "mcp"}>
 							<McpSettings />
@@ -3970,6 +4219,7 @@ export function App() {
 			const activity = agentId ? agentActivities[agentId] : undefined;
 			const toolRecoveryOffer = agentId ? toolRecoveryOffers[agentId] : undefined;
 			const sessionSnapshot = agentId ? agentSessionSnapshots[agentId] : undefined;
+			const forkEntryIds = buildTurnForkEntryMap(items, sessionSnapshot);
 			const canAbort = Boolean(agentId && (activity || slot.status === "running" || slot.status === "waiting"));
 			const latestTurn = groupTranscriptIntoTurns(items).at(-1);
 			const latestTurnToolItems =
@@ -4093,6 +4343,16 @@ export function App() {
 											collapsedRounds={collapsedRounds}
 											onToggleRound={(id, collapsed) =>
 												setCollapsedRounds((current) => ({ ...current, [id]: collapsed }))
+											}
+											forkEntryIds={forkEntryIds}
+											forkingEntryId={forkingEntryId}
+											onFork={(entryId) =>
+												void forkAgentSession(entryId, {
+													agentInstanceId: agentId,
+													projectId: project.id,
+													workItemId: selectedWorkItem.id,
+													role: slot.role,
+												})
 											}
 										/>
 									)}
@@ -4485,6 +4745,7 @@ export function App() {
 	}
 
 	const useWindowOverlay = "codepiddy" in window && window.codepiddy.platform === "win32";
+	const selectedAuthProvider = authProviders.find((provider) => provider.id === authProviderId) ?? null;
 	return (
 		<div className={`app-shell${useWindowOverlay ? " windows-overlay" : ""}`}>
 			{useWindowOverlay ? (
@@ -5005,6 +5266,143 @@ export function App() {
 								取消
 							</button>
 						) : null}
+					</div>
+				</div>
+			) : null}
+			{authDialogMode ? (
+				<div className="modal-backdrop" role="presentation">
+					<button
+						className="modal-backdrop-dismiss"
+						type="button"
+						aria-label="关闭 Provider 登录"
+						onClick={closeAuthDialog}
+					/>
+					<div className="modal auth-modal" role="dialog" aria-modal="true" aria-label="Provider 登录">
+						<div className="session-tree-heading">
+							<div>
+								<h2>{authDialogMode === "login" ? "Provider 登录" : "退出 Provider"}</h2>
+								<p>
+									{authDialogMode === "login"
+										? "使用 Pi 原生登录流程配置订阅或 API Key，凭据写入 ~/.pi/agent/auth.json。"
+										: "移除 Pi 已保存的 Provider 凭据；环境变量和 models.json 中的 Key 不受影响。"}
+								</p>
+							</div>
+							<IconButton label="关闭" onClick={closeAuthDialog}>
+								<AppIcon name="close" />
+							</IconButton>
+						</div>
+						<div className="auth-form">
+							<div className="settings-field">
+								<span>Provider</span>
+								<SelectMenu
+									label="Provider"
+									value={authProviderId ?? ""}
+									disabled={authBusy || authRequestId !== null}
+									placeholder={authBusy ? "正在读取 Provider…" : "没有可用 Provider"}
+									options={authProviders.map((provider) => ({
+										value: provider.id,
+										label: provider.name,
+										...(provider.configured ? { description: "已配置" } : {}),
+									}))}
+									onChange={(value) => {
+										const provider = authProviders.find((candidate) => candidate.id === value);
+										setAuthProviderId(provider?.id ?? null);
+										setAuthMethod(provider?.methods[0]?.type ?? null);
+									}}
+								/>
+							</div>
+							{authDialogMode === "login" && selectedAuthProvider && selectedAuthProvider.methods.length > 1 ? (
+								<div className="settings-field">
+									<span>登录方式</span>
+									<SelectMenu
+										label="登录方式"
+										value={authMethod ?? ""}
+										disabled={authBusy || authRequestId !== null}
+										options={selectedAuthProvider.methods.map((method) => ({
+											value: method.type,
+											label: method.name,
+											...(method.isSubscription ? { description: "订阅登录" } : {}),
+										}))}
+										onChange={(value) => setAuthMethod(value as AuthMethodType)}
+									/>
+								</div>
+							) : null}
+							{authPrompt ? (
+								<form
+									onSubmit={(event) => {
+										event.preventDefault();
+										void submitAuthPrompt();
+									}}
+								>
+									<label className="settings-field" htmlFor={`auth-prompt-${authPrompt.promptId}`}>
+										<span>{authPrompt.message}</span>
+										{authPrompt.type === "select" ? (
+											<SelectMenu
+												label={authPrompt.message}
+												value={authPromptValue}
+												disabled={authBusy}
+												options={(authPrompt.options ?? []).map((option) => ({
+													value: option.id,
+													label: option.label,
+													...(option.description ? { description: option.description } : {}),
+												}))}
+												onChange={setAuthPromptValue}
+											/>
+										) : (
+											<input
+												id={`auth-prompt-${authPrompt.promptId}`}
+												type={authPrompt.type === "secret" ? "password" : "text"}
+												value={authPromptValue}
+												placeholder={authPrompt.placeholder}
+												disabled={authBusy}
+												onChange={(event) => setAuthPromptValue(event.target.value)}
+											/>
+										)}
+									</label>
+									<div className="modal-actions">
+										<button type="button" disabled={authBusy} onClick={closeAuthDialog}>
+											取消
+										</button>
+										<button className="primary-button" type="submit" disabled={authBusy}>
+											继续
+										</button>
+									</div>
+								</form>
+							) : null}
+							{authMessage ? <p className="auth-message">{authMessage}</p> : null}
+							{authError ? (
+								<p className="permission-settings-error" role="alert">
+									{authError}
+								</p>
+							) : null}
+							{!authPrompt ? (
+								<div className="modal-actions">
+									{authDialogMode === "login" && authRequestId === null ? (
+										<button
+											className="primary-button"
+											type="button"
+											disabled={authBusy || !selectedAuthProvider || !authMethod}
+											onClick={() => void startAuthLogin()}
+										>
+											开始登录
+										</button>
+									) : null}
+									{authDialogMode === "logout" ? (
+										<button
+											className="primary-button"
+											type="button"
+											disabled={authBusy || !selectedAuthProvider}
+											onClick={() => void logoutAuthProvider()}
+										>
+											退出登录
+										</button>
+									) : null}
+									<button type="button" onClick={closeAuthDialog}>
+										关闭
+									</button>
+								</div>
+							) : null}
+						</div>
 					</div>
 				</div>
 			) : null}

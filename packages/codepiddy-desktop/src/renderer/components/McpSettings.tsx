@@ -1,6 +1,7 @@
 import type { McpServerInput, McpServerSummary, McpTransport } from "@codepiddy/shared";
 import { Globe, Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { SelectMenu } from "./select-menu.tsx";
 
 const demoMode = import.meta.env.DEV && new URLSearchParams(window.location.search).has("demo");
 
@@ -247,16 +248,18 @@ export function McpSettings() {
 							onChange={(event) => setDraft({ ...draft, name: event.target.value })}
 						/>
 					</label>
-					<label className="settings-field">
+					<div className="settings-field">
 						<span>类型</span>
-						<select
+						<SelectMenu
+							label="MCP 服务类型"
 							value={draft.transport}
-							onChange={(event) => setDraft({ ...draft, transport: event.target.value as McpTransport })}
-						>
-							<option value="stdio">stdio（本地命令）</option>
-							<option value="http">HTTP（远程地址）</option>
-						</select>
-					</label>
+							options={[
+								{ value: "stdio", label: "stdio（本地命令）" },
+								{ value: "http", label: "HTTP（远程地址）" },
+							]}
+							onChange={(value) => setDraft({ ...draft, transport: value as McpTransport })}
+						/>
+					</div>
 					{draft.transport === "stdio" ? (
 						<>
 							<label className="settings-field">

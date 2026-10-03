@@ -79,6 +79,11 @@ async function captureDemoViews(): Promise<void> {
 
 		await page.locator(".work-panel-tab").filter({ hasText: "更改" }).first().click();
 		await page.waitForTimeout(600);
+		const firstChangeCard = page.locator(".change-stack-toggle").first();
+		if ((await firstChangeCard.count()) > 0) {
+			await firstChangeCard.click();
+			await page.waitForTimeout(250);
+		}
 		await page.screenshot({ path: path.join(outputDirectory, "codepiddy-overview.png") });
 
 		await page.getByRole("button", { name: "设置", exact: true }).first().click();

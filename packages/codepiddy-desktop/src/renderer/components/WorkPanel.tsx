@@ -26,6 +26,7 @@ import {
 	Suspense,
 	useCallback,
 	useEffect,
+	useId,
 	useMemo,
 	useRef,
 	useState,
@@ -276,116 +277,96 @@ function diffLineClass(type: PanelDiffLine["type"]): string {
 	return "diff-line context";
 }
 
-const ChangeBrowser = memo(function ChangeBrowser({
-	groups,
-	selectedKey,
-	split,
-	onSelect,
+const ChangeStackCard = memo(function ChangeStackCard({
+	group,
 	onOpenFile,
 }: {
-	groups: ChangeFileGroup[];
-	selectedKey: string | null;
-	split: boolean;
-	onSelect(key: string): void;
+	group: ChangeFileGroup;
 	onOpenFile(path: string): void;
 }) {
-	const selected = selectedKey ? groups.find((group) => group.key === selectedKey) : split ? groups[0] : undefined;
-	const lines = useMemo(
-		() => numberedDiffLines(selected?.entries.flatMap((entry) => panelDiffLines(entry)) ?? []),
-		[selected],
-	);
+	const [open, setOpen] = useState(false);
+	const detailsId = useId();
+	const lines = useMemo(() => numberedDiffLines(group.entries.flatMap((entry) => panelDiffLines(entry))), [group]);
 	const summary = useMemo(() => summarizePanelDiff(lines), [lines]);
 	const visibleLines = lines.slice(0, DIFF_LINE_LIMIT);
+	const path = group.path;
 
-	const fileList = (
-		<div className="change-file-list" role="listbox" aria-label="更改的文件">
-			{groups.map((group) => {
-				const groupLines = group.entries.flatMap((entry) => panelDiffLines(entry));
-				const groupSummary = summarizePanelDiff(groupLines);
-				const active = group.key === selected?.key;
-				return (
-					<button
-						key={group.key}
-						type="button"
-						role="option"
-						aria-selected={active}
-						className={`change-file-item${active ? " active" : ""}`}
-						title={group.displayPath}
-						onClick={() => onSelect(group.key)}
-					>
-						<FileText size={14} strokeWidth={2} aria-hidden="true" />
-						<span className="change-file-copy">
-							<strong>{group.name}</strong>
-							<small>{group.displayPath}</small>
-						</span>
-						<span className="diff-counts">
-							{groupSummary.additions > 0 ? (
-								<span className="diff-count-add">+{groupSummary.additions}</span>
-							) : null}
-							{groupSummary.deletions > 0 ? (
-								<span className="diff-count-del">−{groupSummary.deletions}</span>
-							) : null}
-						</span>
-					</button>
-				);
-			})}
-		</div>
-	);
-
-	if (!selected) return fileList;
-
-	const diffViewer = (
-		<div className="change-diff-viewer">
-			<header className="change-diff-header">
-				{!split ? (
-					<PanelIconButton label="返回更改文件列表" onClick={() => onSelect("")}>
-						<ChevronLeft size={15} strokeWidth={2} />
-					</PanelIconButton>
-				) : null}
-				<span className="file-viewer-title">
-					<strong title={selected.displayPath}>{selected.name}</strong>
-					<small title={selected.displayPath}>{selected.displayPath}</small>
-				</span>
-				<span className="diff-counts">
-					{summary.additions > 0 ? <span className="diff-count-add">+{summary.additions}</span> : null}
-					{summary.deletions > 0 ? <span className="diff-count-del">−{summary.deletions}</span> : null}
-				</span>
-				{selected.path ? (
-					<PanelIconButton label="在文件中打开" onClick={() => onOpenFile(selected.path!)}>
+	return (
+		<section className={`change-stack-card${open ? " is-open" : ""}`}>
+			<div className="change-stack-header">
+				<button
+					type="button"
+					className="change-stack-toggle"
+					aria-expanded={open}
+					aria-controls={detailsId}
+					title={group.displayPath}
+					onClick={() => setOpen((current) => !current)}
+				>
+					<span className="change-stack-caret" aria-hidden="true">
+						<ChevronRight size={13} strokeWidth={2} />
+					</span>
+					<FileText size={14} strokeWidth={2} aria-hidden="true" />
+					<span className="change-stack-copy">
+						<strong>{group.name}</strong>
+						<small>{group.displayPath}</small>
+					</span>
+					<span className="diff-counts">
+						{summary.additions > 0 ? <span className="diff-count-add">+{summary.additions}</span> : null}
+						{summary.deletions > 0 ? <span className="diff-count-del">−{summary.deletions}</span> : null}
+					</span>
+				</button>
+				{path ? (
+					<PanelIconButton label="在文件中打开" onClick={() => onOpenFile(path)}>
 						<FileText size={14} strokeWidth={2} />
 					</PanelIconButton>
 				) : null}
-			</header>
-			<div className="change-diff-body">
-				{visibleLines.length > 0 ? (
-					<div className="diff-view">
-						{visibleLines.map((line, index) => (
-							<div className={diffLineClass(line.type)} key={`${line.type}-${index}`}>
-								<span className="diff-line-number" aria-hidden="true">
-									{line.lineNumber ?? ""}
-								</span>
-								<span className="diff-line-sign" aria-hidden="true">
-									{line.type === "add" ? "+" : line.type === "remove" ? "−" : line.type === "hunk" ? "" : " "}
-								</span>
-								<span className="diff-line-text">{line.text || " "}</span>
-							</div>
-						))}
-					</div>
-				) : (
-					<p className="work-change-note">没有可展示的行级差异。</p>
-				)}
-				{lines.length > visibleLines.length ? (
-					<p className="work-change-note">仅显示前 {DIFF_LINE_LIMIT} 行差异。</p>
-				) : null}
 			</div>
-		</div>
+			{open ? (
+				<div className="change-stack-body" id={detailsId}>
+					{visibleLines.length > 0 ? (
+						<div className="diff-view">
+							{visibleLines.map((line, index) => (
+								<div className={diffLineClass(line.type)} key={`${line.type}-${index}`}>
+									<span className="diff-line-number" aria-hidden="true">
+										{line.lineNumber ?? ""}
+									</span>
+									<span className="diff-line-sign" aria-hidden="true">
+										{line.type === "add"
+											? "+"
+											: line.type === "remove"
+												? "−"
+												: line.type === "hunk"
+													? ""
+													: " "}
+									</span>
+									<span className="diff-line-text">{line.text || " "}</span>
+								</div>
+							))}
+						</div>
+					) : (
+						<p className="work-change-note">没有可展示的行级差异。</p>
+					)}
+					{lines.length > visibleLines.length ? (
+						<p className="work-change-note">仅显示前 {DIFF_LINE_LIMIT} 行差异。</p>
+					) : null}
+				</div>
+			) : null}
+		</section>
 	);
+});
 
-	if (!split) return selectedKey ? diffViewer : fileList;
+const ChangeStack = memo(function ChangeStack({
+	groups,
+	onOpenFile,
+}: {
+	groups: ChangeFileGroup[];
+	onOpenFile(path: string): void;
+}) {
 	return (
-		<div className="change-browser">
-			{fileList}
-			{diffViewer}
+		<div className="change-stack">
+			{groups.map((group) => (
+				<ChangeStackCard key={group.key} group={group} onOpenFile={onOpenFile} />
+			))}
 		</div>
 	);
 });
@@ -422,7 +403,6 @@ export const WorkPanel = memo(function WorkPanel({
 	const [reloadSeq, setReloadSeq] = useState(0);
 	const [wrapLines, setWrapLines] = useState(true);
 	const [copiedViewer, setCopiedViewer] = useState(false);
-	const [selectedChangeKey, setSelectedChangeKey] = useState<string | null>(null);
 	const [terminalMounted, setTerminalMounted] = useState(false);
 	const historyKey = changeHistoryStorageKey(projectRoot, workItemId, agentRole, turnId);
 	const [changeHistory, setChangeHistory] = useState<{ key: string; entries: WorkPanelEntry[] }>(() => ({
@@ -455,6 +435,10 @@ export const WorkPanel = memo(function WorkPanel({
 		[liveChangeEntries, persistedChangeEntries],
 	);
 	const changeGroups = useMemo(() => buildChangeFileGroups(changeEntries, projectRoot), [changeEntries, projectRoot]);
+	const changeSummary = useMemo(
+		() => summarizePanelDiff(changeEntries.flatMap((entry) => panelDiffLines(entry))),
+		[changeEntries],
+	);
 
 	useEffect(() => {
 		setChangeHistory({
@@ -511,16 +495,9 @@ export const WorkPanel = memo(function WorkPanel({
 		setSearchResults(null);
 		setWrapLines(true);
 		setCopiedViewer(false);
-		setSelectedChangeKey(null);
 		setTerminalMounted(false);
 		void loadDir("");
 	}, [loadDir]);
-
-	useEffect(() => {
-		setSelectedChangeKey((current) =>
-			current && changeGroups.some((group) => group.key === current) ? current : (changeGroups[0]?.key ?? null),
-		);
-	}, [changeGroups]);
 
 	// 选中文件（含跟随打开）时展开祖先目录并读文件。
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reloadSeq 不参与读取，只作为「刷新」按钮的重跑信号
@@ -863,12 +840,18 @@ export const WorkPanel = memo(function WorkPanel({
 			<div className="work-panel-view change-view">
 				<div className="work-panel-summary">
 					<span>{changeGroups.length} 个文件</span>
+					<span className="diff-counts">
+						{changeSummary.additions > 0 ? (
+							<span className="diff-count-add">+{changeSummary.additions}</span>
+						) : null}
+						{changeSummary.deletions > 0 ? (
+							<span className="diff-count-del">−{changeSummary.deletions}</span>
+						) : null}
+					</span>
 				</div>
-				<ChangeBrowser
+				<ChangeStack
+					key={`${projectRoot}:${workItemId}:${agentRole}:${turnId}`}
 					groups={changeGroups}
-					selectedKey={selectedChangeKey}
-					split={width >= 430}
-					onSelect={setSelectedChangeKey}
 					onOpenFile={openFile}
 				/>
 			</div>
