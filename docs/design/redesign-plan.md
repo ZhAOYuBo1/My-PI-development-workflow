@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-26 已提交（内置终端换成 xterm + node-pty 真 PTY 并读取本机 Windows Terminal 默认 profile；README 重写并补回截图），待办清单已清空。
+再读 PRODUCT.md、DESIGN.md。批次 1-26 已提交并推送到 origin/main（内置终端换成 xterm + node-pty 真 PTY 并读取本机 Windows Terminal 默认 profile；README 重写并补回截图），待办清单已清空。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端和结构清理都已验收或待验收，不要重做。
 当前 HEAD 以 `git log -1` 为准。
 
@@ -654,16 +654,12 @@
 
 ## 未提交状态
 
-批次 1-22 已提交。批次 23-26（内置终端 + README）改动未提交，准备推送：
+批次 1-26 已提交并推送到 `origin/main`：
 
-- 修改：`packages/codepiddy-shared/src/index.ts`
-- 修改：`packages/codepiddy-desktop/package.json`、`package-lock.json`、`scripts/build-main.mjs`
-- 修改：`packages/codepiddy-desktop/src/main/index.ts`、`src/main/ipc-validation.ts`、`src/preload/index.ts`
-- 新增：`packages/codepiddy-desktop/src/main/windows-terminal.ts`
-- 修改：`packages/codepiddy-desktop/src/renderer/main.tsx`、`src/renderer/components/WorkPanel.tsx`、`src/renderer/styles.css`
-- 修改：`README.md`、`packages/codepiddy-desktop/scripts/capture-screenshots.mts`
-- 新增：`docs/images/codepiddy-overview.png`、`codepiddy-files.png`、`codepiddy-terminal.png`、`codepiddy-settings.png`
-- 文档：本文件（批次 23-26 记录）
+- `0c1f84c feat(desktop): embed a real PTY terminal`（批次 23-25）
+- `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
+
+工作树除 Impeccable 的 untracked 安装目录外是干净的。
 
 注意：`package-lock.json` 有改动（新增 xterm / node-pty），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
