@@ -22,9 +22,10 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-34 已提交并推送（`e17218e`）；批次 35（对话快速定位条 dock 放大 + 溢出显示）已改完，待验收提交。
-字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
-Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
+再读 PRODUCT.md、DESIGN.md。批次 1-35 已提交并推送到 origin/main（`3f5284a`），待办清单已清空。
+字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README、截图、设置分区、MCP / Provider 配置、Agent 会话新建 / 切换 / 删除、会话 Fork、快速定位条都已验收，不要重做。
+Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result / agent_before_settle）或 packages/codepiddy-desktop 自己的 main / renderer。
+UI 改完 build 通过后自动重启客户端，不用询问用户。
 后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
 当前 HEAD 以 `git log -1` 为准。
 
@@ -800,16 +801,13 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 ## 未提交状态
 
-批次 1-29 已提交并推送到 `origin/main`：
+批次 1-35 已全部提交并推送到 `origin/main`，工作树干净。最近几批：
 
-- `0c1f84c feat(desktop): embed a real PTY terminal`（批次 23-25）
-- `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
-- `396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
-
-批次 35 已改完，待用户验收后提交。改动范围：
-
-- `App.tsx`：`TranscriptMinimap` 增加 `scrollRef`、溢出检测、rAF 节流 dock 放大；传入 `transcriptRef`。
-- `styles.css`：刻度宽度改用 `--minimap-magnify`，去掉宽度 transition。
+- `3f5284a feat(desktop): upgrade transcript minimap with dock magnification`（批次 35）
+- `e17218e docs(desktop): restart the client automatically after UI changes`
+- `0ba23e6 feat(desktop): add session deletion and fix new-session button layout`（批次 34）
+- `4205939 feat(desktop): add per-agent session list, new session and switching`（批次 33）
+- `9ed96e1 feat(desktop): add categorized settings with MCP and provider config`（批次 31）
 
 注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
@@ -867,4 +865,4 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 ## 待用户确认
 
-- 批次 35（对话快速定位条升级）待验收。
+- 暂无，批次 1-35 已验收。
