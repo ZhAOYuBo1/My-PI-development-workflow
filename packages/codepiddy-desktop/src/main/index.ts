@@ -97,6 +97,7 @@ const channels = {
 	listAgentSessions: "codepiddy:agent:session:list",
 	newAgentSession: "codepiddy:agent:session:new",
 	switchAgentSession: "codepiddy:agent:session:switch",
+	deleteAgentSession: "codepiddy:agent:session:delete",
 	resetAgent: "codepiddy:agent:reset",
 	activateAgent: "codepiddy:agent:activate",
 	agentEvent: "codepiddy:agent:event",
@@ -912,6 +913,19 @@ class AgentManager {
 		return this.sessionSwitchResult(process, agent);
 	}
 
+	async deleteAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSummary[]> {
+		const agent = await this.resolve(input);
+		const process = await this.ensureProcess(agent);
+		const stateResponse = await process.getState();
+		const state = isRecord(stateResponse.data) ? stateResponse.data : {};
+		if (state.sessionId === input.sessionId) throw new Error("不能删除当前正在使用的会话");
+		const sessionFile = await this.resolveSessionFile(agent, input.sessionId);
+		await rm(sessionFile, { force: true });
+		const selectedSessionId = await readSelectedSessionId(agent.sessionDirectory);
+		if (selectedSessionId === input.sessionId) await writeSelectedSessionId(agent.sessionDirectory, null);
+		return this.listSessions(process, agent);
+	}
+
 	async forkSession(input: ForkAgentSessionInput): Promise<ForkAgentSessionResult> {
 		const agent = await this.resolve(input);
 		const process = await this.ensureProcess(agent);
@@ -1696,6 +1710,9 @@ function registerIpcHandlers(
 	);
 	ipcMain.handle(channels.switchAgentSession, (_event, raw: unknown) =>
 		agentManager.switchAgentSession(parseSwitchAgentSessionInput(raw)),
+	);
+	ipcMain.handle(channels.deleteAgentSession, (_event, raw: unknown) =>
+		agentManager.deleteAgentSession(parseSwitchAgentSessionInput(raw)),
 	);
 	ipcMain.handle(channels.forkAgentSession, (_event, raw: unknown) =>
 		agentManager.forkSession(parseForkAgentSessionInput(raw)),

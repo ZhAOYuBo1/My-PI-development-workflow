@@ -23,6 +23,7 @@ import type {
 	SettingsStatus,
 	WorkItemSummary,
 } from "@codepiddy/shared";
+import { Trash2 } from "lucide-react";
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppIcon, type AppIconName } from "./components/app-icon.tsx";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
@@ -3005,6 +3006,35 @@ export function App() {
 		}
 	}
 
+	async function deleteAgentSession(sessionId: string): Promise<void> {
+		if (!sessionPanel || sessionPanel.snapshot.sessionId === sessionId) return;
+		if (!window.confirm("确定删除这个会话？此操作不可撤销。")) return;
+		if (demoMode) {
+			setSessionPanel((current) =>
+				current
+					? { ...current, sessions: current.sessions.filter((session) => session.sessionId !== sessionId) }
+					: current,
+			);
+			return;
+		}
+		setSessionPanelLoading(true);
+		setError(null);
+		try {
+			const sessions = await window.codepiddy.deleteAgentSession({
+				agentInstanceId: sessionPanel.agentInstanceId,
+				projectId: sessionPanel.projectId,
+				workItemId: sessionPanel.workItemId,
+				role: sessionPanel.role,
+				sessionId,
+			});
+			setSessionPanel((current) => (current ? { ...current, sessions } : current));
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "删除会话失败");
+		} finally {
+			setSessionPanelLoading(false);
+		}
+	}
+
 	async function cloneAgentSession(slot: AgentSlotSummary): Promise<void> {
 		if (!project || !selectedWorkItem || !slot.currentInstanceId) return;
 		setBusy(true);
@@ -4555,22 +4585,38 @@ export function App() {
 							</div>
 							<div className="session-picker-list">
 								{sessionPanel.sessions.map((session) => (
-									<button
+									<div
 										key={session.sessionId}
-										type="button"
 										className={`session-picker-item${session.isCurrent ? " active" : ""}`}
-										disabled={sessionPanelLoading}
-										onClick={() => void switchAgentSession(session.sessionId)}
 									>
-										<span className="session-picker-copy">
-											<strong>{session.name || session.preview || "新会话"}</strong>
-											<small>
-												{session.messageCount} 条消息 ·{" "}
-												{session.updatedAt ? new Date(session.updatedAt).toLocaleString() : "—"}
-											</small>
-										</span>
-										{session.isCurrent ? <em>当前</em> : null}
-									</button>
+										<button
+											type="button"
+											className="session-picker-main"
+											disabled={sessionPanelLoading}
+											onClick={() => void switchAgentSession(session.sessionId)}
+										>
+											<span className="session-picker-copy">
+												<strong>{session.name || session.preview || "新会话"}</strong>
+												<small>
+													{session.messageCount} 条消息 ·{" "}
+													{session.updatedAt ? new Date(session.updatedAt).toLocaleString() : "—"}
+												</small>
+											</span>
+											{session.isCurrent ? <em>当前</em> : null}
+										</button>
+										{session.isCurrent ? null : (
+											<button
+												type="button"
+												className="work-panel-icon-button"
+												aria-label="删除会话"
+												title="删除会话"
+												disabled={sessionPanelLoading}
+												onClick={() => void deleteAgentSession(session.sessionId)}
+											>
+												<Trash2 size={13} strokeWidth={2} />
+											</button>
+										)}
+									</div>
 								))}
 							</div>
 						</div>

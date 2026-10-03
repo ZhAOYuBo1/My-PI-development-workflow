@@ -3723,6 +3723,9 @@ textarea:focus-visible,
 }
 
 .session-picker-heading .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cp-space-xs);
   flex: none;
   white-space: nowrap;
 }
@@ -3737,12 +3740,23 @@ textarea:focus-visible,
 .session-picker-item {
   display: flex;
   align-items: center;
-  gap: var(--cp-space-sm);
-  padding: var(--cp-space-sm) var(--cp-space-md);
-  border: 0;
+  gap: var(--cp-space-xs);
+  padding-right: var(--cp-space-sm);
   border-radius: var(--cp-radius-md);
   background: var(--cp-surface-secondary);
   color: var(--cp-ink-secondary);
+}
+
+.session-picker-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-sm) var(--cp-space-md);
+  border: 0;
+  background: transparent;
+  color: inherit;
   text-align: left;
   cursor: pointer;
 }

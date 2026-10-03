@@ -238,6 +238,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	listAgentSessions(input: AgentInstanceLocator): Promise<AgentSessionSummary[]>;
 	newAgentSession(input: AgentInstanceLocator): Promise<AgentSessionSwitchResult>;
 	switchAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSwitchResult>;
+	deleteAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSummary[]>;
 	forkAgentSession(input: ForkAgentSessionInput): Promise<ForkAgentSessionResult>;
 	resetAgent(input: ResetAgentInput): Promise<ProjectSummary>;
 	respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void>;
