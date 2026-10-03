@@ -14,6 +14,7 @@
    - 截图：Playwright + 已安装的 chromium（`npx playwright install chromium` 装过一次即可）
    - 真实客户端：`Start-Process node_modules\electron\dist\electron.exe -ArgumentList "." -WorkingDirectory packages\codepiddy-desktop`
 4. 改完必须跑 `npm run check` + `npm run build:codepiddy`，需要时截图比对。
+5. UI 改完 build 通过后**直接重启客户端**（关掉现有 electron 进程，再 `Start-Process node_modules\electron\dist\electron.exe -ArgumentList "." -WorkingDirectory packages/codepiddy-desktop`），不用再问用户。
 
 截图和 `node_modules` 一样在 `.artifacts/` 里，**已被 gitignore**，只在当前机器上存在，重新克隆后需要重跑一遍才能复现。
 
@@ -855,6 +856,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 | 2026-10-03 | 退避参数写 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁回退 | 用户要求功能不侵入且 Pi 更新后仍然有效 |
 | 2026-10-03 | 开发只适配最新 Pi；更新器的回退 / 自动回退保留给用户侧 | 用户明确：开发不需要旧版本兼容，回退是用户更新失败时的保护 |
 | 2026-10-03 | 设置页改左侧分类导航；MCP / Provider 直接在客户端配置，写 Pi 原生 mcp.json / models.json | 用户要求设置分类清晰，并参考项目做到客户端内配置 |
+| 2026-10-03 | UI 改完 build 通过后自动重启客户端，不再询问 | 用户明确要求「下回你自动重启」 |
 
 ## 待用户确认
 
