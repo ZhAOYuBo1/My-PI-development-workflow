@@ -702,7 +702,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 - **退避策略走配置**：`AppSettingsStore.ensurePiRetrySettings()` 在应用启动时把 `retry.maxRetries = 5 / baseDelayMs = 1000 / maxAgentDelayMs = 5000` 合并写进 Pi 原生 `~/.pi/agent/settings.json`；只补缺失字段，用户显式配置优先。Pi 内置重试和扩展共用这一份参数。
 - **网关并发错误走扩展**：新增 `packages/codepiddy-retry-extension`。Pi 内置重试只认自己的错误列表，网关并发错误不在里面；内置重试放弃后触发 `agent_before_settle`，扩展检查 `outcome === "error"`、`context.canContinue` 和错误文本，按同一套退避 sleep 后返回 `{ continue: true }`，强制再发一次 provider 请求。
-- **版本口径**：功能以更新后的 Pi（v0.99.1+）为准，`agent_before_settle` 是必备事件，不做旧版本兼容；类型 cast 只是因为仓库 vendored 的类型较旧。
+- **版本口径**：开发侧只适配最新 Pi（v0.99.1+），`agent_before_settle` 是必备事件，不做旧版本兼容；类型 cast 只是因为仓库 vendored 的类型较旧。回退（手动 rollback / 启动失败自动回退）保留给用户更新出问题时的保护，不属于开发兼容范围。
 - **回退 core**：`packages/ai/src/utils/retry.ts` 和 `packages/coding-agent/src/core/settings-manager.ts` 已恢复到 `9cf21c8` 上游基线（diff 为空）。
 - 打包接线：`build-main.mjs` → `dist/runtime-extensions/retry.js`；`build-codepiddy-runtime.mjs` → `extensions/retry.js`；`startProcess` 和 runtime probe 都加 `--extension retry.js`。
 
@@ -791,6 +791,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 | 2026-10-03 | 变更 diff 走 Pi 扩展快照（`tool_call` 前抓旧内容、`tool_result` 后写 patch），不改 Pi core | 用户明确要求 Pi core 可更新，增强只能走扩展点 |
 | 2026-10-03 | 记入 core 更新边界审计：重试默认值和 gateway 并发错误模式曾是 core 补丁，更新后失效 | 用户要求确认外壳没有依赖私有 core 修改 |
 | 2026-10-03 | 退避参数写 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁回退 | 用户要求功能不侵入且 Pi 更新后仍然有效 |
+| 2026-10-03 | 开发只适配最新 Pi；更新器的回退 / 自动回退保留给用户侧 | 用户明确：开发不需要旧版本兼容，回退是用户更新失败时的保护 |
 
 ## 待用户确认
 
