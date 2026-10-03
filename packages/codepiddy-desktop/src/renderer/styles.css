@@ -1143,11 +1143,11 @@ button { color: inherit; }
   padding: 0 var(--cp-space-sm);
   border: 0;
   border-radius: var(--cp-radius-sm);
-  background: transparent;
-  color: var(--cp-ink-muted);
+  background: var(--cp-surface-inset);
+  color: var(--cp-ink-secondary);
   font-size: 11.5px;
   cursor: pointer;
-  opacity: 0;
+  opacity: 1;
   transition: background var(--cp-dur-fast) var(--cp-ease), color var(--cp-dur-fast) var(--cp-ease),
     opacity var(--cp-dur-fast) var(--cp-ease);
 }
@@ -1158,7 +1158,7 @@ button { color: inherit; }
 }
 
 .session-fork-button:hover {
-  background: var(--cp-surface-inset);
+  background: color-mix(in oklab, var(--cp-ink) 8%, transparent);
   color: var(--cp-ink);
 }
 

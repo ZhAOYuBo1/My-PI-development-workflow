@@ -1073,6 +1073,7 @@ export function App() {
 	);
 	const [dialog, setDialog] = useState<WorkItemDialogState | null>(null);
 	const [archiveToast, setArchiveToast] = useState<ArchiveToast | null>(null);
+	const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 	const [renameDialog, setRenameDialog] = useState<RenameDialogState | null>(null);
 	const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState | null>(null);
 	const [resetAgentDialog, setResetAgentDialog] = useState<ResetAgentDialogState | null>(null);
@@ -2096,6 +2097,12 @@ export function App() {
 	}, [archiveToast]);
 
 	useEffect(() => {
+		if (!sessionNotice) return;
+		const timer = window.setTimeout(() => setSessionNotice(null), 3200);
+		return () => window.clearTimeout(timer);
+	}, [sessionNotice]);
+
+	useEffect(() => {
 		const element = transcriptRef.current;
 		if (!element || !activeAgentId) {
 			setShowJumpToLatest(false);
@@ -2877,6 +2884,9 @@ export function App() {
 				role: sessionPanel.role,
 			});
 			setModelSelections((current) => ({ ...current, [sessionPanel.agentInstanceId]: modelSelection }));
+			setSessionPanel(null);
+			setSessionNotice("已从该节点创建分支，原消息已填回输入框");
+			window.requestAnimationFrame(() => composerInputRef.current?.focus());
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : "Fork 会话失败");
 		} finally {
@@ -4414,7 +4424,7 @@ export function App() {
 						<div className="session-tree-heading">
 							<div>
 								<h2>{sessionPanel.displayName} 会话树</h2>
-								<p>从任意用户消息创建分支。原会话不会被修改。</p>
+								<p>点用户消息右侧的 Fork 从此处创建分支；原消息会填回输入框，原会话不会被修改。</p>
 							</div>
 							<IconButton label="关闭会话树" onClick={() => setSessionPanel(null)}>
 								<AppIcon name="close" />
@@ -4755,6 +4765,11 @@ export function App() {
 					<button type="button" onClick={() => void restoreArchived()}>
 						撤销
 					</button>
+				</output>
+			) : null}
+			{sessionNotice ? (
+				<output className="toast" aria-live="polite">
+					{sessionNotice}
 				</output>
 			) : null}
 		</div>

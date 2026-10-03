@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-30 已提交并推送；批次 31（设置页分区 + MCP / Provider 配置）已改完，待验收提交。
+再读 PRODUCT.md、DESIGN.md。批次 1-31 已提交并推送（`9ed96e1`）；批次 32（会话 Fork 可发现性修复）已改完，待验收提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
 后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
@@ -55,7 +55,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 31：设置页分区 + MCP / Provider 配置）
+## 当前状态（2026-10-03 批次 32：会话 Fork 可发现性修复）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -732,6 +732,23 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - Playwright demo：设置页导航 7 项（Pi 运行时 / Shell / Provider 与模型 / MCP 服务 / Tavily Search / 默认权限 / Agent Skills）；MCP 页 2 行（内置 web_search + demo 服务）；Provider 页 1 行。
 - `npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。
 
+### 2026-10-03 批次 32：会话 Fork 可发现性修复（待验收）
+
+用户反馈：会话树与 Fork「感觉用不了」。
+
+诊断（用真实会话副本直连 v0.99.1 RPC）：`get_tree` 返回 115 个节点，`get_fork_messages` 返回 10 条可 Fork 的用户消息，`fork` 返回原消息文本并生成新分支。**后端是通的**，问题在 UI：
+
+- `.session-fork-button` 默认 `opacity: 0`，只有 hover 到节点才出现；用户打开弹窗看不到 Fork 按钮。
+- Fork 成功后弹窗不关、没有提示，填回输入框的草稿被弹窗挡住，看起来像没反应。
+
+修复：
+
+- Fork 按钮改成常显（inset 底 + 次墨色），hover 加深；forkable 节点一眼能看到入口。
+- Fork 成功后关闭会话树弹窗，设置 3.2s 的 toast「已从该节点创建分支，原消息已填回输入框」，并聚焦输入框。
+- 弹窗说明改成「点用户消息右侧的 Fork 从此处创建分支；原消息会填回输入框，原会话不会被修改」。
+
+验证：Playwright demo 打开会话树后 3 个 Fork 按钮常显（computed opacity 1），说明文案正确；`npm run check`、`npm run build:codepiddy` 全绿。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
@@ -744,6 +761,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 8. [x] **工作区面板默认收起**：批次 29 启动不再自动展开右侧面板，只保留宽度记忆。
 9. [x] **重试不侵入化**：批次 30 把退避参数写进 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁已回退。
 10. [x] **设置页分区与集成配置**：批次 31 设置页改成左侧分类导航；新增 MCP 服务和 Provider / 模型的客户端配置。
+11. [x] **会话 Fork 可发现性**：批次 32 Fork 按钮常显，Fork 后关弹窗、提示并聚焦输入框。
 
 ## 未提交状态
 
@@ -753,13 +771,10 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 - `396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 
-批次 31 已改完，待用户验收后提交。改动范围：
+批次 32 已改完，待用户验收后提交。改动范围：
 
-- `App.tsx` / `styles.css`：设置页改成左侧分类导航 + 右侧单分类内容。
-- `components/McpSettings.tsx`：MCP 服务增删改，读写 `~/.pi/agent/mcp.json`。
-- `components/ProviderSettings.tsx`：Provider / 模型增删改，读写 `~/.pi/agent/models.json`。
-- `codepiddy-shared` / `main/index.ts` / `ipc-validation.ts` / `settings-store.ts` / `preload`：新增 MCP 与 Provider 的 IPC 和存储逻辑。
-- `DESIGN.md`：新增 Settings 一节。
+- `App.tsx`：Fork 成功后关闭弹窗、toast 提示、聚焦输入框；更新弹窗说明文案。
+- `styles.css`：`.session-fork-button` 改成常显。
 
 注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
@@ -816,4 +831,4 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 ## 待用户确认
 
-- 批次 31（设置页分区 + MCP / Provider 配置）待验收。
+- 批次 32（会话 Fork 可发现性修复）待验收。
