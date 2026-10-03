@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-21 已提交；批次 22（styles.css 结构清理 + .impeccable/design.json）已实现并验证，等待验收后提交，待办清单已清空。
+再读 PRODUCT.md、DESIGN.md。批次 1-22 已提交，工作树干净，待办清单已清空；下一步是推送 origin/main，并在真实项目做工作区面板 / 终端的手工回归。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端和结构清理都已验收或待验收，不要重做。
 当前 HEAD 以 `git log -1` 为准。
 
@@ -52,7 +52,7 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 22 待验收）
+## 当前状态（2026-10-03 批次 22 已验收）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -87,13 +87,13 @@
 - 已提交：`b2644f5 feat(desktop): add per-turn changes and terminal`（批次 19-20）
 - 已提交：`b5e30b2 feat(desktop): use meteor stream icon`（批次 21）
 - 已提交：`deb8d69 feat(desktop): mirror meteor stream icon`（批次 21）
-- 待验收：`styles.css` 结构清理 + `.impeccable/design.json`（批次 22）
+- 已提交：`6b6b95b feat(desktop): consolidate stylesheet layers and add design sidecar`（批次 22）
 
 批次 1-21 的 UI 调整均已提交；详细过程见下方进度日志。
 
 ### 下一步
 
-等待用户验收批次 22。通过后提交代码和文档；待办清单已清空。
+待办清单已清空，改版收尾。下一步建议：把 `main` 上积压的提交推到 `origin/main`，再在真实项目里做一轮工作区面板 / 终端的手工回归。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -525,7 +525,7 @@
 
 验证：`svg_cli.py validate` 无错误；`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；浏览器实测资源加载为 205×200 源图并渲染为 12×12。
 
-### 2026-10-03 批次 22：styles.css 结构清理 + impeccable sidecar（待验收）
+### 2026-10-03 批次 22：styles.css 结构清理 + impeccable sidecar
 
 目标是把“历史玻璃层 + 末尾迁移覆盖层”收敛成一层，而不是继续往上叠规则。
 
@@ -565,22 +565,18 @@
 - 浏览器 demo 1440x900 与 900x700 截图：无横向溢出，composer 居中，模型/思考按钮为安静的透明控件。
 - `.impeccable/design.json` 通过 `JSON.parse`；schemaVersion 2，含 14 个 colorMeta（OKLCH ramp）、4 个 typographyMeta、2 个 shadow、3 个 motion、3 个 breakpoint、9 个组件。
 
+用户已验收，随 `6b6b95b feat(desktop): consolidate stylesheet layers and add design sidecar` 提交。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
 2. [x] **工作区面板多视图**：批次 19-21 已实现并在真实 Electron 中验证，随 `b2644f5`、`b5e30b2` 提交。
-3. [x] **结构清理**：批次 22 删除旧玻璃层，白色叠加只剩侧栏 sheen 两处；待验收。
-4. [x] **`.impeccable/design.json` sidecar**：批次 22 已写入 schemaVersion 2；待验收。
+3. [x] **结构清理**：批次 22 删除旧玻璃层，白色叠加只剩侧栏 sheen 两处；已验收。
+4. [x] **`.impeccable/design.json` sidecar**：批次 22 已写入 schemaVersion 2；已验收。
 
 ## 未提交状态
 
-批次 1-21 已提交。批次 22 改动未提交，等待验收：
-
-- 修改：`packages/codepiddy-desktop/src/renderer/styles.css`
-- 新增：`.impeccable/design.json`
-- 文档：本文件（批次 22 记录）
-
-根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-22 已提交，工作树干净。根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
