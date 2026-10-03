@@ -729,6 +729,32 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
+## Pi core 更新边界（2026-10-03 审计）
+
+结论：外壳与 Pi 的边界基本干净，`packages/codepiddy-*` 全部是外壳，Pi 只通过 CLI RPC + 扩展 API 使用；但 `packages/ai` / `packages/coding-agent` 里仍残留两处功能性补丁，**Pi 更新后已经失效**。本机正在运行的客户端用的是 v0.99.1 更新运行时，已实测确认这两处补丁当前未生效。
+
+仍然侵入 core 的代码（相对 `9cf21c8` 上游基线）：
+
+1. `packages/ai/src/utils/retry.ts`：在可重试错误模式里加了 `gateway_concurrency_limit` / `concurrency.?limit`（commit `c345b54`）。v0.99.1 的 bundle 里搜不到这两个字符串。
+2. `packages/coding-agent/src/core/settings-manager.ts`：`getRetrySettings()` 默认值改成 `maxRetries 5 / baseDelayMs 1000 / maxAgentDelayMs 5000`（commit `c345b54`）。v0.99.1 的 `dist/core/settings-manager.js` 仍是 `?? 3` / `?? 2000` / `DEFAULT_MAX_AGENT_RETRY_DELAY_MS`。
+
+不影响运行、更新后会被上游完整包覆盖的 core 差异：
+
+- 删除的 docs / examples / test（清理 commit `45c39bc`）。
+- 各 Pi 包 devDependency `vitest 4.1.9 → 4.1.11`。
+- 生成的 `packages/ai/src/providers/data/*.json` 模型数据。
+
+已经修掉的旧侵入：
+
+- `PI_SHELL_PATH` 私有环境变量旁路（`647cf1b`）。
+- 私有 RPC 命令（`7d5f368`）。
+- `getShellPath()` 现在只读 Pi 原生 `settings.json`。
+
+建议：
+
+- 重试默认值改成外壳写 Pi 原生 `settings.json` 的 `retry.maxRetries / baseDelayMs / maxAgentDelayMs`，再把 core 默认值改回上游，更新后仍然生效。
+- `gateway_concurrency_limit` 没有配置钩子，只能向上游 Pi 提 PR，或接受它只在内置 runtime 生效。
+
 ## 决策记录
 
 | 日期 | 决策 | 理由 |
@@ -743,6 +769,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 | 2026-10-02 | UI 字体采用 `Monaspace Argon + Maple Mono NF CN` | 用户要求英文和中文分别优化，且两份字体均适合作为技术工具字体 |
 | 2026-10-02 | app icon 使用透明黑白矢量，不再保留图片底模 | 用户确认原图白色背景造成分层 |
 | 2026-10-03 | 变更 diff 走 Pi 扩展快照（`tool_call` 前抓旧内容、`tool_result` 后写 patch），不改 Pi core | 用户明确要求 Pi core 可更新，增强只能走扩展点 |
+| 2026-10-03 | 记入 core 更新边界审计：重试默认值和 gateway 并发错误模式仍是 core 补丁，更新后失效 | 用户要求确认外壳没有依赖私有 core 修改 |
 
 ## 待用户确认
 
