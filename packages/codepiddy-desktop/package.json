@@ -20,7 +20,10 @@
   "dependencies": {
     "@codepiddy/core": "0.1.0",
     "@codepiddy/shared": "0.1.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "lucide-react": "1.48.0",
+    "node-pty": "1.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -42,6 +45,8 @@
     "productName": "CodePIddy",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": ["node_modules/node-pty/**/*"],
     "directories": {
       "output": "../../.artifacts/release",
       "buildResources": "resources/icons"
@@ -50,7 +55,8 @@
       "dist/**/*",
       "!dist/runtime-extensions/**/*",
       "resources/icons/codepiddy-icon-1024.png",
-      "package.json"
+      "package.json",
+      "node_modules/node-pty/**/*"
     ],
     "extraResources": [
       {

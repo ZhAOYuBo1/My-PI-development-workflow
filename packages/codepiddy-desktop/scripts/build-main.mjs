@@ -12,7 +12,7 @@ await Promise.all([
     platform: "node",
     format: "esm",
     target: "node22",
-    external: ["electron"],
+    external: ["electron", "node-pty"],
     sourcemap: true,
   }),
   build({

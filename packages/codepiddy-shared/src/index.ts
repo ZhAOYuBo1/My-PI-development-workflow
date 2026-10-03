@@ -250,6 +250,7 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	readWorkspaceFile(projectRoot: string, relativePath: string): Promise<WorkspaceFileContent>;
 	startTerminal(input: TerminalStartInput): Promise<TerminalSessionInfo>;
 	writeTerminal(input: TerminalWriteInput): Promise<void>;
+	resizeTerminal(input: TerminalResizeInput): Promise<void>;
 	killTerminal(terminalId: string): Promise<void>;
 	getProjectWriteLeaseStatus(projectId: string): Promise<ProjectWriteLeaseStatus>;
 	clearStaleProjectWriteLease(projectId: string): Promise<ProjectWriteLeaseStatus>;
@@ -290,6 +291,10 @@ export interface WorkspaceFileContent {
 export interface TerminalStartInput {
 	terminalId: string;
 	projectRoot: string;
+	/** 初始列数；缺省时由主进程取 80。 */
+	cols?: number;
+	/** 初始行数；缺省时由主进程取 24。 */
+	rows?: number;
 }
 
 export interface TerminalWriteInput {
@@ -297,10 +302,21 @@ export interface TerminalWriteInput {
 	data: string;
 }
 
+export interface TerminalResizeInput {
+	terminalId: string;
+	cols: number;
+	rows: number;
+}
+
 export interface TerminalSessionInfo {
 	terminalId: string;
 	shell: string;
 	cwd: string;
+	/** 来源的 Windows Terminal profile 名；没有 WT 配置时为 null。 */
+	profileName?: string | null;
+	fontFamily?: string | null;
+	fontSize?: number | null;
+	cursorStyle?: "bar" | "block" | "underline" | null;
 }
 
 export interface TerminalClientEvent {

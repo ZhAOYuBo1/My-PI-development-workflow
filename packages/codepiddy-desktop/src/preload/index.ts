@@ -16,6 +16,7 @@ import type {
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
 	TerminalClientEvent,
+	TerminalResizeInput,
 	TerminalStartInput,
 	TerminalWriteInput,
 } from "@codepiddy/shared";
@@ -81,6 +82,7 @@ const channels = {
 	readWorkspaceFile: "codepiddy:workspace:file:read",
 	startTerminal: "codepiddy:terminal:start",
 	writeTerminal: "codepiddy:terminal:write",
+	resizeTerminal: "codepiddy:terminal:resize",
 	killTerminal: "codepiddy:terminal:kill",
 	terminalEvent: "codepiddy:terminal:event",
 	sendAgentPrompt: "codepiddy:agent:prompt",
@@ -137,6 +139,7 @@ const api: CodePIddyClientApi = {
 		ipcRenderer.invoke(channels.readWorkspaceFile, projectRoot, relativePath),
 	startTerminal: (input: TerminalStartInput) => ipcRenderer.invoke(channels.startTerminal, input),
 	writeTerminal: (input: TerminalWriteInput) => ipcRenderer.invoke(channels.writeTerminal, input),
+	resizeTerminal: (input: TerminalResizeInput) => ipcRenderer.invoke(channels.resizeTerminal, input),
 	killTerminal: (terminalId: string) => ipcRenderer.invoke(channels.killTerminal, terminalId),
 	getSettingsStatus: () => ipcRenderer.invoke(channels.settingsStatus),
 	getPiRuntimeStatus: () => ipcRenderer.invoke(channels.piRuntimeStatus),

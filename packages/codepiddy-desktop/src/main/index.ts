@@ -1,4 +1,4 @@
-import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { copyFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -45,6 +45,7 @@ import type {
 	TerminalSessionInfo,
 } from "@codepiddy/shared";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, webContents } from "electron";
+import pty, { type IPty } from "node-pty";
 import {
 	assertPathInside,
 	parseAgentLocator,
@@ -67,6 +68,7 @@ import {
 	parseSetAgentModelInput,
 	parseSetAgentThinkingInput,
 	parseTerminalId,
+	parseTerminalResizeInput,
 	parseTerminalStartInput,
 	parseTerminalWriteInput,
 } from "./ipc-validation.ts";
@@ -76,6 +78,7 @@ import { RecentProjectStore } from "./recent-project-store.ts";
 import { AppSettingsStore } from "./settings-store.ts";
 import { SingleFlightMap } from "./single-flight.ts";
 import { discoverAgentSkills, resolveBuiltinSkillsDirectory, resolveRoleSkillPaths } from "./skill-catalog.ts";
+import { readWindowsTerminalProfile, type TerminalCursorStyle } from "./windows-terminal.ts";
 
 const channels = {
 	abortAgent: "codepiddy:agent:abort",
@@ -137,6 +140,7 @@ const channels = {
 	readWorkspaceFile: "codepiddy:workspace:file:read",
 	startTerminal: "codepiddy:terminal:start",
 	writeTerminal: "codepiddy:terminal:write",
+	resizeTerminal: "codepiddy:terminal:resize",
 	killTerminal: "codepiddy:terminal:kill",
 	terminalEvent: "codepiddy:terminal:event",
 	sendAgentPrompt: "codepiddy:agent:prompt",
@@ -147,35 +151,81 @@ interface TerminalSession {
 	projectRoot: string;
 	ownerId: number;
 	shell: string;
-	cwd: string;
-	child: ChildProcessWithoutNullStreams;
+	profileName: string | null;
+	fontFamily: string | null;
+	fontSize: number | null;
+	cursorStyle: TerminalCursorStyle | null;
+	pty: IPty;
 }
 
 const terminalSessions = new Map<string, TerminalSession>();
 const terminalOwnerCleanupRegistered = new Set<number>();
 
-function resolveTerminalShell(): { command: string; args: string[]; label: string } {
+const DEFAULT_TERMINAL_COLS = 80;
+const DEFAULT_TERMINAL_ROWS = 24;
+
+interface ResolvedTerminalShell {
+	command: string;
+	args: string[];
+	label: string;
+	profileName: string | null;
+	fontFamily: string | null;
+	fontSize: number | null;
+	cursorStyle: TerminalCursorStyle | null;
+}
+
+function resolveTerminalShell(): ResolvedTerminalShell {
 	if (process.platform === "win32") {
+		// 优先跟随本机 Windows Terminal 的默认 profile（只读标准配置路径，不做机器特定写死）。
+		const profile = readWindowsTerminalProfile();
+		if (profile) {
+			return {
+				command: profile.command,
+				args: profile.args,
+				label: profile.label,
+				profileName: profile.name,
+				fontFamily: profile.fontFamily,
+				fontSize: profile.fontSize,
+				cursorStyle: profile.cursorStyle,
+			};
+		}
 		if (spawnSync("where.exe", ["pwsh.exe"], { windowsHide: true }).status === 0) {
 			const version = spawnSync(
 				"pwsh.exe",
 				["-NoLogo", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"],
 				{ encoding: "utf8", windowsHide: true },
 			).stdout.trim();
+			// 没有 WT 配置时回退到 PATH 上的 pwsh，同样不传 -NoProfile，让 profile 正常加载。
 			return {
 				command: "pwsh.exe",
-				args: ["-NoLogo", "-NoProfile", "-NoExit", "-Command", "-"],
+				args: [],
 				label: version ? `PowerShell ${version}` : "PowerShell",
+				profileName: null,
+				fontFamily: null,
+				fontSize: null,
+				cursorStyle: null,
 			};
 		}
 		return {
 			command: "powershell.exe",
-			args: ["-NoLogo", "-NoProfile", "-NoExit", "-Command", "-"],
+			args: [],
 			label: "Windows PowerShell",
+			profileName: null,
+			fontFamily: null,
+			fontSize: null,
+			cursorStyle: null,
 		};
 	}
 	const command = process.env.SHELL || "/bin/bash";
-	return { command, args: ["-l"], label: path.basename(command) };
+	return {
+		command,
+		args: ["-l"],
+		label: path.basename(command),
+		profileName: null,
+		fontFamily: null,
+		fontSize: null,
+		cursorStyle: null,
+	};
 }
 
 function sendTerminalEvent(session: TerminalSession, event: Omit<TerminalClientEvent, "terminalId">): void {
@@ -188,7 +238,11 @@ function stopTerminalSession(terminalId: string): void {
 	const session = terminalSessions.get(terminalId);
 	if (!session) return;
 	terminalSessions.delete(terminalId);
-	session.child.kill();
+	try {
+		session.pty.kill();
+	} catch {
+		// 进程可能已经退出。
+	}
 }
 
 function stopOwnerTerminals(ownerId: number): void {
@@ -1461,32 +1515,33 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.readWorkspaceFile, (_event, rawProjectRoot: unknown, rawPath: unknown) =>
 		readWorkspaceFile(requireOpenProjectRoot(rawProjectRoot), parseBoundedText(rawPath, "文件路径", 1000)),
 	);
-	ipcMain.handle(channels.startTerminal, async (event, raw: unknown): Promise<TerminalSessionInfo> => {
+	ipcMain.handle(channels.startTerminal, (event, raw: unknown): TerminalSessionInfo => {
 		const input = parseTerminalStartInput(raw);
 		const projectRoot = requireOpenProjectRoot(input.projectRoot);
 		stopTerminalSession(input.terminalId);
 		const resolved = resolveTerminalShell();
-		const child = spawn(resolved.command, resolved.args, {
+		const ptyProcess = pty.spawn(resolved.command, resolved.args, {
+			name: "xterm-256color",
+			cols: input.cols ?? DEFAULT_TERMINAL_COLS,
+			rows: input.rows ?? DEFAULT_TERMINAL_ROWS,
 			cwd: projectRoot,
-			env: { ...process.env, TERM: "xterm-256color" },
-			windowsHide: true,
-			stdio: ["pipe", "pipe", "pipe"],
-		});
-		await new Promise<void>((resolve, reject) => {
-			const onError = (error: Error): void => reject(error);
-			child.once("spawn", () => {
-				child.off("error", onError);
-				resolve();
-			});
-			child.once("error", onError);
+			env: {
+				...process.env,
+				TERM: "xterm-256color",
+				// 关掉 PowerShell 启动时的“有新版本可用”提示，保持终端首屏干净。
+				POWERSHELL_UPDATECHECK: "Off",
+			},
 		});
 		const session: TerminalSession = {
 			terminalId: input.terminalId,
 			projectRoot,
 			ownerId: event.sender.id,
 			shell: resolved.label,
-			cwd: projectRoot,
-			child,
+			profileName: resolved.profileName,
+			fontFamily: resolved.fontFamily,
+			fontSize: resolved.fontSize,
+			cursorStyle: resolved.cursorStyle,
+			pty: ptyProcess,
 		};
 		terminalSessions.set(input.terminalId, session);
 		const ownerId = event.sender.id;
@@ -1497,26 +1552,34 @@ function registerIpcHandlers(
 				stopOwnerTerminals(ownerId);
 			});
 		}
-		child.stdout.on("data", (data: Buffer) =>
-			sendTerminalEvent(session, { type: "data", data: data.toString("utf8") }),
-		);
-		child.stderr.on("data", (data: Buffer) =>
-			sendTerminalEvent(session, { type: "data", data: data.toString("utf8") }),
-		);
-		child.on("error", (error) => {
-			sendTerminalEvent(session, { type: "error", data: error.message });
+		ptyProcess.onData((data) => sendTerminalEvent(session, { type: "data", data }));
+		ptyProcess.onExit(({ exitCode }) => {
+			sendTerminalEvent(session, { type: "exit", exitCode });
 			terminalSessions.delete(input.terminalId);
 		});
-		child.on("exit", (code) => {
-			sendTerminalEvent(session, { type: "exit", exitCode: code });
-			terminalSessions.delete(input.terminalId);
-		});
-		return { terminalId: input.terminalId, shell: resolved.label, cwd: projectRoot };
+		return {
+			terminalId: input.terminalId,
+			shell: resolved.label,
+			cwd: projectRoot,
+			profileName: resolved.profileName,
+			fontFamily: resolved.fontFamily,
+			fontSize: resolved.fontSize,
+			cursorStyle: resolved.cursorStyle,
+		};
 	});
 	ipcMain.handle(channels.writeTerminal, (event, raw: unknown) => {
 		const input = parseTerminalWriteInput(raw);
 		const session = requireTerminalSession(input.terminalId, event.sender.id);
-		session.child.stdin.write(`${input.data}\n`);
+		session.pty.write(input.data);
+	});
+	ipcMain.handle(channels.resizeTerminal, (event, raw: unknown) => {
+		const input = parseTerminalResizeInput(raw);
+		const session = requireTerminalSession(input.terminalId, event.sender.id);
+		try {
+			session.pty.resize(input.cols, input.rows);
+		} catch {
+			// 会话可能已经退出。
+		}
 	});
 	ipcMain.handle(channels.killTerminal, (event, rawTerminalId: unknown) => {
 		const terminalId = parseTerminalId(rawTerminalId);

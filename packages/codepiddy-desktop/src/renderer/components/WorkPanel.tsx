@@ -1,11 +1,12 @@
 import type { WorkspaceDirEntry, WorkspaceFileContent } from "@codepiddy/shared";
+import { FitAddon } from "@xterm/addon-fit";
+import { type ITheme, Terminal } from "@xterm/xterm";
 import {
 	Check,
 	ChevronLeft,
 	ChevronRight,
 	CircleAlert,
 	Copy,
-	CornerDownLeft,
 	FileDiff,
 	FileQuestion,
 	Files,
@@ -39,7 +40,6 @@ import {
 	type ProjectableToolItem,
 	panelDiffLines,
 	projectToolToPanel,
-	stripAnsi,
 	summarizePanelDiff,
 	type WorkPanelEntry,
 } from "./work-panel.ts";
@@ -50,7 +50,6 @@ const PANEL_DEFAULT_WIDTH = 480;
 const DIFF_LINE_LIMIT = 800;
 const CHANGE_HISTORY_LIMIT = 80;
 const CHANGE_BODY_LIMIT = 160_000;
-const CWD_MARKER = "__CODEPIDDY_CWD__";
 
 type WorkPanelTab = "files" | "changes" | "terminal";
 
@@ -190,24 +189,6 @@ function mergeChangeEntries(live: WorkPanelEntry[], persisted: WorkPanelEntry[])
 	for (const entry of persisted) merged.set(entry.id, entry);
 	for (const entry of live) merged.set(entry.id, entry);
 	return [...merged.values()].sort((left, right) => left.timestamp - right.timestamp).slice(-CHANGE_HISTORY_LIMIT);
-}
-
-function stripCwdMarker(value: string): { text: string; cwd: string | null } {
-	const marker = new RegExp(`(?:^|\\r?\\n)${CWD_MARKER}([^\\r\\n]*)\\r?\\n?`, "g");
-	let cwd: string | null = null;
-	const text = value.replace(marker, (_match, captured: string) => {
-		cwd = captured.trim();
-		return "\n";
-	});
-	const inline = text.indexOf(CWD_MARKER);
-	if (inline === -1) return { text, cwd };
-	const tail = text.slice(inline + CWD_MARKER.length);
-	const lineEnd = tail.search(/[\r\n]/);
-	cwd = (lineEnd === -1 ? tail : tail.slice(0, lineEnd)).trim();
-	return {
-		text: `${text.slice(0, inline)}${lineEnd === -1 ? "" : text.slice(inline + CWD_MARKER.length + lineEnd)}`,
-		cwd,
-	};
 }
 
 function PanelGlyph({ kind }: { kind: "dir" | "file" }) {
@@ -435,19 +416,39 @@ const ChangeBrowser = memo(function ChangeBrowser({
 	);
 });
 
+const TERMINAL_THEME: ITheme = {
+	background: "#ffffff",
+	foreground: "#17181a",
+	cursor: "#2563eb",
+	cursorAccent: "#ffffff",
+	selectionBackground: "rgba(37, 99, 235, 0.22)",
+	black: "#17181a",
+	red: "#b91c1c",
+	green: "#15803d",
+	yellow: "#8a5a00",
+	blue: "#1d4ed8",
+	magenta: "#7c3aed",
+	cyan: "#0e7490",
+	// PSReadLine 的默认/参数颜色落在 ANSI 7/15 上；浅色主题下必须把它们压深，
+	// 否则就是截图里那种白底浅灰看不见的情况。
+	white: "#4a4c50",
+	brightBlack: "#6e7075",
+	brightRed: "#dc2626",
+	brightGreen: "#047857",
+	brightYellow: "#d97706",
+	brightBlue: "#2563eb",
+	brightMagenta: "#6d28d9",
+	brightCyan: "#0369a1",
+	brightWhite: "#17181a",
+};
+
 const TerminalPane = memo(function TerminalPane({ projectRoot }: { projectRoot: string }) {
 	const [terminalId] = useState(() => crypto.randomUUID());
-	const [output, setOutput] = useState("");
-	const [input, setInput] = useState("");
 	const [shell, setShell] = useState("终端");
-	const [cwd, setCwd] = useState(projectRoot);
-	const [commandHistory, setCommandHistory] = useState<string[]>([]);
 	const [status, setStatus] = useState<"starting" | "ready" | "exited" | "error">("starting");
 	const [error, setError] = useState<string | null>(null);
-	const outputRef = useRef<HTMLTextAreaElement | null>(null);
-	const inputRef = useRef<HTMLInputElement | null>(null);
-	const streamBufferRef = useRef("");
-	const historyIndexRef = useRef(-1);
+	const hostRef = useRef<HTMLDivElement | null>(null);
+	const terminalRef = useRef<Terminal | null>(null);
 
 	useEffect(() => {
 		if (!("codepiddy" in window)) {
@@ -455,80 +456,105 @@ const TerminalPane = memo(function TerminalPane({ projectRoot }: { projectRoot: 
 			setStatus("error");
 			return;
 		}
+		const host = hostRef.current;
+		if (!host) return;
 		let disposed = false;
+		const terminal = new Terminal({
+			allowProposedApi: true,
+			cursorBlink: true,
+			cursorStyle: "bar",
+			fontFamily: '"Monaspace Argon", "Maple Mono NF CN", ui-monospace, Consolas, monospace',
+			fontSize: 12.5,
+			lineHeight: 1.2,
+			scrollback: 5_000,
+			theme: TERMINAL_THEME,
+		});
+		const fit = new FitAddon();
+		terminal.loadAddon(fit);
+		terminal.open(host);
+		terminalRef.current = terminal;
+
+		const fitAndReport = (): void => {
+			try {
+				fit.fit();
+			} catch {
+				return;
+			}
+			const dimensions = fit.proposeDimensions();
+			if (!dimensions || disposed) return;
+			void window.codepiddy
+				.resizeTerminal({ terminalId, cols: dimensions.cols, rows: dimensions.rows })
+				.catch(() => undefined);
+		};
+
+		fitAndReport();
+		const initial = fit.proposeDimensions() ?? { cols: 80, rows: 24 };
+
 		const off = window.codepiddy.onTerminalEvent((event) => {
 			if (event.terminalId !== terminalId) return;
 			if (event.type === "data" && event.data) {
-				const combined = `${streamBufferRef.current}${event.data}`;
-				const lastNewline = combined.lastIndexOf("\n");
-				if (lastNewline === -1) {
-					streamBufferRef.current = combined;
-					return;
-				}
-				streamBufferRef.current = combined.slice(lastNewline + 1);
-				const { text, cwd: nextCwd } = stripCwdMarker(combined.slice(0, lastNewline + 1));
-				if (nextCwd) setCwd(nextCwd);
-				setOutput((current) => `${current}${stripAnsi(text)}`.slice(-200_000));
+				terminal.write(event.data);
 			} else if (event.type === "error") {
 				setError(event.data || "终端进程出错。");
 				setStatus("error");
 			} else if (event.type === "exit") {
-				if (streamBufferRef.current) {
-					const { text } = stripCwdMarker(streamBufferRef.current);
-					streamBufferRef.current = "";
-					setOutput((current) => `${current}${stripAnsi(text)}`.slice(-200_000));
-				}
 				setStatus("exited");
 			}
 		});
+
+		terminal.attachCustomKeyEventHandler((event) => {
+			if (event.type !== "keydown") return true;
+			const copyModifier = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c";
+			if (!copyModifier) return true;
+			const selection = terminal.getSelection();
+			if (!selection) return true;
+			void navigator.clipboard.writeText(selection).catch(() => undefined);
+			terminal.clearSelection();
+			return false;
+		});
+
+		const dataDisposable = terminal.onData((data) => {
+			void window.codepiddy.writeTerminal({ terminalId, data }).catch(() => undefined);
+		});
+
 		void window.codepiddy
-			.startTerminal({ terminalId, projectRoot })
+			.startTerminal({ terminalId, projectRoot, cols: initial.cols, rows: initial.rows })
 			.then((info) => {
 				if (disposed) return;
 				setShell(info.shell);
-				setCwd(info.cwd);
+				if (info.fontFamily) {
+					terminal.options.fontFamily = `"${info.fontFamily}", ${terminal.options.fontFamily}`;
+				}
+				if (typeof info.fontSize === "number" && info.fontSize >= 9 && info.fontSize <= 20) {
+					terminal.options.fontSize = info.fontSize;
+				}
+				if (info.cursorStyle) terminal.options.cursorStyle = info.cursorStyle;
+				fitAndReport();
 				setStatus("ready");
-				requestAnimationFrame(() => inputRef.current?.focus());
+				terminal.focus();
 			})
 			.catch((caught: unknown) => {
 				if (disposed) return;
 				setError(caught instanceof Error ? caught.message : "启动终端失败。");
 				setStatus("error");
 			});
+
+		const resizeObserver = new ResizeObserver(() => {
+			requestAnimationFrame(fitAndReport);
+		});
+		resizeObserver.observe(host);
+
 		return () => {
 			disposed = true;
+			resizeObserver.disconnect();
+			dataDisposable.dispose();
 			off();
+			terminal.dispose();
+			terminalRef.current = null;
 			void window.codepiddy.killTerminal(terminalId).catch(() => undefined);
 		};
 	}, [projectRoot, terminalId]);
 
-	useEffect(() => {
-		if (!output) return;
-		const element = outputRef.current;
-		if (element) element.scrollTop = element.scrollHeight;
-	}, [output]);
-
-	async function submitCommand(): Promise<void> {
-		const command = input.trim();
-		if (!command || status !== "ready") return;
-		setInput("");
-		setCommandHistory((current) => (current.at(-1) === command ? current : [...current, command].slice(-100)));
-		historyIndexRef.current = -1;
-		try {
-			await window.codepiddy.writeTerminal({
-				terminalId,
-				data: shell.startsWith("PowerShell")
-					? `${command}; Write-Output "${CWD_MARKER}$((Get-Location).Path)"`
-					: `${command}; printf '\\n${CWD_MARKER}%s\\n' "$PWD"`,
-			});
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "写入终端失败。");
-		} finally {
-			inputRef.current?.focus();
-		}
-	}
-
-	const prompt = shell.startsWith("PowerShell") ? `PS ${cwd}>` : `${cwd}$`;
 	return (
 		<div className="terminal-pane">
 			<div className="terminal-toolbar">
@@ -536,80 +562,17 @@ const TerminalPane = memo(function TerminalPane({ projectRoot }: { projectRoot: 
 					<span className="terminal-status-dot" aria-hidden="true" />
 					{shell}
 				</span>
-				<span className="terminal-cwd" title={cwd}>
-					{cwd}
-				</span>
 				<PanelIconButton
 					label="清空终端"
 					onClick={() => {
-						setOutput("");
-						inputRef.current?.focus();
+						terminalRef.current?.clear();
+						terminalRef.current?.focus();
 					}}
 				>
 					<Trash2 size={14} strokeWidth={2} />
 				</PanelIconButton>
 			</div>
-			<textarea
-				ref={outputRef}
-				className="terminal-output"
-				value={output}
-				readOnly
-				spellCheck={false}
-				wrap="off"
-				aria-label="终端输出"
-			/>
-			<form
-				className="terminal-input-row"
-				onSubmit={(event) => {
-					event.preventDefault();
-					void submitCommand();
-				}}
-			>
-				<span className="terminal-prompt">{prompt}</span>
-				<input
-					ref={inputRef}
-					value={input}
-					onChange={(event) => setInput(event.target.value)}
-					spellCheck={false}
-					autoComplete="off"
-					disabled={status !== "ready"}
-					aria-label="终端命令"
-					onKeyDown={(event) => {
-						if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l") {
-							event.preventDefault();
-							setOutput("");
-							return;
-						}
-						if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
-							const inputElement = event.currentTarget;
-							if (inputElement.selectionStart !== inputElement.selectionEnd) return;
-							if (!input) return;
-							event.preventDefault();
-							setInput("");
-							historyIndexRef.current = -1;
-							return;
-						}
-						if (event.key === "ArrowUp") {
-							if (commandHistory.length === 0) return;
-							event.preventDefault();
-							const next = Math.min(historyIndexRef.current + 1, commandHistory.length - 1);
-							historyIndexRef.current = next;
-							setInput(commandHistory[commandHistory.length - 1 - next] ?? "");
-							return;
-						}
-						if (event.key === "ArrowDown") {
-							if (historyIndexRef.current < 0) return;
-							event.preventDefault();
-							const next = historyIndexRef.current - 1;
-							historyIndexRef.current = next;
-							setInput(next < 0 ? "" : (commandHistory[commandHistory.length - 1 - next] ?? ""));
-						}
-					}}
-				/>
-				<button type="submit" disabled={status !== "ready" || !input.trim()} aria-label="运行命令">
-					<CornerDownLeft size={14} strokeWidth={2} />
-				</button>
-			</form>
+			<div className="terminal-host" ref={hostRef} />
 			{error ? <p className="terminal-error">{error}</p> : null}
 		</div>
 	);

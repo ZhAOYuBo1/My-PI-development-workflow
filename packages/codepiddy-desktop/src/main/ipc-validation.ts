@@ -20,6 +20,7 @@ import type {
 	SetAgentModelInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
+	TerminalResizeInput,
 	TerminalStartInput,
 	TerminalWriteInput,
 } from "@codepiddy/shared";
@@ -40,14 +41,6 @@ function text(value: unknown, label: string, maximum: number, allowEmpty = false
 	if (result.length > maximum) throw new Error(`${label} 超过最大长度 ${maximum}`);
 	if (result.includes("\0")) throw new Error(`${label} 包含非法字符`);
 	return result;
-}
-
-function rawText(value: unknown, label: string, maximum: number): string {
-	if (typeof value !== "string") throw new Error(`${label} 必须是字符串`);
-	if (!value.trim()) throw new Error(`${label} 不能为空`);
-	if (value.length > maximum) throw new Error(`${label} 超过最大长度 ${maximum}`);
-	if (value.includes("\0")) throw new Error(`${label} 包含非法字符`);
-	return value;
 }
 
 function role(value: unknown): AgentRole {
@@ -249,6 +242,8 @@ export function parseTerminalStartInput(value: unknown): TerminalStartInput {
 	return {
 		terminalId: terminalId(input.terminalId),
 		projectRoot: projectRoot(input.projectRoot),
+		...(input.cols === undefined ? {} : { cols: terminalDimension(input.cols, "终端列数") }),
+		...(input.rows === undefined ? {} : { rows: terminalDimension(input.rows, "终端行数") }),
 	};
 }
 
@@ -256,8 +251,34 @@ export function parseTerminalWriteInput(value: unknown): TerminalWriteInput {
 	const input = record(value, "Terminal Write");
 	return {
 		terminalId: terminalId(input.terminalId),
-		data: rawText(input.data, "终端输入", 64_000),
+		data: terminalData(input.data),
 	};
+}
+
+// 终端输入是原始字节流：Tab(\t)、回车(\r)、Esc、方向键转义序列都必须原样通过，
+// 不能复用会 trim 掉控制字符的 rawText。
+function terminalData(value: unknown): string {
+	if (typeof value !== "string") throw new Error("终端输入必须是字符串");
+	if (value.length === 0) throw new Error("终端输入不能为空");
+	if (value.length > 64_000) throw new Error("终端输入超过最大长度 64000");
+	if (value.includes("\0")) throw new Error("终端输入包含非法字符");
+	return value;
+}
+
+export function parseTerminalResizeInput(value: unknown): TerminalResizeInput {
+	const input = record(value, "Terminal Resize");
+	return {
+		terminalId: terminalId(input.terminalId),
+		cols: terminalDimension(input.cols, "终端列数"),
+		rows: terminalDimension(input.rows, "终端行数"),
+	};
+}
+
+function terminalDimension(value: unknown, label: string): number {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 2 || value > 1000) {
+		throw new Error(`${label}无效`);
+	}
+	return value;
 }
 
 export function parseTerminalId(value: unknown): string {
