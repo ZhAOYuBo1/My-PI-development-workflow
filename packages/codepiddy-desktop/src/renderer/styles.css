@@ -154,8 +154,8 @@ button { color: inherit; }
 .primary-button:disabled { opacity: .45; cursor: default; }
 .secondary-button { border: 1px solid var(--cp-surface-inset); background: #fff; }
 .secondary-button:hover { background: var(--cp-surface-secondary); }
-.work-item-empty { max-width: 780px; padding: var(--cp-space-4xl) var(--cp-space-4xl); margin: 0 auto; }
-.work-item-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--cp-space-xl); padding-bottom: var(--cp-space-xl); border-bottom: 1px solid var(--cp-surface-secondary); }
+.work-item-empty { max-width: 860px; padding: var(--cp-space-4xl) var(--cp-space-4xl); margin: 0 auto; }
+.work-item-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--cp-space-xl); padding-bottom: var(--cp-space-xl); border-bottom: 1px solid var(--cp-line-subtle); }
 .work-item-heading span { color: var(--cp-ink-faint); font-size: 12px; }
 .work-item-heading h1 { margin: var(--cp-space-xxs) 0 var(--cp-space-sm); font-size: 23px; }
 .work-item-heading p { margin: 0; color: var(--cp-ink-muted); line-height: 1.5; }
@@ -483,7 +483,7 @@ button { color: inherit; }
   height: 22px;
   display: grid;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 72%);
+  border: 1px solid color-mix(in oklab, var(--cp-surface) 72%, transparent);
   border-radius: var(--cp-radius-sm);
   background: rgb(36 36 34 / 82%);
   color: #fff;
@@ -529,17 +529,10 @@ button { color: inherit; }
 /* 外观对 disabled / 非 disabled 一视同仁，切换时盒子不变 */
 .composer button.thinking-control-trigger:not(:disabled),
 .composer button.thinking-control-trigger:disabled {
-  border-color: rgb(255 255 255 / 80%);
-  background: var(--cp-surface-secondary);
-  color: var(--cp-ink-secondary);
-  box-shadow: var(--cp-glass-highlight), 0 4px 12px rgb(23 24 26 / 5%);
-  backdrop-filter: blur(10px);
-  transition: border-color 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out;
+  transition: background 140ms ease-out, color 140ms ease-out;
 }
 .composer button.thinking-control-trigger:not(:disabled) { cursor: pointer; }
 .composer button.thinking-control-trigger:disabled { cursor: default; }
-.composer button.thinking-control-trigger:not(:disabled):hover { border-color: var(--cp-surface-inset); background: rgb(255 255 255 / 78%); color: var(--cp-ink); }
-.composer button.thinking-control-trigger[aria-expanded="true"]:not(:disabled) { border-color: var(--cp-surface-inset); background: rgb(255 255 255 / 78%); color: var(--cp-accent); }
 .thinking-control-current { color: var(--cp-accent); font-weight: 600; }
 .thinking-control-caret {
   width: 0;
@@ -685,7 +678,7 @@ button { color: inherit; }
 .tool-status.running .tool-glyph { color: var(--cp-warning); }
 .tool-status.done .tool-glyph { color: var(--cp-accent); }
 .tool-status.failed .tool-glyph { color: var(--cp-danger); }
-.tool-details { margin-top: var(--cp-space-sm); padding-top: var(--cp-space-sm); border-top: 1px solid var(--cp-surface-secondary); }
+.tool-details { margin-top: var(--cp-space-sm); padding-top: var(--cp-space-sm); border-top: 1px solid var(--cp-line-subtle); }
 .tool-details small { display: block; margin: var(--cp-space-xs) 0 var(--cp-space-xxs); color: var(--cp-ink-muted); }
 .tool-details pre { max-height: 280px; overflow: auto; margin: 0; white-space: pre-wrap; }
 
@@ -767,7 +760,6 @@ button { color: inherit; }
 .slash-menu button.selected {
   border-color: var(--cp-surface-inset);
   background: var(--cp-surface-secondary);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 70%);
 }
 
 .slash-menu strong {
@@ -927,7 +919,7 @@ button { color: inherit; }
 @media (max-width: 1000px) {
   .model-list section > button { gap: var(--cp-space-sm); }
 }
-.active-project-contents { margin-top: var(--cp-space-sm); padding-top: var(--cp-space-sm); border-top: 1px solid var(--cp-surface-secondary); }
+.active-project-contents { margin-top: var(--cp-space-sm); padding-top: var(--cp-space-sm); border-top: 1px solid var(--cp-line-subtle); }
 .active-project-label { padding: var(--cp-space-xxs) var(--cp-space-md) var(--cp-space-xxs); color: var(--cp-ink-faint); font-size: 10px; letter-spacing: .04em; }
 /* Keep the fixed-width sidebar from expanding to the tree's min-content width. */
 .recent-project-list {
@@ -1548,7 +1540,7 @@ button { color: inherit; }
    字号和颜色都【不写死】：继承 .message 的正文样式（16px / var(--cp-ink)）。
    之前写死成 12/11/13px 会让整张表读起来像嵌在正文里的另一个控件，
    而不是正文的一部分 —— 「框内字比外面小」就是这个写死值造成的。 */
-.message-table-scroll { max-width: 100%; margin: var(--cp-space-md) 0; overflow-x: auto; border: 1px solid var(--cp-surface-inset); border-radius: var(--cp-radius-md); background: rgb(255 255 255 / 58%); }
+.message-table-scroll { max-width: 100%; margin: var(--cp-space-md) 0; overflow-x: auto; border: 1px solid var(--cp-surface-inset); border-radius: var(--cp-radius-md); background: var(--cp-surface); }
 .message-table { width: 100%; border-collapse: collapse; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .message-table th,
 .message-table td { padding: var(--cp-space-sm) var(--cp-space-md); text-align: left; vertical-align: top; border-bottom: 1px solid var(--cp-surface-secondary); }
@@ -1556,15 +1548,14 @@ button { color: inherit; }
    竖线比横线重一点（var(--cp-surface-inset) vs var(--cp-surface-secondary)），斑马纹行上才看得清。 */
 .message-table th + th,
 .message-table td + td { border-left: 1px solid var(--cp-surface-inset); }
-.message-table th { background: rgb(240 243 238 / 92%); font-weight: 600; }
-.message-table tbody tr:nth-child(even) { background: rgb(246 247 243 / 72%); }
+.message-table th { background: var(--cp-surface-secondary); font-weight: 600; }
+.message-table tbody tr:nth-child(even) { background: color-mix(in oklab, var(--cp-ink) 3%, transparent); }
 .message-table tbody tr:last-child td { border-bottom: 0; }
 .message-table th[data-align="center"],
 .message-table td[data-align="center"] { text-align: center; }
 .message-table th[data-align="right"],
 .message-table td[data-align="right"] { text-align: right; }
 .inline-code { padding: var(--cp-space-micro) var(--cp-space-xxs); border: 1px solid var(--cp-surface-inset); border-radius: var(--cp-radius-xs); background: var(--cp-surface-secondary); color: var(--cp-ink); font-family: var(--cp-font-mono); font-size: .88em; }
-.tool-error-guidance { margin-top: var(--cp-space-sm); padding: var(--cp-space-sm) var(--cp-space-sm); border-radius: var(--cp-radius-sm); background: color-mix(in oklab, var(--cp-danger) 10%, transparent); color: var(--cp-danger); font-size: 10px; line-height: 1.45; }
 .tool-error-guidance { margin-top: var(--cp-space-sm); padding: var(--cp-space-sm) var(--cp-space-sm); border-radius: var(--cp-radius-sm); background: color-mix(in oklab, var(--cp-danger) 10%, transparent); color: var(--cp-danger); font-size: 10px; line-height: 1.45; }
 /* Agent runtime infrastructure */
 .agent-header-actions {
@@ -1720,7 +1711,7 @@ button { color: inherit; }
   justify-content: space-between;
   gap: var(--cp-space-md);
   padding: var(--cp-space-md) var(--cp-space-md);
-  border-bottom: 1px solid var(--cp-surface-secondary);
+  border-bottom: 1px solid var(--cp-line-subtle);
   background: var(--cp-surface-secondary);
 }
 .role-skill-heading h3 { margin: 0; font-size: 13px; }
@@ -1851,7 +1842,7 @@ button { color: inherit; }
   gap: var(--cp-space-md);
   padding: var(--cp-space-xxs) var(--cp-space-xs) var(--cp-space-xxs) var(--cp-space-md);
   border-bottom: 1px solid var(--cp-surface-secondary);
-  background: rgb(255 255 255 / 55%);
+  background: color-mix(in oklab, var(--cp-surface) 55%, var(--cp-surface-secondary));
 }
 .message-code-lang {
   overflow: hidden;
@@ -1876,11 +1867,11 @@ button { color: inherit; }
   transition: background-color 150ms cubic-bezier(.2, .8, .2, 1), color 150ms cubic-bezier(.2, .8, .2, 1);
 }
 .message-code-actions button:hover { background: var(--cp-surface-secondary); color: var(--cp-ink); }
-/* 开启态用 DESIGN.md 的 muted green，与全局 active 语义一致 */
-.message-code-actions button.is-active { background: rgb(80 107 87 / 12%); color: var(--cp-accent); }
+/* 开启态走全站唯一的交互强调色。 */
+.message-code-actions button.is-active { background: var(--cp-accent-soft); color: var(--cp-accent); }
 .message-code-actions button:focus-visible,
 .message-code-expand:focus-visible {
-  outline: 2px solid rgb(80 107 87 / 55%);
+  outline: 2px solid var(--cp-accent-ring);
   outline-offset: 1px;
 }
 
@@ -1900,7 +1891,11 @@ button { color: inherit; }
   left: 0;
   padding: var(--cp-space-md) var(--cp-space-md) var(--cp-space-md);
   border: 0;
-  background: linear-gradient(to bottom, rgb(247 247 244 / 0%), rgb(247 247 244 / 96%) 42%);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--cp-surface-secondary) 0%, transparent),
+    color-mix(in oklab, var(--cp-surface-secondary) 96%, transparent) 42%
+  );
   color: var(--cp-accent);
   font-family: inherit;
   font-size: 11px;
@@ -1910,21 +1905,10 @@ button { color: inherit; }
 .message-code-expand:hover { color: var(--cp-accent); }
 
 /*
-  Legacy 玻璃变量保留为「中性色调分层」的别名（DESIGN.md 的 Tonal-First / No-Glass 规则）。
-  旧规则继续引用这些名字，但拿到的是实色底 + 半像素描边，不再有绿色调、内高光和模糊。
-  后续把引用点逐个迁移到 --cp-* 之后，这一层就可以删掉。
+  Legacy glass-era component rules were consolidated into the design-system
+  layer below. Only global behavior and glass-independent component layout
+  remain here.
 */
-:root {
-  --cp-glass-surface: var(--cp-surface);
-  --cp-glass-surface-strong: var(--cp-surface);
-  --cp-glass-muted: var(--cp-surface-secondary);
-  --cp-glass-border: var(--cp-line);
-  --cp-glass-line: var(--cp-line);
-  --cp-glass-highlight: 0 0 0 transparent;
-  --cp-shadow-surface: var(--cp-elevation-raised);
-  --cp-shadow-float: var(--cp-elevation-float);
-  --cp-shadow-control: 0 1px 2px rgb(23 24 26 / 6%);
-}
 
 ::selection { background: var(--cp-surface-inset); color: var(--cp-ink); }
 * { scrollbar-color: var(--cp-ink-faint) transparent; scrollbar-width: thin; }
@@ -1936,256 +1920,16 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
-.app-shell {
-  gap: var(--cp-space-md);
-  padding: var(--cp-space-md);
-  background:
-    radial-gradient(circle at 8% 12%, rgb(216 224 216 / 58%), transparent 30%),
-    radial-gradient(circle at 88% 82%, rgb(226 220 209 / 48%), transparent 35%),
-    var(--cp-surface-secondary);
-}
-.app-shell.windows-overlay {
-  padding-top: var(--cp-space-3xl);
-  background:
-    linear-gradient(to bottom, var(--cp-surface-secondary), rgb(236 238 234 / 0%) 48px),
-    radial-gradient(circle at 8% 12%, rgb(216 224 216 / 58%), transparent 30%),
-    radial-gradient(circle at 88% 82%, rgb(226 220 209 / 48%), transparent 35%),
-    var(--cp-surface-secondary);
-}
-
-.sidebar {
-  width: 278px;
-  flex-basis: 278px;
-  padding: var(--cp-space-md) var(--cp-space-sm) var(--cp-space-5xl);
-  overflow-x: hidden;
-  border: 1px solid var(--cp-glass-border);
-  border-radius: var(--cp-radius-xl);
-  background: rgb(247 247 245 / 70%);
-  box-shadow: var(--cp-glass-highlight), 0 12px 32px rgb(40 47 41 / 8%);
-  backdrop-filter: blur(26px) saturate(1.18);
-}
-
 .brand-row { min-height: 44px; }
-.brand-title { color: var(--cp-ink); font-weight: 700; letter-spacing: -.015em; }
 .sidebar .icon-button,
 .sidebar-footer button,
 .new-action,
 .tree-row,
 .recent-project-row,
 .archived-row { transition: background 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out, transform 140ms ease-out; }
-.sidebar .icon-button:hover,
-.sidebar-footer button:hover { background: rgb(255 255 255 / 58%); box-shadow: var(--cp-glass-highlight); }
-
-.sidebar-search {
-  border: 1px solid rgb(255 255 255 / 74%);
-  background: rgb(255 255 255 / 48%);
-  box-shadow: var(--cp-glass-highlight), 0 5px 14px rgb(41 47 42 / 5%);
-  backdrop-filter: blur(16px) saturate(1.1);
-}
-.sidebar-search:focus-within { border-color: var(--cp-accent); box-shadow: 0 0 0 3px rgb(94 122 100 / 10%), var(--cp-glass-highlight); }
-
-.new-action {
-  min-height: 40px;
-  border: 1px solid rgb(255 255 255 / 76%);
-  background: rgb(255 255 255 / 48%);
-  box-shadow: var(--cp-glass-highlight), 0 6px 18px rgb(23 24 26 / 5%);
-}
-.new-action:hover { border-color: var(--cp-surface-inset); background: rgb(255 255 255 / 72%); box-shadow: var(--cp-glass-highlight), 0 9px 22px rgb(23 24 26 / 8%); transform: translateY(-1px); }
-
-.tree-row:hover,
-.recent-project-row:hover,
-.archived-row:hover { background: rgb(255 255 255 / 44%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 54%); }
-.tree-row.selected {
-  border: 1px solid rgb(255 255 255 / 78%);
-  background: rgb(255 255 255 / 68%);
-  box-shadow: var(--cp-glass-highlight), 0 6px 18px rgb(35 43 36 / 7%);
-}
 .tree-row.selected .folder-glyph { color: var(--cp-accent); }
-.empty-mark {
-  border: 1px solid rgb(255 255 255 / 84%);
-  background: rgb(255 255 255 / 58%);
-  box-shadow: var(--cp-glass-highlight), 0 10px 24px rgb(23 24 26 / 8%);
-  backdrop-filter: blur(12px);
-}
-.agent-unread { box-shadow: 0 0 0 2px rgb(247 247 245 / 82%), 0 5px 12px rgb(48 78 56 / 16%); }
-
-.active-project-contents { border-color: rgb(104 113 105 / 12%); }
-.sidebar-footer {
-  bottom: var(--cp-space-md);
-  left: var(--cp-space-md);
-  width: 278px;
-  padding: var(--cp-space-lg) var(--cp-space-sm) var(--cp-space-sm);
-  border-radius: 0 0 var(--cp-radius-xl) var(--cp-radius-xl);
-  background: linear-gradient(transparent, rgb(247 247 245 / 88%) 38%);
-}
-
-.main-pane {
-  border: 1px solid var(--cp-glass-border);
-  border-radius: var(--cp-radius-xl);
-  background: rgb(255 255 255 / 73%);
-  box-shadow: var(--cp-glass-highlight), var(--cp-shadow-surface);
-  backdrop-filter: blur(30px) saturate(1.12);
-}
-
-.content-header {
-  position: relative;
-  z-index: 20;
-  min-height: 66px;
-  border-color: rgb(110 118 111 / 13%);
-  background: rgb(255 255 255 / 46%);
-  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 60%), 0 8px 24px rgb(33 40 34 / 3%);
-  backdrop-filter: blur(22px) saturate(1.12);
-}
-.content-header strong { color: var(--cp-ink); letter-spacing: -.01em; }
-.agent-header-actions .icon-button:hover { background: rgb(255 255 255 / 66%); box-shadow: var(--cp-glass-highlight); }
-.agent-actions-menu {
-  border-color: rgb(255 255 255 / 90%);
-  background: rgb(252 252 250 / 96%);
-  box-shadow: var(--cp-glass-highlight), var(--cp-shadow-float);
-  backdrop-filter: blur(30px) saturate(1.12);
-}
-.agent-actions-menu button:hover { background: rgb(242 244 241 / 94%); }
-
-.transcript {
-  background:
-    linear-gradient(rgb(255 255 255 / 28%) 1px, transparent 1px) 0 0 / 100% 30px,
-    transparent;
-}
-.message-user {
-  border: 1px solid rgb(255 255 255 / 80%);
-  background: rgb(245 246 243 / 64%);
-  box-shadow: var(--cp-glass-highlight), 0 8px 22px rgb(34 41 35 / 6%);
-  backdrop-filter: blur(16px) saturate(1.08);
-}
-.message-assistant { border-color: rgb(108 116 109 / 12%); }
-.thinking-block,
-.system-output-fold,
-.message-rich-text blockquote {
-  border-color: rgb(255 255 255 / 76%);
-  background: rgb(248 249 247 / 54%);
-  box-shadow: var(--cp-glass-highlight);
-  backdrop-filter: blur(14px);
-}
-.inline-code { border-color: rgb(108 116 109 / 14%); background: rgb(235 238 233 / 72%); }
-
-.tool-block {
-  border-color: rgb(255 255 255 / 78%);
-  background: rgb(250 250 248 / 60%);
-  box-shadow: var(--cp-glass-highlight), 0 9px 24px rgb(23 24 26 / 6%);
-  backdrop-filter: blur(18px) saturate(1.08);
-}
-.tool-block.error { border-color: rgb(224 184 178 / 72%); background: rgb(255 247 245 / 72%); }
-.tool-details { border-color: rgb(104 113 105 / 13%); }
-.message-code-block { border-radius: var(--cp-radius-lg); box-shadow: 0 16px 34px rgb(21 26 22 / 14%); }
-
-.composer {
-  position: relative;
-  width: min(840px, calc(100% - 38px));
-  margin: 0 auto var(--cp-space-lg);
-  padding: var(--cp-space-md) var(--cp-space-md);
-  overflow: visible;
-  border: 1px solid rgb(255 255 255 / 88%);
-  border-radius: var(--cp-radius-xl);
-  background: rgb(255 255 255 / 62%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 94%),
-    inset 0 -1px 0 rgb(76 86 78 / 8%),
-    0 8px 20px rgb(34 42 35 / 8%),
-    0 28px 64px rgb(34 42 35 / 10%);
-  backdrop-filter: blur(28px) saturate(1.22);
-  transition: border-color 150ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
-}
-.composer::before {
-  position: absolute;
-  top: 0;
-  right: var(--cp-space-lg);
-  left: var(--cp-space-lg);
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 98%) 24%, rgb(255 255 255 / 98%) 76%, transparent);
-  content: "";
-  pointer-events: none;
-}
-.composer:focus-within {
-  border-color: rgb(137 159 142 / 72%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 98%),
-    inset 0 -1px 0 rgb(76 86 78 / 7%),
-    0 0 0 3px rgb(81 111 89 / 9%),
-    0 10px 24px rgb(34 42 35 / 9%),
-    0 32px 72px rgb(34 42 35 / 11%);
-  transform: translateY(-1px);
-}
-.composer textarea { color: var(--cp-ink); }
-.composer textarea::placeholder { color: var(--cp-ink-faint); }
-.composer textarea:focus,
-.composer textarea:focus-visible {
-  border: 0;
-  outline: 0;
-  box-shadow: none;
-}
-.composer button.attach-button:not(:disabled),
-.composer button.model-seat:not(:disabled) {
-  border-color: rgb(255 255 255 / 80%);
-  background: var(--cp-surface-secondary);
-  color: var(--cp-ink-secondary);
-  box-shadow: var(--cp-glass-highlight), 0 4px 12px rgb(23 24 26 / 5%);
-  backdrop-filter: blur(10px);
-}
-.composer button.attach-button:hover:not(:disabled),
-.composer button.model-seat:hover:not(:disabled) { border-color: var(--cp-surface-inset); background: rgb(255 255 255 / 78%); color: var(--cp-ink); }
-.composer button.send-button:not(:disabled) {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--cp-radius-lg);
-  background: var(--cp-ink);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 16%), 0 8px 18px rgb(28 33 29 / 18%);
-  transition: background 130ms ease-out, box-shadow 130ms ease-out, transform 130ms ease-out;
-}
-.composer button.send-button:hover:not(:disabled) { background: var(--cp-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%), 0 11px 24px rgb(28 33 29 / 22%); transform: translateY(-1px); }
-.composer .send-button { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; padding: 0; }
 .composer .send-button svg { display: block; }
-.composer button.stop-send-button:not(:disabled) { background: var(--cp-danger); color: #fff; }
-.composer button.stop-send-button:hover:not(:disabled) { background: var(--cp-danger); }
-.composer .send-button:disabled { background: rgb(225 227 222 / 82%); color: var(--cp-ink-faint); box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%); }
 
-.primary-button,
-.secondary-button,
-.quick-start-button,
-.jump-to-latest {
-  box-shadow: var(--cp-glass-highlight), var(--cp-shadow-control);
-  transition: border-color 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out, transform 140ms ease-out;
-}
-.primary-button:hover:not(:disabled),
-.secondary-button:hover:not(:disabled),
-.quick-start-button:hover,
-.jump-to-latest:hover { transform: translateY(-1px); }
-.secondary-button,
-.quick-start-button,
-.jump-to-latest { border-color: rgb(255 255 255 / 80%); background: rgb(255 255 255 / 58%); backdrop-filter: blur(12px); }
-
-.work-item-empty { max-width: 860px; }
-.work-item-heading { border-color: rgb(106 114 107 / 13%); }
-.agent-choice-list > button {
-  border-color: rgb(255 255 255 / 82%);
-  background: rgb(255 255 255 / 54%);
-  box-shadow: var(--cp-glass-highlight), 0 8px 22px rgb(23 24 26 / 5%);
-  backdrop-filter: blur(16px) saturate(1.08);
-  transition: border-color 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out, transform 140ms ease-out;
-}
-.agent-choice-list > button:hover { border-color: rgb(184 194 185 / 62%); background: rgb(255 255 255 / 74%); box-shadow: var(--cp-glass-highlight), 0 12px 28px rgb(23 24 26 / 8%); transform: translateY(-2px); }
-
-.settings-card,
-.role-skill-card,
-.pi-config-paths {
-  border-color: rgb(255 255 255 / 82%);
-  background: rgb(255 255 255 / 52%);
-  box-shadow: var(--cp-glass-highlight), 0 10px 28px rgb(23 24 26 / 5%);
-  backdrop-filter: blur(18px) saturate(1.08);
-}
-.role-skill-heading { border-color: rgb(105 114 106 / 12%); background: rgb(247 248 245 / 52%); }
-.role-skill-option:hover { background: rgb(255 255 255 / 56%); }
-.role-skill-option.selected { border-color: rgb(190 207 193 / 72%); background: rgb(235 243 236 / 68%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%); }
 .permission-settings-card { gap: var(--cp-space-lg); }
 .pi-runtime-card { gap: var(--cp-space-md); }
 .pi-runtime-versions { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cp-space-sm) var(--cp-space-xl); color: var(--cp-ink-secondary); font-size: 12px; }
@@ -2196,27 +1940,14 @@ textarea:focus-visible,
 .pi-runtime-card .settings-actions { flex-wrap: wrap; justify-content: flex-start; margin-top: 0; }
 .pi-runtime-card > small { color: var(--cp-ink-secondary); line-height: 1.5; }
 
-.permission-setting-list {
-  display: grid;
-  overflow: visible;
-  border: 1px solid rgb(255 255 255 / 82%);
-  border-radius: var(--cp-radius-lg);
-  background: rgb(255 255 255 / 42%);
-  box-shadow: var(--cp-glass-highlight);
-}
 .permission-setting-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 132px;
   align-items: center;
   gap: var(--cp-space-lg);
-  min-height: 62px;
   padding: var(--cp-space-md) var(--cp-space-md);
-  border-bottom: 1px solid rgb(105 114 106 / 12%);
 }
-.permission-setting-row:last-child { border-bottom: 0; }
 .permission-setting-row > span { display: grid; min-width: 0; gap: var(--cp-space-xxs); }
-.permission-setting-row strong { color: var(--cp-ink); font-size: 12px; }
-.permission-setting-row small { color: var(--cp-ink-muted); font-size: 10px; }
 .permission-setting-row { position: relative; }
 .permission-setting-row:first-child { border-radius: var(--cp-radius-lg) var(--cp-radius-lg) 0 0; }
 .permission-setting-row:last-child { border-radius: 0 0 var(--cp-radius-lg) var(--cp-radius-lg); }
@@ -2225,40 +1956,16 @@ textarea:focus-visible,
 .permission-picker-trigger {
   display: flex;
   width: 100%;
-  min-height: 36px;
   align-items: center;
   justify-content: space-between;
   gap: var(--cp-space-sm);
   padding: 0 var(--cp-space-md) 0 var(--cp-space-md);
-  border: 1px solid rgb(255 255 255 / 84%);
-  border-radius: var(--cp-radius-md);
-  background: rgb(255 255 255 / 72%);
-  color: var(--cp-ink);
-  box-shadow: var(--cp-glass-highlight), 0 5px 14px rgb(23 24 26 / 5%);
   cursor: pointer;
   text-align: left;
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
-.permission-picker-trigger:hover,
-.permission-picker-trigger[aria-expanded="true"] { border-color: var(--cp-accent-ring); background: #fff; }
-.permission-picker-trigger:focus-visible { outline: 2px solid var(--cp-accent); outline-offset: 2px; }
 .permission-picker-trigger svg { flex: 0 0 auto; transform: rotate(90deg); transition: transform 140ms ease; }
 .permission-picker-trigger[aria-expanded="true"] svg { transform: rotate(-90deg); }
-.permission-picker-list {
-  position: absolute;
-  z-index: 12;
-  top: calc(100% + var(--cp-space-xxs));
-  right: 0;
-  left: 0;
-  display: grid;
-  gap: var(--cp-space-xxs);
-  padding: var(--cp-space-xxs);
-  border: 1px solid rgb(255 255 255 / 88%);
-  border-radius: var(--cp-radius-lg);
-  background: rgb(252 253 250 / 96%);
-  box-shadow: var(--cp-glass-highlight), 0 12px 30px rgb(36 44 37 / 16%);
-  backdrop-filter: blur(18px);
-}
 .permission-picker-list button {
   min-height: 32px;
   padding: var(--cp-space-xxs) var(--cp-space-sm);
@@ -2274,49 +1981,6 @@ textarea:focus-visible,
 .permission-picker-list button[aria-selected="true"] { background: var(--cp-surface-secondary); color: var(--cp-accent); font-weight: 600; }
 .permission-settings-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--cp-space-lg); }
 .permission-settings-footer small { max-width: 68ch; line-height: 1.5; }
-/* 权限卡就地报错。设置页通用的 error 横幅固定在 main pane 顶部，页面一长就滚出屏幕，
-   而保存失败恰恰是用户最需要当场看到的事。 */
-.permission-settings-error {
-  margin: 0;
-  padding: var(--cp-space-sm) var(--cp-space-md);
-  border-radius: var(--cp-radius-md);
-  background: color-mix(in oklab, var(--cp-danger) 10%, transparent);
-  color: var(--cp-danger);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-/* 25% 挡不住背景里的彩色强调控件：文件管理器表头那个绿色「刷新」按钮透过来
-   变成一个说不清来历的色块。压到 38% 后背景只读作「暗一层」，不再能辨认出
-   是什么东西，但仍然保留玻璃的通透感（面板自身是 76% 半透明，两层叠加后
-   正文对比度不变）。 */
-.modal-backdrop { background: rgb(35 38 35 / 38%); backdrop-filter: blur(9px) saturate(.9); }
-.modal,
-.model-picker,
-.slash-menu,
-.agent-actions-menu,
-.thinking-control-popover {
-  border-color: rgb(255 255 255 / 84%);
-  background: rgb(252 252 250 / 76%);
-  box-shadow: var(--cp-glass-highlight), var(--cp-shadow-float);
-  backdrop-filter: blur(30px) saturate(1.18);
-}
-.modal { animation: codepiddy-glass-enter 170ms cubic-bezier(.2, .8, .2, 1) both; }
-.modal input,
-.modal textarea { border-color: rgb(255 255 255 / 84%); background: rgb(255 255 255 / 62%); box-shadow: var(--cp-glass-highlight); }
-.modal input:focus,
-.modal textarea:focus { border-color: var(--cp-accent-ring); box-shadow: 0 0 0 3px rgb(23 24 26 / 9%), var(--cp-glass-highlight); }
-.slash-menu button:hover,
-.slash-menu button.selected,
-.agent-actions-menu button:hover { background: rgb(242 244 241 / 94%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 76%); }
-.model-list section { border: 0; background: transparent; }
-.model-list h3 { padding: var(--cp-space-xxs) var(--cp-space-sm) var(--cp-space-micro); border: 0; background: transparent; }
-.model-list section > button:hover { background: rgb(255 255 255 / 58%); }
-.model-list section > button.selected { background: rgb(231 237 231 / 70%); }
-
-.toast { border-color: rgb(255 255 255 / 18%); box-shadow: var(--cp-shadow-float); backdrop-filter: blur(18px); }
-.error-banner { border-color: rgb(255 255 255 / 80%); box-shadow: var(--cp-glass-highlight), 0 14px 34px rgb(23 24 26 / 11%); backdrop-filter: blur(18px); }
-
 /* 右侧工作区：文件 / 更改 / 运行三个视图，共享现有 tool 事件数据。 */
 .icon-button.active { border-color: var(--cp-surface-inset); background: var(--cp-surface-secondary); color: var(--cp-accent); }
 .work-panel {
@@ -3298,16 +2962,12 @@ textarea:focus-visible,
 .context-gauge:hover .context-gauge-tooltip,
 .context-gauge:focus-visible .context-gauge-tooltip { opacity: 1; transform: translateY(0); }
 
-@keyframes codepiddy-glass-enter {
-  from { opacity: 0; filter: blur(5px); transform: translateY(8px) scale(.985); }
-  to { opacity: 1; filter: blur(0); transform: translateY(0) scale(1); }
+@keyframes codepiddy-dialog-enter {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (max-width: 980px) {
-  .app-shell { gap: 0; padding: 0; }
-  .sidebar { border-width: 0 1px 0 0; border-radius: 0; }
-  .main-pane { border-width: 0; border-radius: 0; }
-  .sidebar-footer { bottom: 0; left: 0; border-radius: 0; }
   .transcript-minimap { display: none; }
 }
 
@@ -3328,9 +2988,8 @@ textarea:focus-visible,
 }
 
 /* ==========================================================================
-   CodePIddy design system v2 — 迁移层（shell / 控件 / 浮层）
-   规则来源：DESIGN.md。这一层必须留在文件末尾：它是覆盖层，靠源码顺序压过
-   上面的历史规则；后续把数值折回各自的归属规则后，这一层会逐段删掉。
+   CodePIddy design system v2 — 组件与外观（单一事实来源）
+   规则来源：DESIGN.md。旧玻璃层的覆盖规则已整段合并到这里，后续只在这里改。
    ========================================================================== */
 
 /* ---- 应用外框 ---- */
@@ -3353,6 +3012,7 @@ textarea:focus-visible,
   width: 266px;
   flex-basis: 266px;
   padding: var(--cp-space-md) var(--cp-space-sm) var(--cp-space-5xl);
+  overflow-x: hidden;
   background: var(--cp-surface-rail);
   border-right: 0;
   box-shadow: inset -0.5px 0 0 var(--cp-line-subtle);
@@ -3360,7 +3020,13 @@ textarea:focus-visible,
 
 .sidebar-footer {
   width: 265px;
+  padding: var(--cp-space-lg) var(--cp-space-sm) var(--cp-space-sm);
   background: linear-gradient(transparent, var(--cp-surface-rail) 24%);
+}
+
+.sidebar-footer button:hover {
+  background: rgb(23 24 26 / 5%);
+  color: var(--cp-ink);
 }
 
 .brand-title {
@@ -3389,9 +3055,12 @@ textarea:focus-visible,
   gap: var(--cp-space-sm);
   padding: var(--cp-space-sm) var(--cp-space-sm);
   margin: var(--cp-space-xxs) 0 var(--cp-space-md);
+  border: 0;
   border-radius: var(--cp-radius-md);
+  background: var(--cp-surface);
   color: var(--cp-ink-secondary);
   font-size: 13px;
+  box-shadow: var(--cp-elevation-raised);
 }
 
 .new-action:hover {
@@ -3475,6 +3144,10 @@ textarea:focus-visible,
 
 .sidebar-search input::placeholder {
   color: var(--cp-ink-muted);
+}
+
+.sidebar-search:focus-within {
+  box-shadow: 0 0 0 2px var(--cp-accent-ring);
 }
 
 /* ---- 内容区 ---- */
@@ -3616,9 +3289,7 @@ textarea:focus-visible,
 .transcript-minimap-preview,
 .toast,
 .error-banner,
-.agent-choice-list > button,
-.composer button.thinking-control-trigger:not(:disabled),
-.composer button.thinking-control-trigger:disabled {
+.agent-choice-list > button {
   border: 0;
   background: var(--cp-surface);
   box-shadow: var(--cp-elevation-float);
@@ -3638,6 +3309,13 @@ textarea:focus-visible,
   backdrop-filter: none;
 }
 
+.agent-choice-list > button:hover {
+  border: 0;
+  background: var(--cp-surface-secondary);
+  box-shadow: var(--cp-elevation-raised);
+  transform: none;
+}
+
 .toast,
 .error-banner {
   color: var(--cp-ink);
@@ -3646,6 +3324,10 @@ textarea:focus-visible,
 .modal-backdrop {
   background: rgb(23 24 26 / 32%);
   backdrop-filter: none;
+}
+
+.modal {
+  animation: codepiddy-dialog-enter 170ms var(--cp-ease) both;
 }
 
 /* ---- 聚焦态：全站统一可见 ---- */
@@ -3686,6 +3368,10 @@ textarea:focus-visible,
   backdrop-filter: none;
 }
 
+.composer:focus-within {
+  box-shadow: var(--cp-elevation-float), 0 0 0 2px var(--cp-accent-ring);
+}
+
 .composer textarea {
   padding: var(--cp-space-sm) var(--cp-space-xs);
   color: var(--cp-ink);
@@ -3693,13 +3379,20 @@ textarea:focus-visible,
   line-height: 1.5;
 }
 
+.composer textarea:focus,
+.composer textarea:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
 .composer textarea::placeholder {
   color: var(--cp-ink-muted);
 }
 
 .composer button.attach-button,
-.composer .model-seat,
-.composer .thinking-control-trigger {
+.composer button.model-seat,
+.composer button.thinking-control-trigger {
   width: auto;
   height: var(--cp-control);
   min-height: var(--cp-control);
@@ -3718,7 +3411,7 @@ textarea:focus-visible,
 }
 
 .composer button.attach-button:hover:not(:disabled),
-.composer .model-seat:hover:not(:disabled),
+.composer button.model-seat:hover:not(:disabled),
 .composer button.thinking-control-trigger:not(:disabled):hover,
 .composer button.thinking-control-trigger[aria-expanded="true"]:not(:disabled) {
   border: 0;
@@ -3748,7 +3441,14 @@ textarea:focus-visible,
   transform: none;
 }
 
-.composer .send-button { width: var(--cp-control); height: var(--cp-control); flex: 0 0 var(--cp-control); }
+.composer .send-button {
+  display: grid;
+  width: var(--cp-control);
+  height: var(--cp-control);
+  flex: 0 0 var(--cp-control);
+  place-items: center;
+  padding: 0;
+}
 
 .composer .send-button:disabled {
   background: var(--cp-surface-inset);
@@ -4383,6 +4083,7 @@ body {
 }
 
 .permission-setting-list {
+  display: grid;
   border: 0;
   border-radius: var(--cp-radius-lg);
   background: var(--cp-surface-secondary);
@@ -4549,23 +4250,4 @@ body {
   background: var(--cp-surface);
   color: var(--cp-ink-secondary);
   box-shadow: inset 0 0.5px 0 color-mix(in oklab, var(--cp-danger) 16%, transparent);
-}
-
-.agent-unread {
-  background: var(--cp-accent);
-  color: #fff;
-}
-
-.error-banner {
-  background: var(--cp-danger);
-  color: #fff;
-}
-
-.message-streaming-placeholder span {
-  background: var(--cp-accent);
-}
-
-.pi-response-dot {
-  background: var(--cp-accent);
-  box-shadow: 0 0 0 3px var(--cp-accent-soft);
 }

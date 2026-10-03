@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T00:00:00.000Z",
+  "title": "Design System: CodePIddy Desktop",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Instrument Ink",
+        "canonical": "oklch(20.9% 0.004 264.5)",
+        "tonalRamp": ["#111213", "#28292b", "#414245", "#5c5e60", "#797a7d", "#9d9ea1", "#c3c4c6", "#eaebec"]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Graphite",
+        "canonical": "oklch(41.6% 0.007 264.5)",
+        "tonalRamp": ["#111214", "#27292c", "#404246", "#5c5e62", "#787a7f", "#9c9ea3", "#c3c4c7", "#eaebed"]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Annotation Grey",
+        "canonical": "oklch(54.5% 0.008 268.5)",
+        "tonalRamp": ["#111214", "#27292d", "#404247", "#5c5d62", "#787a7f", "#9c9ea4", "#c3c4c7", "#eaebed"]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Disabled Graphite",
+        "canonical": "oklch(71.2% 0.009 271.3)",
+        "tonalRamp": ["#111114", "#27292d", "#404247", "#5c5d63", "#787a80", "#9c9ea4", "#c3c4c8", "#eaebed"]
+      },
+      "surface-content": {
+        "role": "neutral",
+        "displayName": "Content White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": ["#121212", "#292929", "#424242", "#5d5d5d", "#7a7a7a", "#9e9e9e", "#c4c4c4", "#ebebeb"]
+      },
+      "surface-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Plate",
+        "canonical": "oklch(97.9% 0.001 286.4)",
+        "tonalRamp": ["#111112", "#292929", "#424243", "#5d5d5e", "#7a7a7b", "#9e9e9f", "#c4c4c4", "#ebebeb"]
+      },
+      "surface-rail": {
+        "role": "neutral",
+        "displayName": "Navigation Rail",
+        "canonical": "oklch(96.2% 0.003 286.3)",
+        "tonalRamp": ["#111112", "#29292a", "#424244", "#5d5d5f", "#7a7a7c", "#9e9ea0", "#c4c4c5", "#ebebec"]
+      },
+      "surface-inset": {
+        "role": "neutral",
+        "displayName": "Recessed Slot",
+        "canonical": "oklch(93.2% 0.004 286.3)",
+        "tonalRamp": ["#111113", "#29292b", "#424244", "#5d5d60", "#7a7a7d", "#9e9ea1", "#c4c4c5", "#ebebec"]
+      },
+      "border-subtle": {
+        "role": "neutral",
+        "displayName": "Hairline Subtle",
+        "canonical": "rgb(23 24 26 / 6%)"
+      },
+      "border-default": {
+        "role": "neutral",
+        "displayName": "Hairline Default",
+        "canonical": "rgb(23 24 26 / 10%)"
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "rgb(23 24 26 / 16%)"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "oklch(54.6% 0.215 262.9)",
+        "tonalRamp": ["#000049", "#000090", "#0029b2", "#104dd4", "#2f6ef7", "#5295ff", "#97c3ff", "#d1ecff"]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Action Blue Pressed",
+        "canonical": "oklch(48.8% 0.217 264.4)",
+        "tonalRamp": ["#010049", "#040091", "#0427b3", "#1b4bd5", "#366cf8", "#5894ff", "#9ac2ff", "#d2ebff"]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Action Blue Wash",
+        "canonical": "rgb(37 99 235 / 10%)"
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Completion Green",
+        "canonical": "oklch(52.7% 0.137 150.1)",
+        "tonalRamp": ["#001a00", "#003900", "#005512", "#00722f", "#2d904c", "#57b66f", "#9ed4a8", "#d5f5db"]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Attention Amber",
+        "canonical": "oklch(55.5% 0.146 49)",
+        "tonalRamp": ["#2c0000", "#5a0000", "#7a1c00", "#9b3c00", "#bc5b18", "#e58044", "#f3b492", "#ffe2ce"]
+      },
+      "error": {
+        "role": "tertiary",
+        "displayName": "Failure Red",
+        "canonical": "oklch(50.5% 0.19 27.5)",
+        "tonalRamp": ["#350000", "#6a0000", "#8d0000", "#b00c13", "#d43b34", "#ff6458", "#ffa79b", "#ffdbd3"]
+      },
+      "violet": {
+        "role": "secondary",
+        "displayName": "Special Mode Violet",
+        "canonical": "oklch(54.1% 0.247 293)",
+        "tonalRamp": ["#1b004a", "#3c0093", "#5200b5", "#6c1ed7", "#8749fb", "#aa73ff", "#c8b1ff", "#ede1ff"]
+      }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Page titles, empty-state titles, settings group headings. Never above 20px." },
+      "body": { "displayName": "Body", "purpose": "Transcript prose and message content, capped at 65-75ch." },
+      "label": { "displayName": "Label", "purpose": "Buttons, tags, table headers, status text. No uppercase tracking." },
+      "mono": { "displayName": "Mono", "purpose": "Code, terminal output, diff, paths, commands, numeric readouts." }
+    },
+    "shadows": [
+      {
+        "name": "raised",
+        "value": "0 1px 2px rgb(23 24 26 / 6%), 0 0 0 0.5px rgb(23 24 26 / 5%)",
+        "purpose": "Hover lift, active controls, and selected rows that rise out of the rail."
+      },
+      {
+        "name": "float",
+        "value": "0 1px 2px rgb(23 24 26 / 6%), 0 8px 28px rgb(23 24 26 / 12%), 0 0 0 0.5px rgb(23 24 26 / 8%)",
+        "purpose": "Dropdowns, dialogs, command palettes, and the composer."
+      }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Default easing for state transitions." },
+      { "name": "dur-fast", "value": "120ms", "purpose": "Hover, focus, and small state changes." },
+      { "name": "dur-default", "value": "180ms", "purpose": "Overlays, dialogs, and larger state changes." }
+    ],
+    "breakpoints": [
+      { "name": "work-panel-hide", "value": "1100px" },
+      { "name": "rail-collapse", "value": "940px" },
+      { "name": "narrow", "value": "680px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single main action in a view; blue fill, 28px tall.",
+      "html": "<button class=\"ds-btn-primary\">创建</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--cp-accent, #2563eb); color: #fff; font: 500 12.5px/1 var(--cp-font-ui, system-ui, sans-serif); cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-primary:hover { background: var(--cp-accent-hover, #1d4ed8); } .ds-btn-primary:focus-visible { outline: 2px solid var(--cp-accent, #2563eb); outline-offset: 2px; } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:disabled { opacity: 0.45; cursor: default; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Parallel secondary action on the recessed surface fill.",
+      "html": "<button class=\"ds-btn-secondary\">检查更新</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--cp-surface-inset, #e8e8eb); color: var(--cp-ink, #17181a); font: 500 12.5px/1 var(--cp-font-ui, system-ui, sans-serif); cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-secondary:hover { background: rgb(23 24 26 / 10%); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--cp-accent, #2563eb); outline-offset: 2px; } .ds-btn-secondary:disabled { opacity: 0.45; cursor: default; }"
+    },
+    {
+      "name": "Ghost Icon Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Toolbar and row action; no fill at rest, 6% ink on hover.",
+      "html": "<button class=\"ds-btn-ghost-icon\" aria-label=\"复制\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"></rect><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"></path></svg></button>",
+      "css": ".ds-btn-ghost-icon { display: grid; width: 28px; height: 28px; place-items: center; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--cp-ink-muted, #6e7075); cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-ghost-icon:hover { background: rgb(23 24 26 / 6%); color: var(--cp-ink, #17181a); } .ds-btn-ghost-icon:focus-visible { outline: 2px solid var(--cp-accent, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Recessed fill, no border; focus turns the surface white and adds a blue ring.",
+      "html": "<input class=\"ds-field\" placeholder=\"输入消息或 / 命令\" />",
+      "css": ".ds-field { width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--cp-surface-inset, #e8e8eb); color: var(--cp-ink, #17181a); font: 400 13px/1.5 var(--cp-font-ui, system-ui, sans-serif); outline: none; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-field::placeholder { color: var(--cp-ink-muted, #6e7075); } .ds-field:focus { background: var(--cp-surface, #fff); box-shadow: 0 0 0 2px var(--cp-accent-ring, rgb(37 99 235 / 26%)); }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Compact metadata or state tag; selected state uses the blue wash.",
+      "html": "<span class=\"ds-chip\">运行中</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 9999px; background: var(--cp-surface-inset, #e8e8eb); color: var(--cp-ink-secondary, #4a4c50); font: 500 11.5px/1 var(--cp-font-ui, system-ui, sans-serif); } .ds-chip.is-selected { background: var(--cp-accent-soft, rgb(37 99 235 / 10%)); color: var(--cp-accent, #2563eb); }"
+    },
+    {
+      "name": "Sidebar Navigation Row",
+      "kind": "nav",
+      "refersTo": "tile",
+      "description": "Project and session row; selected row rises out of the rail in white.",
+      "html": "<button class=\"ds-nav-row is-selected\"><span class=\"ds-nav-dot\"></span><span>FEAT-001：增加登录功能</span></button>",
+      "css": ".ds-nav-row { display: flex; width: 100%; min-height: 32px; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 10px; background: transparent; color: var(--cp-ink-secondary, #4a4c50); font: 400 13px/1.4 var(--cp-font-ui, system-ui, sans-serif); text-align: left; cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-nav-row:hover { background: rgb(23 24 26 / 5%); color: var(--cp-ink, #17181a); } .ds-nav-row.is-selected { background: var(--cp-surface, #fff); color: var(--cp-ink, #17181a); box-shadow: 0 1px 2px rgb(23 24 26 / 6%), 0 0 0 0.5px rgb(23 24 26 / 5%); } .ds-nav-dot { width: 6px; height: 6px; flex: none; border-radius: 9999px; background: var(--cp-accent, #2563eb); }"
+    },
+    {
+      "name": "Work Panel Tab",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "Files / Changes / Terminal switch; active tab is white with a raised shadow.",
+      "html": "<div class=\"ds-panel-tabs\"><button class=\"ds-panel-tab is-active\">文件</button><button class=\"ds-panel-tab\">更改 <span class=\"ds-panel-count\">1</span></button><button class=\"ds-panel-tab\">终端</button></div>",
+      "css": ".ds-panel-tabs { display: flex; align-items: center; gap: 2px; padding: 6px 8px; background: var(--cp-surface-secondary, #f8f8f9); } .ds-panel-tab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--cp-ink-muted, #6e7075); font: 400 11.5px/1 var(--cp-font-ui, system-ui, sans-serif); cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-panel-tab:hover { background: rgb(23 24 26 / 5%); color: var(--cp-ink, #17181a); } .ds-panel-tab.is-active { background: var(--cp-surface, #fff); color: var(--cp-ink, #17181a); box-shadow: 0 1px 2px rgb(23 24 26 / 6%), 0 0 0 0.5px rgb(23 24 26 / 5%); } .ds-panel-count { display: grid; min-width: 17px; height: 17px; place-items: center; padding: 0 4px; border-radius: 9999px; background: var(--cp-accent-soft, rgb(37 99 235 / 10%)); color: var(--cp-accent, #2563eb); font-size: 9.5px; }"
+    },
+    {
+      "name": "Composer",
+      "kind": "custom",
+      "refersTo": "field",
+      "description": "Signature bottom input; white panel, 18px radius, auto-growing textarea, quiet tool row.",
+      "html": "<form class=\"ds-composer\"><textarea class=\"ds-composer-input\" rows=\"1\" placeholder=\"输入消息或 / 命令\"></textarea><div class=\"ds-composer-tools\"><span class=\"ds-composer-tool\">GPT-5.5</span><span class=\"ds-composer-tool\">中</span><button class=\"ds-composer-send\" aria-label=\"发送\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19V5\"></path><path d=\"m5 12 7-7 7 7\"></path></svg></button></div></form>",
+      "css": ".ds-composer { display: flex; width: 100%; flex-direction: column; gap: 8px; padding: 12px 12px 8px; border-radius: 18px; background: var(--cp-surface, #fff); box-shadow: 0 1px 2px rgb(23 24 26 / 6%), 0 8px 28px rgb(23 24 26 / 12%), 0 0 0 0.5px rgb(23 24 26 / 8%); } .ds-composer:focus-within { box-shadow: 0 1px 2px rgb(23 24 26 / 6%), 0 8px 28px rgb(23 24 26 / 12%), 0 0 0 0.5px rgb(23 24 26 / 8%), 0 0 0 2px var(--cp-accent-ring, rgb(37 99 235 / 26%)); } .ds-composer-input { min-height: 46px; padding: 8px 6px; border: 0; outline: 0; background: transparent; color: var(--cp-ink, #17181a); font: 400 13px/1.55 var(--cp-font-ui, system-ui, sans-serif); resize: none; } .ds-composer-input::placeholder { color: var(--cp-ink-muted, #6e7075); } .ds-composer-tools { display: flex; align-items: center; gap: 8px; } .ds-composer-tool { display: inline-flex; height: 28px; align-items: center; padding: 0 8px; border-radius: 8px; color: var(--cp-ink-muted, #6e7075); font: 400 12px/1 var(--cp-font-ui, system-ui, sans-serif); cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-composer-tool:hover { background: rgb(23 24 26 / 6%); color: var(--cp-ink, #17181a); } .ds-composer-send { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; padding: 0; border: 0; border-radius: 9999px; background: var(--cp-accent, #2563eb); color: #fff; cursor: pointer; transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-composer-send:hover { background: var(--cp-accent-hover, #1d4ed8); } .ds-composer-send:focus-visible { outline: 2px solid var(--cp-accent, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tool Card",
+      "kind": "custom",
+      "refersTo": "tile",
+      "description": "Signature agent tool call; flat secondary fill with a half-pixel inset line.",
+      "html": "<div class=\"ds-tool-card\"><div class=\"ds-tool-head\"><span class=\"ds-tool-name\">read</span><span class=\"ds-tool-status\">完成</span></div></div>",
+      "css": ".ds-tool-card { max-width: 760px; padding: 12px; border-radius: 12px; background: var(--cp-surface-secondary, #f8f8f9); box-shadow: inset 0 0 0 0.5px var(--cp-line-subtle, rgb(23 24 26 / 6%)); color: var(--cp-ink-secondary, #4a4c50); font: 400 13px/1.5 var(--cp-font-ui, system-ui, sans-serif); } .ds-tool-head { display: flex; min-height: 32px; align-items: center; justify-content: space-between; gap: 8px; } .ds-tool-name { color: var(--cp-ink-secondary, #4a4c50); font-weight: 500; } .ds-tool-status { display: inline-flex; align-items: center; gap: 6px; color: var(--cp-success, #15803d); font-size: 11px; } .ds-tool-card.is-running .ds-tool-status { color: var(--cp-warning, #b45309); } .ds-tool-card.is-failed { background: color-mix(in oklab, var(--cp-danger, #b91c1c) 7%, transparent); box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--cp-danger, #b91c1c) 22%, transparent); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "精密仪器台",
+    "overview": "这不是一个展示型界面，是一台放在桌面上的测量仪器。操作者长时间盯着它，读的是状态、数值和过程。所以它必须中性、稳定、对齐严格：底色分成清晰的几层，文字对比足够但不过分锐利，彩色只出现在真正承载信息的地方。\n\n它明确拒绝 AI 味重的界面：玻璃拟态堆叠、渐变文字、紫色渐变、没有意义的超大圆角卡片网格、用 emoji 当图标、每张卡片都长一样。差异化的地方在密度与秩序：信息密度接近专业开发工具，但每条信息的层级用字号、字重和灰色深浅区分，而不是用框线。",
+    "keyCharacteristics": [
+      "浅色、中性、低饱和；彩色只表达状态与分类。",
+      "四层底色（内容 / 次级 / 侧栏 / 内嵌）承担主要层次，描边只出现在浮层。",
+      "单一无衬线字体家族，紧凑梯级，非整数字重。",
+      "控件尺寸统一，28px 基准，不出现差 2px 的控件。",
+      "动效只表达状态变化，150-240ms，尊重 prefers-reduced-motion。"
+    ],
+    "rules": [
+      { "name": "The Color-Is-Information Rule", "body": "彩色只允许出现在状态、分类和当前选中上。任何纯装饰性的彩色都必须删除。判断方法：把这块颜色换成灰色，如果信息没有丢失，那它就不该是彩色的。", "section": "colors" },
+      { "name": "The Blue-Is-Action Rule", "body": "蓝色只出现在可交互或当前选中的地方：主按钮、选中行、聚焦环、活动状态。它不做纯装饰填色，也不出现在静态内容上。", "section": "colors" },
+      { "name": "The Ten Percent Rule", "body": "强调色在一屏内的覆盖面积不超过 10%。它的稀有性是它有效的原因。", "section": "colors" },
+      { "name": "The Two-Layer Font Rule", "body": "UI 固定使用 Monaspace Argon -> Maple Mono NF CN。前者有字形时优先走前者，中文和前者没有的象形字符由后者接住。不要再引入第三种 UI 字体。", "section": "typography" },
+      { "name": "The Fixed Scale Rule", "body": "产品界面不使用 clamp() 流体字号。字号是固定的梯级，由全局 --font-scale 统一缩放。", "section": "typography" },
+      { "name": "The Mono-Is-Code Rule", "body": "等宽字体只用于代码、路径、命令、数值。按钮文案、标签、标题一律用 sans。", "section": "typography" },
+      { "name": "The Tonal-First Rule", "body": "先用底色分层，再考虑阴影。如果一个区块能用更深的底色表达从属关系，就不许给它加投影。", "section": "elevation" },
+      { "name": "The Half-Pixel Rule", "body": "必须画线的地方用 0 0 0 0.5px 的描边而不是 1px border。高 DPI 屏幕上 1px 边框会显得笨重。", "section": "elevation" },
+      { "name": "The Material-Not-Decoration Rule", "body": "禁止装饰性的玻璃拟态。唯一例外是左侧导航栏，模糊由操作系统的窗口材质提供，渲染层只叠 tint 和 sheen。", "section": "elevation" },
+      { "name": "The No-Frame Rule", "body": "区域之间不加圆角外框。外壳是边到边的分区，靠底色和材质分层，不靠描边、圆角和投影把每一块包成卡片。", "section": "elevation" },
+      { "name": "The Space-Ladder Rule", "body": "组件 CSS 中不得出现梯级之外的裸 px 间距。所有 gap、margin、padding、inset 和定位偏移都必须引用 --cp-space-* 令牌。", "section": "components" },
+      { "name": "The Shape-Means-Control Rule", "body": "同一个控件不能随 disabled / enabled 状态切换圆角。发送与停止按钮形态完全相同，只改底色、图标和可点击状态。", "section": "components" }
+    ],
+    "dos": [
+      "Do 用四层底色（#ffffff / #f8f8f9 / #f2f2f4 / #e8e8eb）表达层级，先分层再考虑阴影。",
+      "Do 把控件统一到 28px 高度、8px 圆角、0-12px 内边距这三条基线上。",
+      "Do 用 #17181a 墨色的透明度生成描边和悬停底色，而不是手写独立灰值。",
+      "Do 让彩色只出现在状态点、选中态、状态文字和必要的分类标记上。",
+      "Do 给每个交互元素补齐 default / hover / focus-visible / active / disabled 五种状态。",
+      "Do 用半像素描边（0 0 0 0.5px）画必须存在的线条。",
+      "Do 用等宽字体只标注代码、路径、命令和数值。"
+    ],
+    "donts": [
+      "Don't 做成 AI 味重的界面：禁止玻璃拟态堆叠、渐变文字、紫色渐变、无意义的超大圆角卡片网格、用 emoji 当图标、每张卡片都长得一样。",
+      "Don't 用 1px border 给平铺卡片画框；那是 2014 年的做法，会让界面立刻显得廉价。",
+      "Don't 用蓝色作为品牌强调色；蓝色留给链接和系统选中语义。",
+      "Don't 用 clamp() 做流体字号，产品界面不需要。",
+      "Don't 给按钮、标签、标题套等宽字体。",
+      "Don't 用纯黑 #000 作为正文色。",
+      "Don't 让占位符或元信息浅于 #6e7075。",
+      "Don't 为装饰添加动效。动效只表达状态变化，且必须提供 prefers-reduced-motion 降级。"
+    ]
+  }
+}

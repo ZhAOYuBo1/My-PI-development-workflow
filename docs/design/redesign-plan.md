@@ -21,8 +21,8 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-21 已提交，工作树干净；从「待办清单」第 3 项 `styles.css` 结构清理开始。
-字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史和内部终端都已验收并提交，不要重做。
+再读 PRODUCT.md、DESIGN.md。批次 1-21 已提交；批次 22（styles.css 结构清理 + .impeccable/design.json）已实现并验证，等待验收后提交，待办清单已清空。
+字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端和结构清理都已验收或待验收，不要重做。
 当前 HEAD 以 `git log -1` 为准。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
@@ -52,9 +52,9 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 20 待验收）
+## 当前状态（2026-10-03 批次 22 待验收）
 
-- `styles.css` 4477 行，顶部是完整的 `--cp-*` 令牌层；全文件只剩少量硬编码色值，基本就是令牌定义本身。
+- `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
 - 字体：`Monaspace Argon` 负责拉丁/符号，`Maple Mono NF CN` 负责中文；只随包保留 Regular 400 和 SemiBold 600 两档 WOFF2。
 - app icon：正式源是透明 SVG，PNG/ICO 由 `packages/codepiddy-desktop/scripts/render-icon.mjs` 从 SVG 生成；旧的彩色和图片底模已清理。
@@ -71,6 +71,8 @@
 - 思考强度：滑块改为轻量 canvas 波场，低档慢而疏、高档快而密，最高档有短促落点扫光；拖拽加入轻微磁吸。
 - 会话树弹窗：标题与摘要合并成安静头部，节点按深度使用 token 缩进；当前节点使用蓝色淡底和半像素强调环，Fork 按钮在悬停/聚焦时出现；空态补齐状态标识和说明。
 - 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并显示左侧文件列表 + 右侧完整 diff，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
+- 结构：旧玻璃层（`--cp-glass-*`、白色叠加、backdrop-filter 卡片）已整段删除，最终值合并进文件末尾的设计系统层；不再靠“后面再覆盖”维持外观。
+- `.impeccable/design.json`：`DESIGN.md` 的 schemaVersion 2 sidecar，含 OKLCH tonal ramps、阴影/动效/断点、9 个可渲染组件和叙事规则。
 
 ### 本轮改动清单
 
@@ -82,13 +84,16 @@
 - 已提交：`c34c20a feat(desktop): use selected lightning asset`
 - 已提交：`4e4341c docs(desktop): record lightning asset acceptance`
 - 已提交：`4473a98 feat(desktop): refine session tree modal`
-- 待验收：工作区面板 `文件 / 更改 / 终端`（批次 19-20）
+- 已提交：`b2644f5 feat(desktop): add per-turn changes and terminal`（批次 19-20）
+- 已提交：`b5e30b2 feat(desktop): use meteor stream icon`（批次 21）
+- 已提交：`deb8d69 feat(desktop): mirror meteor stream icon`（批次 21）
+- 待验收：`styles.css` 结构清理 + `.impeccable/design.json`（批次 22）
 
-批次 1-18 的 UI 调整均已提交；详细过程见下方进度日志。
+批次 1-21 的 UI 调整均已提交；详细过程见下方进度日志。
 
 ### 下一步
 
-等待用户验收批次 19-20。通过后提交代码和文档，再从「待办清单」第 3 项继续做 `styles.css` 的结构清理。
+等待用户验收批次 22。通过后提交代码和文档；待办清单已清空。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -520,16 +525,62 @@
 
 验证：`svg_cli.py validate` 无错误；`npm run check`、renderer typecheck、`npm run build:codepiddy` 全绿；浏览器实测资源加载为 205×200 源图并渲染为 12×12。
 
+### 2026-10-03 批次 22：styles.css 结构清理 + impeccable sidecar（待验收）
+
+目标是把“历史玻璃层 + 末尾迁移覆盖层”收敛成一层，而不是继续往上叠规则。
+
+改了 `packages/codepiddy-desktop/src/renderer/styles.css`（4477 → 4253 行），并新增 `.impeccable/design.json`。
+
+删除与合并：
+
+- 整段删除 1912-2318 的玻璃层规则：`.app-shell` / `.sidebar` / `.main-pane` / `.content-header` 的圆角卡片、`.composer` 的白色玻璃块与 `::before` 高光、`.message-user` / `.tool-block` / `.thinking-block` / `.inline-code` / `.message-code-block` 的玻璃属性、`.settings-card` / `.role-skill-card` / `.permission-picker-*` / `.modal` / `.slash-menu` / `.model-list` 的白色叠加。
+- 删除 `:root` 里的 `--cp-glass-*` / `--cp-shadow-*` 别名；全文件已无引用。
+- 删除 `codepiddy-glass-enter` 关键帧（带 `blur(5px)`），改成无模糊的 `codepiddy-dialog-enter`。
+- 删除重复的 `.tool-error-guidance`、重复的 `@media (max-width: 1000px)`、空的 `@media (max-width: 720px)`；`@media (max-width: 980px)` 只保留 `.transcript-minimap` 隐藏。
+- 删除末尾的实心红 `.error-banner` 覆盖，恢复 `DESIGN.md` 记录的“错误红 9% 淡底 + 同色文字 + 半像素内描边”。
+
+把最终值并入设计系统层（不是再加覆盖）：
+
+- 侧栏：`overflow-x: hidden`、footer padding、footer hover 5% ink、搜索框 `:focus-within` 蓝色聚焦环。
+- `.new-action`：白底 + raised 投影；hover 5% ink。
+- `.composer`：`:focus-within` 用 float 投影 + 2px 强调环；textarea 聚焦抑制内部 outline；`.send-button` 保留 `display:grid / place-items:center / padding:0`。
+- `.agent-choice-list > button:hover`：白底换成 secondary 底 + raised 投影，不再位移。
+
+顺带修掉的 specificity 回归（删旧规则后暴露）：
+
+- 旧 `.composer button.model-seat:not(:disabled)` / `.composer button.thinking-control-trigger:not(:disabled)` 被删后，基础规则 `.composer button:not(:disabled)`（`background: ink; color: #fff`）赢了，模型按钮和思考按钮一度变成黑底白字。
+- 修法：把设计系统层的选择器提高到同等特异性（`.composer button.model-seat` / `.composer button.thinking-control-trigger`），并把思考触发按钮从浮层组移回 composer 控件组。
+- 现在 composer 的附件、模型、思考三个控件统一为透明底 + 次墨色，hover 6% ink。
+
+剩余 off-palette 字面量收敛：
+
+- `.message-table-scroll` 白 58% → `--cp-surface`；表头 `rgb(240 243 238)` / 斑马纹 `rgb(246 247 243)` → `--cp-surface-secondary` / 3% ink。
+- `.message-code-toolbar` 白 55% → surface/secondary 混合；`.message-code-actions .is-active` 旧蓝灰 → `--cp-accent-soft` + `--cp-accent`；focus ring → `--cp-accent-ring`；`.message-code-expand` 渐变 → surface-secondary。
+- `.active-project-contents` / `.tool-details` / `.role-skill-heading` 的灰绿描边 → `--cp-line-subtle`。
+
+验证：
+
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+- 新增一次性校验脚本（在 `.artifacts/css-audit/`，gitignored）：对 agent / settings / changes / terminal / slash / model-picker / thinking / agent-actions 八个状态，逐元素对比 HEAD CSS 与新 CSS 的 computed style。剩余 diff 全部是“去玻璃 / 去绿色 / 统一 hover / 控件 30→28px”等预期变化；`.permission-setting-list` 的 `display: grid` 已补回。
+- 浏览器 demo 1440x900 与 900x700 截图：无横向溢出，composer 居中，模型/思考按钮为安静的透明控件。
+- `.impeccable/design.json` 通过 `JSON.parse`；schemaVersion 2，含 14 个 colorMeta（OKLCH ramp）、4 个 typographyMeta、2 个 shadow、3 个 motion、3 个 breakpoint、9 个组件。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
 2. [x] **工作区面板多视图**：批次 19-21 已实现并在真实 Electron 中验证，随 `b2644f5`、`b5e30b2` 提交。
-3. **结构清理**：`styles.css` 里约 100 处 `rgb(255 255 255 / N%)` 白色叠加是被迁移层覆盖的死代码，要整条删除旧规则而不是继续叠加覆盖。
-4. **`.impeccable/design.json` sidecar**：`DESIGN.md` 的配套产物，还没写。
+3. [x] **结构清理**：批次 22 删除旧玻璃层，白色叠加只剩侧栏 sheen 两处；待验收。
+4. [x] **`.impeccable/design.json` sidecar**：批次 22 已写入 schemaVersion 2；待验收。
 
 ## 未提交状态
 
-批次 1-21 已提交，工作树干净。根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-21 已提交。批次 22 改动未提交，等待验收：
+
+- 修改：`packages/codepiddy-desktop/src/renderer/styles.css`
+- 新增：`.impeccable/design.json`
+- 文档：本文件（批次 22 记录）
+
+根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
