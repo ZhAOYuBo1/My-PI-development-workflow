@@ -22,8 +22,8 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md、docs/design/pi-1.0.1-feature-audit.md。批次 1-35 已提交并推送到 origin/main（`c8e863d`），批次 36 更改 diff 卡片堆叠、批次 37 用户消息级快捷 Fork 已实现并完成截图验证，正在等待验收，工作树尚未提交。
-客户端设置页的 Provider 登录/退出已经完成实现和隔离验证，正在等待验收；登录不接入 /login、/logout 命令。内置 Pi 已改为仓库内固定 1.0.1 bundle，build 不再联网或自动升级；所有下拉列表已统一为自定义 SelectMenu。
+再读 PRODUCT.md、DESIGN.md、docs/design/pi-1.0.1-feature-audit.md。批次 1-38 已提交到本地 main，最近提交 `55e6d4bf3` 和 `888ed5b27`；origin/main 仍是 `c8e863d`，尚未推送。
+批次 36-38 已验收：diff 卡片堆叠、用户消息级 Fork、客户端 Provider 登录、固定 Pi 1.0.1 内置运行时、统一 SelectMenu 都已完成。登录不接入 /login、/logout 命令；build 不联网，升级必须手动替换 packages/coding-agent-runtime。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README、截图、设置分区、MCP / Provider 配置、Agent 会话新建 / 切换 / 删除、会话 Fork、快速定位条都已验收，不要重做。文件搜索和终端多标签已取消，不再推进。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result / agent_before_settle）或 packages/codepiddy-desktop 自己的 main / renderer。
 UI 改完 build 通过后自动重启客户端，不用询问用户。
@@ -57,7 +57,7 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 38：Pi 1.0.1 审计与客户端 Provider 登录，待验收）
+## 当前状态（2026-10-03 批次 38：Pi 1.0.1 审计与客户端 Provider 登录，已完成）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -84,7 +84,7 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - Pi 版本现状：当前机器实际运行 `1.0.1`，仓库内置运行时也已固定为 `1.0.1` bundle（`packages/coding-agent-runtime`）；build 只复制该固定目录，不联网、不自动升级。
 - Pi 1.0.1 原生 MCP：`@earendil-works/pi-mcp` 已内置；客户端基础 MCP 已读写原生 `mcp.json`。`web_search` 仍需迁移到原生 MCP 配置，但客户端保留独立 Tavily 设置和加密 Key。
 - 完整功能审计、MCP 方案、缺失功能矩阵和分阶段任务清单见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
-- 客户端设置页 Provider 登录/退出已完成实现和隔离验证，待验收；不接入 `/login`、`/logout` 命令。
+- 客户端设置页 Provider 登录/退出已完成实现和隔离验证；不接入 `/login`、`/logout` 命令。
 - 设置页和登录弹窗的所有下拉列表已统一为自定义 `SelectMenu`，列表最大高度受控，不再使用系统原生超长弹层。
 
 ### 本轮改动清单
@@ -107,15 +107,15 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - 已提交：`396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 - 已提交：`f4a86c9 feat(desktop): move gateway retry policy out of Pi core`（批次 30）
 - 已提交：`b6bb6c5 docs(desktop): record newest-Pi development stance`
-- 待验收：批次 36 更改 diff 卡片堆叠
-- 待验收：批次 37 用户消息级快捷 Fork
-- 待验收：批次 38 Pi 1.0.1 固定内置版本、客户端 Provider 登录与统一 SelectMenu
+- 已提交：批次 36 更改 diff 卡片堆叠
+- 已提交：批次 37 用户消息级快捷 Fork
+- 已提交：批次 38 Pi 1.0.1 固定内置版本、客户端 Provider 登录与统一 SelectMenu
 
-批次 1-35 已提交；批次 36-38 待验收。详细过程见下方进度日志和 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
+批次 1-38 已提交到本地 `main`；尚未推送到 `origin/main`。详细过程见下方进度日志和 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
 
 ### 下一步
 
-批次 36-38 待用户验收后提交推送。批次 38 的版本控制收口已完成：build 只复制固定 bundle，后续升级必须手动替换 `packages/coding-agent-runtime`。文件搜索和终端多标签已取消，不作为后续待办。
+批次 36-38 已提交。版本控制收口已完成：build 只复制固定 bundle，后续升级必须手动替换 `packages/coding-agent-runtime`。文件搜索和终端多标签已取消，不作为后续待办。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -826,7 +826,7 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
 - 截图：`.artifacts/turn-fork-layout.png`、`.artifacts/turn-fork-notice.png`。
 
-### 2026-10-03 批次 38：Pi 1.0.1 固定内置版本与客户端 Provider 登录（待验收）
+### 2026-10-03 批次 38：Pi 1.0.1 固定内置版本与客户端 Provider 登录（已提交）
 
 用户要求确认 Pi 1.0.1 的原生 MCP、登录和全功能覆盖，并把缺失项留成后续任务清单。审计结果单独写入
 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
@@ -865,15 +865,14 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 13. [x] **对话快速定位条升级**：批次 35 加 dock 余弦放大、溢出才显示，保留滚动跟随与预览。
 14. [ ] **更改 diff 卡片堆叠**：批次 36 已实现并完成截图验证，等待用户验收。
 15. [ ] **用户消息级快捷 Fork**：批次 37 已实现并完成截图验证，等待用户验收。
-16. [ ] **Pi 1.0.1 功能审计与版本收口**：批次 38 已完成文档审计、固定内置 1.0.1 bundle、客户端 Provider 登录和统一 SelectMenu，等待验收。详细清单见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
+16. [x] **Pi 1.0.1 功能审计与版本收口**：批次 38 已完成文档审计、固定内置 1.0.1 bundle、客户端 Provider 登录和统一 SelectMenu，已提交。详细清单见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
 
 ## 未提交状态
 
-批次 1-35 已提交并推送到 `origin/main`；批次 36-38 尚未提交，等待验收。最近几批：
+批次 1-38 已提交到本地 `main`；`origin/main` 仍停留在 `c8e863d`，本批尚未推送。最近提交：
 
-- 待验收：更改 diff 卡片堆叠（`WorkPanel.tsx`、`styles.css`、README、截图和交接文档）
-- 待验收：用户消息级快捷 Fork（`App.tsx`、`styles.css`、README、DESIGN 和交接文档）
-- 待验收：Pi 1.0.1 固定内置版本、客户端 Provider 登录/退出、统一 SelectMenu（详见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)）
+- `888ed5b27 docs(desktop): record Pi 1.0.1 audit and handoff`
+- `55e6d4bf3 feat(desktop): finalize UI, pin Pi runtime and add provider login`
 - `3f5284a feat(desktop): upgrade transcript minimap with dock magnification`（批次 35）
 - `e17218e docs(desktop): restart the client automatically after UI changes`
 - `0ba23e6 feat(desktop): add session deletion and fix new-session button layout`（批次 34）
@@ -936,6 +935,4 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 
 ## 待用户确认
 
-- 批次 36：更改 diff 卡片堆叠。
-- 批次 37：用户消息级快捷 Fork。
-- 批次 38：Pi 1.0.1 固定内置版本、客户端 Provider 登录/退出、统一 SelectMenu；`web_search` 原生 MCP 命名策略。
+- 暂无，批次 1-38 已验收并提交。

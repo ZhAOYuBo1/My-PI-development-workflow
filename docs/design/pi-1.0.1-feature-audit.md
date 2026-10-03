@@ -263,9 +263,9 @@
 35. 更新 `PRODUCT.md`、`DESIGN.md`、`docs/design/redesign-plan.md` 和本文件。
 36. 按验收结果拆分提交并推送。
 
-## 当前未提交的原型代码
+## 本轮已提交的实现
 
-以下代码是审计过程中已经写入但尚未验收的原型，后续必须先审核，再决定保留或回退：
+以下代码已在本轮提交（`55e6d4bf3`、`888ed5b27`）：
 
 - 固定内置 Pi 1.0.1 bundle：
   `packages/coding-agent-runtime/`、`scripts/build-codepiddy-runtime.mjs`
