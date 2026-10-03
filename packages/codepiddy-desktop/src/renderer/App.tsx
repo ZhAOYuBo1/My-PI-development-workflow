@@ -6,6 +6,7 @@ import type {
 	AgentModelSelection,
 	AgentRole,
 	AgentSessionSnapshot,
+	AgentSessionSummary,
 	AgentSkillSummary,
 	AgentSlotSummary,
 	AgentStatus,
@@ -111,6 +112,7 @@ interface SessionPanelState {
 	role: AgentRole;
 	displayName: string;
 	snapshot: AgentSessionSnapshot;
+	sessions: AgentSessionSummary[];
 }
 
 interface ExtensionDialogState {
@@ -2833,25 +2835,47 @@ export function App() {
 				role: slot.role,
 				displayName: slot.displayName,
 				snapshot: demoSessionSnapshot,
+				sessions: [
+					{
+						sessionId: "demo-session",
+						name: "登录功能实现",
+						preview: "按照 design.md 和 tasks.md 实现登录功能。",
+						messageCount: 6,
+						createdAt: "2026-09-17T02:10:00.000Z",
+						updatedAt: "2026-09-17T02:38:00.000Z",
+						isCurrent: true,
+					},
+					{
+						sessionId: "demo-session-old",
+						name: "会话过期边界",
+						preview: "修复 Review Agent 提出的会话过期边界问题。",
+						messageCount: 12,
+						createdAt: "2026-09-16T09:00:00.000Z",
+						updatedAt: "2026-09-16T09:30:00.000Z",
+						isCurrent: false,
+					},
+				],
 			});
 			return;
 		}
 		setSessionPanelLoading(true);
 		setError(null);
 		try {
-			const snapshot = await window.codepiddy.getAgentSessionSnapshot({
+			const locator = {
 				agentInstanceId: slot.currentInstanceId,
 				projectId: project.id,
 				workItemId: selectedWorkItem.id,
 				role: slot.role,
-			});
+			};
+			const [snapshot, sessions] = await Promise.all([
+				window.codepiddy.getAgentSessionSnapshot(locator),
+				window.codepiddy.listAgentSessions(locator),
+			]);
 			setSessionPanel({
-				agentInstanceId: slot.currentInstanceId,
-				projectId: project.id,
-				workItemId: selectedWorkItem.id,
-				role: slot.role,
+				...locator,
 				displayName: slot.displayName,
 				snapshot,
+				sessions,
 			});
 			setAgentSessionSnapshots((current) => ({ ...current, [slot.currentInstanceId!]: snapshot }));
 		} catch (caught) {
@@ -2874,7 +2898,13 @@ export function App() {
 				entryId,
 			});
 			if (result.cancelled) return;
-			setSessionPanel((current) => (current ? { ...current, snapshot: result.snapshot } : current));
+			const sessions = await window.codepiddy.listAgentSessions({
+				agentInstanceId: sessionPanel.agentInstanceId,
+				projectId: sessionPanel.projectId,
+				workItemId: sessionPanel.workItemId,
+				role: sessionPanel.role,
+			});
+			setSessionPanel((current) => (current ? { ...current, snapshot: result.snapshot, sessions } : current));
 			setAgentSessionSnapshots((current) => ({ ...current, [sessionPanel.agentInstanceId]: result.snapshot }));
 			setDrafts((current) => ({ ...current, [sessionPanel.agentInstanceId]: result.selectedText }));
 			const modelSelection = await window.codepiddy.getAgentModelSelection({
@@ -2889,6 +2919,87 @@ export function App() {
 			window.requestAnimationFrame(() => composerInputRef.current?.focus());
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : "Fork 会话失败");
+		} finally {
+			setSessionPanelLoading(false);
+		}
+	}
+
+	async function createAgentSession(): Promise<void> {
+		if (!sessionPanel) return;
+		if (demoMode) {
+			setSessionPanel((current) =>
+				current
+					? {
+							...current,
+							sessions: [
+								{
+									sessionId: `demo-session-${current.sessions.length + 1}`,
+									name: null,
+									preview: "新会话",
+									messageCount: 0,
+									createdAt: new Date().toISOString(),
+									updatedAt: new Date().toISOString(),
+									isCurrent: true,
+								},
+								...current.sessions.map((session) => ({ ...session, isCurrent: false })),
+							],
+						}
+					: current,
+			);
+			return;
+		}
+		setSessionPanelLoading(true);
+		setError(null);
+		try {
+			const result = await window.codepiddy.newAgentSession({
+				agentInstanceId: sessionPanel.agentInstanceId,
+				projectId: sessionPanel.projectId,
+				workItemId: sessionPanel.workItemId,
+				role: sessionPanel.role,
+			});
+			setSessionPanel((current) =>
+				current ? { ...current, snapshot: result.snapshot, sessions: result.sessions } : current,
+			);
+			setDrafts((current) => ({ ...current, [sessionPanel.agentInstanceId]: "" }));
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "新建会话失败");
+		} finally {
+			setSessionPanelLoading(false);
+		}
+	}
+
+	async function switchAgentSession(sessionId: string): Promise<void> {
+		if (!sessionPanel || sessionPanel.snapshot.sessionId === sessionId) return;
+		if (demoMode) {
+			setSessionPanel((current) =>
+				current
+					? {
+							...current,
+							sessions: current.sessions.map((session) => ({
+								...session,
+								isCurrent: session.sessionId === sessionId,
+							})),
+						}
+					: current,
+			);
+			return;
+		}
+		setSessionPanelLoading(true);
+		setError(null);
+		try {
+			const result = await window.codepiddy.switchAgentSession({
+				agentInstanceId: sessionPanel.agentInstanceId,
+				projectId: sessionPanel.projectId,
+				workItemId: sessionPanel.workItemId,
+				role: sessionPanel.role,
+				sessionId,
+			});
+			setSessionPanel((current) =>
+				current ? { ...current, snapshot: result.snapshot, sessions: result.sessions } : current,
+			);
+			setDrafts((current) => ({ ...current, [sessionPanel.agentInstanceId]: "" }));
+		} catch (caught) {
+			setError(caught instanceof Error ? caught.message : "切换会话失败");
 		} finally {
 			setSessionPanelLoading(false);
 		}
@@ -4429,6 +4540,39 @@ export function App() {
 							<IconButton label="关闭会话树" onClick={() => setSessionPanel(null)}>
 								<AppIcon name="close" />
 							</IconButton>
+						</div>
+						<div className="session-picker">
+							<div className="session-picker-heading">
+								<strong>会话</strong>
+								<button
+									className="secondary-button"
+									type="button"
+									disabled={sessionPanelLoading}
+									onClick={() => void createAgentSession()}
+								>
+									<AppIcon name="plus" size={13} /> 新建会话
+								</button>
+							</div>
+							<div className="session-picker-list">
+								{sessionPanel.sessions.map((session) => (
+									<button
+										key={session.sessionId}
+										type="button"
+										className={`session-picker-item${session.isCurrent ? " active" : ""}`}
+										disabled={sessionPanelLoading}
+										onClick={() => void switchAgentSession(session.sessionId)}
+									>
+										<span className="session-picker-copy">
+											<strong>{session.name || session.preview || "新会话"}</strong>
+											<small>
+												{session.messageCount} 条消息 ·{" "}
+												{session.updatedAt ? new Date(session.updatedAt).toLocaleString() : "—"}
+											</small>
+										</span>
+										{session.isCurrent ? <em>当前</em> : null}
+									</button>
+								))}
+							</div>
 						</div>
 						<div className="session-summary">
 							<span>{sessionPanel.snapshot.messageCount} 条消息</span>

@@ -3704,6 +3704,93 @@ textarea:focus-visible,
   }
 }
 
+/* ---- 会话树弹窗：会话切换 ---- */
+.session-picker {
+  display: grid;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-md) var(--cp-space-lg) 0;
+}
+
+.session-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.session-picker-heading strong {
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.session-picker-heading .secondary-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.session-picker-list {
+  display: grid;
+  max-height: 168px;
+  gap: var(--cp-space-micro);
+  overflow-y: auto;
+}
+
+.session-picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cp-space-sm);
+  padding: var(--cp-space-sm) var(--cp-space-md);
+  border: 0;
+  border-radius: var(--cp-radius-md);
+  background: var(--cp-surface-secondary);
+  color: var(--cp-ink-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-picker-item:hover {
+  background: color-mix(in oklab, var(--cp-ink) 6%, transparent);
+}
+
+.session-picker-item.active {
+  background: var(--cp-surface);
+  box-shadow: var(--cp-elevation-raised);
+  color: var(--cp-ink);
+}
+
+.session-picker-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.session-picker-copy strong,
+.session-picker-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-picker-copy strong {
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.session-picker-copy small {
+  color: var(--cp-ink-muted);
+  font-size: 10.5px;
+}
+
+.session-picker-item em {
+  flex: none;
+  padding: 2px var(--cp-space-sm);
+  border-radius: var(--cp-radius-full);
+  background: var(--cp-accent-soft);
+  color: var(--cp-accent);
+  font-size: 10px;
+  font-style: normal;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .file-tree-note.is-loading::before,
   .file-viewer-skeleton > span,

@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-31 已提交并推送（`9ed96e1`）；批次 32（会话 Fork 可发现性修复）已改完，待验收提交。
+再读 PRODUCT.md、DESIGN.md。批次 1-32 已提交并推送（`2ecdbed`）；批次 33（Agent 会话新建 / 切换）已改完，待验收提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
 后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
@@ -55,7 +55,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 32：会话 Fork 可发现性修复）
+## 当前状态（2026-10-03 批次 33：Agent 会话新建 / 切换）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -749,6 +749,19 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 验证：Playwright demo 打开会话树后 3 个 Fork 按钮常显（computed opacity 1），说明文案正确；`npm run check`、`npm run build:codepiddy` 全绿。
 
+### 2026-10-03 批次 33：Agent 会话新建 / 切换（待验收）
+
+用户反馈：Fork 之后当前会话被替换，没有回切入口；而且不只是 Fork，每个 Agent（如 Coding Agent）都应该能自己新建会话、在历史会话之间切换。
+
+落地内容：
+
+- shared 新增 `AgentSessionSummary` / `SwitchAgentSessionInput` / `AgentSessionSwitchResult`，`CodePIddyClientApi` 增加 `listAgentSessions` / `newAgentSession` / `switchAgentSession`。
+- main 新增会话列表：扫描 agent 的 sessionDirectory 下 `.jsonl`，解析 `session` 头（id / timestamp）、`session_info`（名称）、`message` 数量与首条用户消息预览，按更新时间排序，标记当前会话。
+- main 新增新建 / 切换：调用 Pi RPC `new_session` / `switch_session`，切换后广播 `agent_history` 刷新转录；选中的 sessionId 写入 agent 目录的 `selected-session.json`，下次启动用 `--session <id>` 而不是 `--continue`，重启后回到同一会话。
+- renderer 会话树弹窗顶部新增「会话」列表：显示名称 / 预览 / 消息数 / 更新时间 / 当前标记，支持点击切换；「新建会话」按钮创建新会话。
+
+验证：Playwright demo 打开会话树显示 2 条会话，点「新建会话」变 3 条并标记当前，点击列表项可切换高亮；`npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
@@ -762,6 +775,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 9. [x] **重试不侵入化**：批次 30 把退避参数写进 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁已回退。
 10. [x] **设置页分区与集成配置**：批次 31 设置页改成左侧分类导航；新增 MCP 服务和 Provider / 模型的客户端配置。
 11. [x] **会话 Fork 可发现性**：批次 32 Fork 按钮常显，Fork 后关弹窗、提示并聚焦输入框。
+12. [x] **Agent 会话新建 / 切换**：批次 33 每个 Agent 可列出、新建、切换会话，Fork 分支也在列表里，选择会持久化到重启。
 
 ## 未提交状态
 
@@ -771,10 +785,10 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 - `396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 
-批次 32 已改完，待用户验收后提交。改动范围：
+批次 33 已改完，待用户验收后提交。改动范围：
 
-- `App.tsx`：Fork 成功后关闭弹窗、toast 提示、聚焦输入框；更新弹窗说明文案。
-- `styles.css`：`.session-fork-button` 改成常显。
+- `codepiddy-shared` / `main/index.ts` / `ipc-validation.ts` / `preload`：新增会话列表、新建、切换的 IPC 与持久化。
+- `App.tsx` / `styles.css`：会话树弹窗新增会话列表和「新建会话」按钮。
 
 注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
@@ -831,4 +845,4 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 ## 待用户确认
 
-- 批次 32（会话 Fork 可发现性修复）待验收。
+- 批次 33（Agent 会话新建 / 切换）待验收。

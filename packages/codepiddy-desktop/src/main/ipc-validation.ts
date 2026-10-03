@@ -23,6 +23,7 @@ import type {
 	SetAgentModelInput,
 	SetAgentThinkingInput,
 	SetRoleSkillAssignmentsInput,
+	SwitchAgentSessionInput,
 	TerminalResizeInput,
 	TerminalStartInput,
 	TerminalWriteInput,
@@ -290,6 +291,14 @@ export function parseTerminalId(value: unknown): string {
 
 export function parseBoundedText(value: unknown, label: string, maximum: number, allowEmpty = false): string {
 	return text(value, label, maximum, allowEmpty);
+}
+
+export function parseSwitchAgentSessionInput(value: unknown): SwitchAgentSessionInput {
+	const input = record(value, "Switch Session");
+	return {
+		...parseAgentLocator(input),
+		sessionId: text(input.sessionId, "Session ID", 200),
+	};
 }
 
 function nonNegativeInteger(value: unknown, label: string): number {

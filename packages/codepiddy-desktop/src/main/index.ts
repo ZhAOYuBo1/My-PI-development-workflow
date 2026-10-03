@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -29,6 +29,8 @@ import type {
 	AgentRole,
 	AgentSessionNode,
 	AgentSessionSnapshot,
+	AgentSessionSummary,
+	AgentSessionSwitchResult,
 	ArchiveWorkItemInput,
 	CreateAgentInput,
 	ExtensionUiResponseInput,
@@ -41,6 +43,7 @@ import type {
 	SendAgentPromptInput,
 	SetAgentModelInput,
 	SetAgentThinkingInput,
+	SwitchAgentSessionInput,
 	TerminalClientEvent,
 	TerminalSessionInfo,
 } from "@codepiddy/shared";
@@ -69,6 +72,7 @@ import {
 	parseSendAgentPromptInput,
 	parseSetAgentModelInput,
 	parseSetAgentThinkingInput,
+	parseSwitchAgentSessionInput,
 	parseTerminalId,
 	parseTerminalResizeInput,
 	parseTerminalStartInput,
@@ -90,6 +94,9 @@ const channels = {
 	cloneAgentSession: "codepiddy:agent:session:clone",
 	getAgentSessionSnapshot: "codepiddy:agent:session:get",
 	forkAgentSession: "codepiddy:agent:session:fork",
+	listAgentSessions: "codepiddy:agent:session:list",
+	newAgentSession: "codepiddy:agent:session:new",
+	switchAgentSession: "codepiddy:agent:session:switch",
 	resetAgent: "codepiddy:agent:reset",
 	activateAgent: "codepiddy:agent:activate",
 	agentEvent: "codepiddy:agent:event",
@@ -348,6 +355,82 @@ function flattenSessionTree(
 	};
 	for (const root of tree) visit(root, 0);
 	return result;
+}
+
+const SESSION_FILE_SUFFIX = ".jsonl";
+
+async function readSessionFileSummary(filePath: string, currentSessionId: string): Promise<AgentSessionSummary | null> {
+	let raw: string;
+	try {
+		raw = await readFile(filePath, "utf8");
+	} catch {
+		return null;
+	}
+	let sessionId: string | null = null;
+	let createdAt: string | null = null;
+	let name: string | null = null;
+	let preview = "";
+	let messageCount = 0;
+	for (const line of raw.split("\n")) {
+		if (!line.trim()) continue;
+		let entry: unknown;
+		try {
+			entry = JSON.parse(line);
+		} catch {
+			continue;
+		}
+		if (!isRecord(entry)) continue;
+		if (entry.type === "session" && typeof entry.id === "string") {
+			sessionId = entry.id;
+			if (typeof entry.timestamp === "string") createdAt = entry.timestamp;
+			continue;
+		}
+		if (entry.type === "session_info" && typeof entry.name === "string" && entry.name.trim()) {
+			name = entry.name.trim();
+			continue;
+		}
+		if (entry.type === "message") {
+			messageCount += 1;
+			const message = isRecord(entry.message) ? entry.message : null;
+			if (!preview && message?.role === "user") {
+				preview = sessionEntryText(message.content).trim().slice(0, 140);
+			}
+		}
+	}
+	if (!sessionId) return null;
+	const info = await stat(filePath).catch(() => null);
+	return {
+		sessionId,
+		name,
+		preview,
+		messageCount,
+		createdAt,
+		updatedAt: info ? new Date(info.mtimeMs).toISOString() : null,
+		isCurrent: sessionId === currentSessionId,
+	};
+}
+
+function selectedSessionFilePath(sessionDirectory: string): string {
+	return path.join(path.dirname(sessionDirectory), "selected-session.json");
+}
+
+async function readSelectedSessionId(sessionDirectory: string): Promise<string | null> {
+	try {
+		const parsed: unknown = JSON.parse(await readFile(selectedSessionFilePath(sessionDirectory), "utf8"));
+		return isRecord(parsed) && typeof parsed.sessionId === "string" && parsed.sessionId ? parsed.sessionId : null;
+	} catch {
+		return null;
+	}
+}
+
+async function writeSelectedSessionId(sessionDirectory: string, sessionId: string | null): Promise<void> {
+	const filePath = selectedSessionFilePath(sessionDirectory);
+	if (!sessionId) {
+		await rm(filePath, { force: true });
+		return;
+	}
+	await mkdir(path.dirname(filePath), { recursive: true });
+	await writeFile(filePath, `${JSON.stringify({ sessionId })}\n`, "utf8");
 }
 
 async function readWorkItemPromptContext(agent: StoredAgentInstance): Promise<{ title: string; description: string }> {
@@ -736,6 +819,99 @@ class AgentManager {
 		return this.sessionSnapshot(await this.ensureProcess(await this.resolve(input)));
 	}
 
+	private async listSessions(process: PiRpcProcess, agent: StoredAgentInstance): Promise<AgentSessionSummary[]> {
+		const stateResponse = await process.getState();
+		const state = isRecord(stateResponse.data) ? stateResponse.data : {};
+		const currentSessionId = typeof state.sessionId === "string" ? state.sessionId : "";
+		let fileNames: string[] = [];
+		try {
+			fileNames = (await readdir(agent.sessionDirectory)).filter((name) => name.endsWith(SESSION_FILE_SUFFIX));
+		} catch {
+			fileNames = [];
+		}
+		const summaries = await Promise.all(
+			fileNames.map((name) => readSessionFileSummary(path.join(agent.sessionDirectory, name), currentSessionId)),
+		);
+		return summaries
+			.filter((summary): summary is AgentSessionSummary => summary !== null)
+			.sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
+	}
+
+	async listAgentSessions(input: AgentInstanceLocator): Promise<AgentSessionSummary[]> {
+		const agent = await this.resolve(input);
+		return this.listSessions(await this.ensureProcess(agent), agent);
+	}
+
+	private async resolveSessionFile(agent: StoredAgentInstance, sessionId: string): Promise<string> {
+		let fileNames: string[] = [];
+		try {
+			fileNames = (await readdir(agent.sessionDirectory)).filter((name) => name.endsWith(SESSION_FILE_SUFFIX));
+		} catch {
+			fileNames = [];
+		}
+		for (const name of fileNames) {
+			const filePath = path.join(agent.sessionDirectory, name);
+			const firstLine = (await readFile(filePath, "utf8").catch(() => "")).split("\n", 1)[0];
+			try {
+				const entry: unknown = JSON.parse(firstLine);
+				if (isRecord(entry) && entry.type === "session" && entry.id === sessionId) return filePath;
+			} catch {
+				// 忽略损坏的会话文件，继续找下一个。
+			}
+		}
+		throw new Error("找不到指定的会话");
+	}
+
+	private async sessionSwitchResult(
+		process: PiRpcProcess,
+		agent: StoredAgentInstance,
+	): Promise<AgentSessionSwitchResult> {
+		return {
+			snapshot: await this.sessionSnapshot(process),
+			sessions: await this.listSessions(process, agent),
+		};
+	}
+
+	async newAgentSession(input: AgentInstanceLocator): Promise<AgentSessionSwitchResult> {
+		const agent = await this.resolve(input);
+		const process = await this.ensureProcess(agent);
+		const result = await process.newSession();
+		if (!result.cancelled) {
+			const stateResponse = await process.getState();
+			const state = isRecord(stateResponse.data) ? stateResponse.data : {};
+			await writeSelectedSessionId(
+				agent.sessionDirectory,
+				typeof state.sessionId === "string" ? state.sessionId : null,
+			);
+			this.broadcast({
+				agentInstanceId: agent.id,
+				projectId: agent.projectId,
+				workItemId: agent.workItemId,
+				role: agent.role,
+				event: { type: "agent_history", messages: await process.getMessages() },
+			});
+		}
+		return this.sessionSwitchResult(process, agent);
+	}
+
+	async switchAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSwitchResult> {
+		const agent = await this.resolve(input);
+		const process = await this.ensureProcess(agent);
+		const sessionFile = await this.resolveSessionFile(agent, input.sessionId);
+		const result = await process.switchSession(sessionFile);
+		if (!result.cancelled) {
+			await writeSelectedSessionId(agent.sessionDirectory, input.sessionId);
+			this.broadcast({
+				agentInstanceId: agent.id,
+				projectId: agent.projectId,
+				workItemId: agent.workItemId,
+				role: agent.role,
+				event: { type: "agent_history", messages: await process.getMessages() },
+			});
+		}
+		return this.sessionSwitchResult(process, agent);
+	}
+
 	async forkSession(input: ForkAgentSessionInput): Promise<ForkAgentSessionResult> {
 		const agent = await this.resolve(input);
 		const process = await this.ensureProcess(agent);
@@ -1024,6 +1200,7 @@ class AgentManager {
 			agent.role,
 			roleSkillAssignments,
 		);
+		const selectedSessionId = await readSelectedSessionId(agent.sessionDirectory);
 		const rpc = new PiRpcProcess({
 			command: nodeExecutable,
 			cwd: agent.projectRoot,
@@ -1073,7 +1250,7 @@ class AgentManager {
 				"--no-extensions",
 				"--session-dir",
 				agent.sessionDirectory,
-				"--continue",
+				...(selectedSessionId ? ["--session", selectedSessionId] : ["--continue"]),
 				"--extension",
 				compiledRuntime
 					? path.join(extensionRoot, "permission.js")
@@ -1510,6 +1687,15 @@ function registerIpcHandlers(
 	);
 	ipcMain.handle(channels.getAgentSessionSnapshot, (_event, raw: unknown) =>
 		agentManager.getSessionSnapshot(parseAgentLocator(raw)),
+	);
+	ipcMain.handle(channels.listAgentSessions, (_event, raw: unknown) =>
+		agentManager.listAgentSessions(parseAgentLocator(raw)),
+	);
+	ipcMain.handle(channels.newAgentSession, (_event, raw: unknown) =>
+		agentManager.newAgentSession(parseAgentLocator(raw)),
+	);
+	ipcMain.handle(channels.switchAgentSession, (_event, raw: unknown) =>
+		agentManager.switchAgentSession(parseSwitchAgentSessionInput(raw)),
 	);
 	ipcMain.handle(channels.forkAgentSession, (_event, raw: unknown) =>
 		agentManager.forkSession(parseForkAgentSessionInput(raw)),

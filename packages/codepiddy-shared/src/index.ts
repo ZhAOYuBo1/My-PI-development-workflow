@@ -187,6 +187,25 @@ export interface AgentSessionSnapshot {
 	nodes: AgentSessionNode[];
 }
 
+export interface AgentSessionSummary {
+	sessionId: string;
+	name: string | null;
+	preview: string;
+	messageCount: number;
+	createdAt: string | null;
+	updatedAt: string | null;
+	isCurrent: boolean;
+}
+
+export interface SwitchAgentSessionInput extends AgentInstanceLocator {
+	sessionId: string;
+}
+
+export interface AgentSessionSwitchResult {
+	snapshot: AgentSessionSnapshot;
+	sessions: AgentSessionSummary[];
+}
+
 export interface ForkAgentSessionInput extends AgentInstanceLocator {
 	entryId: string;
 }
@@ -216,6 +235,9 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	invokeAgentBuiltinCommand(input: InvokeAgentBuiltinCommandInput): Promise<AgentBuiltinCommandResult>;
 	cloneAgentSession(input: AgentInstanceLocator): Promise<void>;
 	getAgentSessionSnapshot(input: AgentInstanceLocator): Promise<AgentSessionSnapshot>;
+	listAgentSessions(input: AgentInstanceLocator): Promise<AgentSessionSummary[]>;
+	newAgentSession(input: AgentInstanceLocator): Promise<AgentSessionSwitchResult>;
+	switchAgentSession(input: SwitchAgentSessionInput): Promise<AgentSessionSwitchResult>;
 	forkAgentSession(input: ForkAgentSessionInput): Promise<ForkAgentSessionResult>;
 	resetAgent(input: ResetAgentInput): Promise<ProjectSummary>;
 	respondToExtensionUi(input: ExtensionUiResponseInput): Promise<void>;
