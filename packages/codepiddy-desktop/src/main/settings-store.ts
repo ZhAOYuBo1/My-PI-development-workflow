@@ -25,6 +25,16 @@ interface StoredSecrets {
 const agentRoles: AgentRole[] = ["requirement-analysis", "coding", "bug-fix", "review"];
 const ROLE_SKILLS_SCHEMA_VERSION = 2;
 
+/**
+ * 写进 Pi 原生 settings.json 的重试默认值。
+ * 与 @codepiddy/retry-extension 的 DEFAULT_RETRY_POLICY 保持一致。
+ */
+const DEFAULT_RETRY_SETTINGS = {
+	maxRetries: 5,
+	baseDelayMs: 1000,
+	maxAgentDelayMs: 5000,
+} as const;
+
 function isNotFound(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
@@ -121,6 +131,43 @@ export class AppSettingsStore {
 			if (isNotFound(error)) return null;
 			throw error;
 		}
+	}
+
+	/**
+	 * 把 CodePIddy 的重试策略写进 Pi 原生 settings.json。
+	 *
+	 * Pi core 的 getRetrySettings() 只读 settings.retry.*，写这里就不需要在 core 里改默认值，
+	 * Pi 更新后仍然生效。只补缺失字段，用户显式写过的值优先。
+	 */
+	private async syncPiRetrySettings(): Promise<void> {
+		let current: Record<string, unknown> = {};
+		try {
+			const parsed: unknown = JSON.parse(await readFile(this.piSettingsPath, "utf8"));
+			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+				current = parsed as Record<string, unknown>;
+			}
+		} catch (error) {
+			if (!isNotFound(error)) throw error;
+		}
+		const existing =
+			typeof current.retry === "object" && current.retry !== null && !Array.isArray(current.retry)
+				? (current.retry as Record<string, unknown>)
+				: {};
+		const nextRetry = { ...existing };
+		let changed = false;
+		for (const [key, value] of Object.entries(DEFAULT_RETRY_SETTINGS)) {
+			if (typeof nextRetry[key] !== "number") {
+				nextRetry[key] = value;
+				changed = true;
+			}
+		}
+		if (!changed) return;
+		await mkdir(path.dirname(this.piSettingsPath), { recursive: true });
+		await writeFile(this.piSettingsPath, `${JSON.stringify({ ...current, retry: nextRetry }, null, 2)}\n`, "utf8");
+	}
+
+	async ensurePiRetrySettings(): Promise<void> {
+		await this.syncPiRetrySettings();
 	}
 
 	async setShellPath(value: string): Promise<SettingsStatus> {

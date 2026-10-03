@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-26 已提交并推送到 origin/main；批次 27（收尾清理）、批次 28（变更 diff 扩展 + Agent 操作菜单修复）、批次 29（工作区面板默认收起）已改完，待验收提交。
+再读 PRODUCT.md、DESIGN.md。批次 1-29 已提交并推送到 origin/main（`396006e`）；批次 30（重试策略改走 settings.json + agent_before_settle 扩展）已改完，待验收提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
 后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
@@ -55,7 +55,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 29：工作区面板默认收起）
+## 当前状态（2026-10-03 批次 30：重试改为不侵入实现）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -96,15 +96,14 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - 已提交：`0c1f84c feat(desktop): embed a real PTY terminal`（批次 23-25）
 - 已提交：`dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 - 已提交：`dc6c403 docs: record README push`（批次 26 文档）
-- 待验收：批次 27 收尾清理（Impeccable 目录 gitignore + 终端按需加载 + 文档同步）
-- 待验收：批次 28 变更 diff 扩展 + Agent 操作菜单修复
-- 待验收：批次 29 工作区面板启动默认收起
+- 已提交：`396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
+- 待验收：批次 30 重试策略改走 settings.json + `agent_before_settle` 扩展，core 补丁已回退
 
-批次 1-26 已提交；批次 27-29 待验收。详细过程见下方进度日志。
+批次 1-29 已提交；批次 30 待验收。详细过程见下方进度日志。
 
 ### 下一步
 
-批次 27-29 待用户验收后提交推送。之后从新增需求里挑：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
+批次 30 待用户验收后提交推送。之后从新增需求里挑：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -695,6 +694,25 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 验证：Playwright demo 实测进入会话后 `.work-panel` 数量为 0（收起），标题栏显示“显示文件管理器”按钮；点击后 `.work-panel` 数量为 1。`npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
 
+### 2026-10-03 批次 30：重试改为不侵入实现（待验收）
+
+用户确认：网关并发错误的重试要在不修改 Pi core 的前提下实现，并且 Pi 更新后仍然有效。
+
+审计结论（详见「Pi core 更新边界」）：`c345b54` 给 core 留了两处补丁，更新后都失效。批次 30 把它们拆成配置 + 扩展两层：
+
+- **退避策略走配置**：`AppSettingsStore.ensurePiRetrySettings()` 在应用启动时把 `retry.maxRetries = 5 / baseDelayMs = 1000 / maxAgentDelayMs = 5000` 合并写进 Pi 原生 `~/.pi/agent/settings.json`；只补缺失字段，用户显式配置优先。Pi 内置重试和扩展共用这一份参数。
+- **网关并发错误走扩展**：新增 `packages/codepiddy-retry-extension`。Pi 内置重试只认自己的错误列表，网关并发错误不在里面；内置重试放弃后触发 `agent_before_settle`，扩展检查 `outcome === "error"`、`context.canContinue` 和错误文本，按同一套退避 sleep 后返回 `{ continue: true }`，强制再发一次 provider 请求。
+- **版本口径**：功能以更新后的 Pi（v0.99.1+）为准，`agent_before_settle` 是必备事件，不做旧版本兼容；类型 cast 只是因为仓库 vendored 的类型较旧。
+- **回退 core**：`packages/ai/src/utils/retry.ts` 和 `packages/coding-agent/src/core/settings-manager.ts` 已恢复到 `9cf21c8` 上游基线（diff 为空）。
+- 打包接线：`build-main.mjs` → `dist/runtime-extensions/retry.js`；`build-codepiddy-runtime.mjs` → `extensions/retry.js`；`startProcess` 和 runtime probe 都加 `--extension retry.js`。
+
+验证：
+
+- `@codepiddy/retry-extension` 单测 7 项全绿：模式匹配、指数退避、预算耗尽、非网关错误、成功重置、`canContinue === false`。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+- 重启真实客户端后：`~/.pi/agent/settings.json` 出现 `retry: { maxRetries: 5, baseDelayMs: 1000, maxAgentDelayMs: 5000 }`；Pi 进程命令行确认加载 `dist/runtime-extensions/retry.js`。
+- 已知边界：命中 Pi 内置模式又命中网关模式的错误，最多会尝试 `2 × maxRetries` 次（内置一层 + 扩展一层）。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
@@ -705,23 +723,23 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 6. [x] **收尾清理**：批次 27 把 Impeccable 安装目录加入 `.gitignore`，终端改为按需加载以消除大包告警，并同步过期设计文档。
 7. [x] **变更 diff 证据**：批次 28 新增 `@codepiddy/review-extension`，Write / Edit 前后快照生成 unified patch；同时修复 Agent 操作菜单定位。
 8. [x] **工作区面板默认收起**：批次 29 启动不再自动展开右侧面板，只保留宽度记忆。
+9. [x] **重试不侵入化**：批次 30 把退避参数写进 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁已回退。
 
 ## 未提交状态
 
-批次 1-26 已提交并推送到 `origin/main`：
+批次 1-29 已提交并推送到 `origin/main`：
 
 - `0c1f84c feat(desktop): embed a real PTY terminal`（批次 23-25）
 - `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
+- `396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 
-批次 27-29 已改完，待用户验收后提交。改动范围：
+批次 30 已改完，待用户验收后提交。改动范围：
 
-- `.gitignore`：加入 Impeccable 本地安装目录，工作树恢复干净。
-- `WorkPanel.tsx` / `terminal-pane.tsx` / `panel-icon-button.tsx` / `main.tsx` / `styles.css`：终端拆成按需加载模块，消除 xterm 进主包的 702kB 告警。
-- `DESIGN.md` / `reference-pi-desktop.md`：Terminal 一节改成真 PTY 事实，删掉与 Blue-Is-Action 冲突的旧禁令；补记参考项目的 message-owned review 机制。
-- `packages/codepiddy-review-extension/`：新增 Pi 扩展，执行前后快照生成 patch，写回 tool result details。
-- `App.tsx` / `work-panel.ts` / `styles.css`：优先展示 details.patch，严格 diff 判定，修复新文件路径推断和 Agent 操作菜单定位。
-- `App.tsx` / `capture-screenshots.mts`：工作区面板启动默认收起，截图脚本显式打开。
-- `package.json` / `package-lock.json`：新增 review workspace 与 `diff@8.0.4` 依赖，提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+- `packages/codepiddy-retry-extension/`：新增 retry 扩展（模式匹配、退避、`agent_before_settle` 兜底、7 项单测）。
+- `settings-store.ts` / `main/index.ts`：启动时把 `retry` 默认值合并写进 Pi 原生 settings.json。
+- `build-main.mjs` / `build-codepiddy-runtime.mjs` / `main/index.ts`：打包并在启动参数里加载 `retry.js`。
+- `packages/ai/src/utils/retry.ts` / `packages/coding-agent/src/core/settings-manager.ts`：回退到 `9cf21c8` 上游基线。
+- `package.json` / `package-lock.json`：新增 retry workspace，提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
@@ -731,12 +749,19 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 ## Pi core 更新边界（2026-10-03 审计）
 
-结论：外壳与 Pi 的边界基本干净，`packages/codepiddy-*` 全部是外壳，Pi 只通过 CLI RPC + 扩展 API 使用；但 `packages/ai` / `packages/coding-agent` 里仍残留两处功能性补丁，**Pi 更新后已经失效**。本机正在运行的客户端用的是 v0.99.1 更新运行时，已实测确认这两处补丁当前未生效。
+结论：审计时发现两处功能性 core 补丁在 Pi 更新后失效；批次 30 已把它们改成不侵入实现。现在 `packages/ai/src/utils/retry.ts` 和 `packages/coding-agent/src/core/settings-manager.ts` 与上游基线 `9cf21c8` 完全一致。
 
-仍然侵入 core 的代码（相对 `9cf21c8` 上游基线）：
+审计发现（历史记录）：
 
-1. `packages/ai/src/utils/retry.ts`：在可重试错误模式里加了 `gateway_concurrency_limit` / `concurrency.?limit`（commit `c345b54`）。v0.99.1 的 bundle 里搜不到这两个字符串。
-2. `packages/coding-agent/src/core/settings-manager.ts`：`getRetrySettings()` 默认值改成 `maxRetries 5 / baseDelayMs 1000 / maxAgentDelayMs 5000`（commit `c345b54`）。v0.99.1 的 `dist/core/settings-manager.js` 仍是 `?? 3` / `?? 2000` / `DEFAULT_MAX_AGENT_RETRY_DELAY_MS`。
+1. `packages/ai/src/utils/retry.ts` 曾加入 `gateway_concurrency_limit` / `concurrency.?limit` 两个可重试模式（commit `c345b54`）。v0.99.1 的 bundle 里没有这两个字符串。
+2. `packages/coding-agent/src/core/settings-manager.ts` 曾把 `getRetrySettings()` 默认值改成 `5 / 1000 / 5000`。v0.99.1 仍是上游 `3 / 2000 / DEFAULT_MAX_AGENT_RETRY_DELAY_MS`。
+
+批次 30 的不侵入实现：
+
+- **退避策略走配置**：外壳启动时把 `retry.maxRetries = 5 / baseDelayMs = 1000 / maxAgentDelayMs = 5000` 合并写进 Pi 原生 `~/.pi/agent/settings.json`（只补缺失字段，用户显式配置优先）。Pi 内置重试和扩展共用这一份参数，更新后仍然生效。
+- **网关并发错误走扩展**：新增 `packages/codepiddy-retry-extension`。Pi 内置重试只认自己的错误列表，网关并发错误不在里面；内置重试放弃后会触发 `agent_before_settle`，扩展在这里检查 `outcome === "error"`、`context.canContinue` 和错误文本，按同一套退避参数 sleep 后返回 `{ continue: true }`，强制再发一次 provider 请求。
+- **版本口径**：功能以更新后的 Pi（v0.99.1+）为准，`agent_before_settle` 是必备事件，不做旧版本兼容；类型用最小结构声明 + 窄化 cast，只是因为仓库 vendored 类型较旧。
+- **副作用**：扩展的 continue 不新增 user 消息，也不改 Pi core；内置重试和扩展兜底是两层，命中双方模式的错误最多会尝试 `2 × maxRetries` 次。
 
 不影响运行、更新后会被上游完整包覆盖的 core 差异：
 
@@ -749,11 +774,6 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - `PI_SHELL_PATH` 私有环境变量旁路（`647cf1b`）。
 - 私有 RPC 命令（`7d5f368`）。
 - `getShellPath()` 现在只读 Pi 原生 `settings.json`。
-
-建议：
-
-- 重试默认值改成外壳写 Pi 原生 `settings.json` 的 `retry.maxRetries / baseDelayMs / maxAgentDelayMs`，再把 core 默认值改回上游，更新后仍然生效。
-- `gateway_concurrency_limit` 没有配置钩子，只能向上游 Pi 提 PR，或接受它只在内置 runtime 生效。
 
 ## 决策记录
 
@@ -769,8 +789,9 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 | 2026-10-02 | UI 字体采用 `Monaspace Argon + Maple Mono NF CN` | 用户要求英文和中文分别优化，且两份字体均适合作为技术工具字体 |
 | 2026-10-02 | app icon 使用透明黑白矢量，不再保留图片底模 | 用户确认原图白色背景造成分层 |
 | 2026-10-03 | 变更 diff 走 Pi 扩展快照（`tool_call` 前抓旧内容、`tool_result` 后写 patch），不改 Pi core | 用户明确要求 Pi core 可更新，增强只能走扩展点 |
-| 2026-10-03 | 记入 core 更新边界审计：重试默认值和 gateway 并发错误模式仍是 core 补丁，更新后失效 | 用户要求确认外壳没有依赖私有 core 修改 |
+| 2026-10-03 | 记入 core 更新边界审计：重试默认值和 gateway 并发错误模式曾是 core 补丁，更新后失效 | 用户要求确认外壳没有依赖私有 core 修改 |
+| 2026-10-03 | 退避参数写 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁回退 | 用户要求功能不侵入且 Pi 更新后仍然有效 |
 
 ## 待用户确认
 
-- 批次 27（收尾清理）、批次 28（变更 diff 扩展 + Agent 操作菜单）和批次 29（工作区面板默认收起）待验收。
+- 批次 30（重试策略改走 settings.json + `agent_before_settle` 扩展）待验收。

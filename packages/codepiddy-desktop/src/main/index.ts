@@ -467,6 +467,8 @@ async function probePiUpdate(
 			path.join(extensions, "tavily-tool.js"),
 			"--extension",
 			path.join(extensions, "review.js"),
+			"--extension",
+			path.join(extensions, "retry.js"),
 			"--approve",
 		],
 	});
@@ -1075,6 +1077,10 @@ class AgentManager {
 				compiledRuntime
 					? path.join(extensionRoot, "review.js")
 					: path.join(this.repositoryRoot, "packages", "codepiddy-review-extension", "index.ts"),
+				"--extension",
+				compiledRuntime
+					? path.join(extensionRoot, "retry.js")
+					: path.join(this.repositoryRoot, "packages", "codepiddy-retry-extension", "index.ts"),
 				...roleSkillPaths.flatMap((skillPath) => ["--skill", skillPath]),
 				"--name",
 				`${agent.workItemId} ${roleLabel(agent.role)}`,
@@ -1711,6 +1717,7 @@ if (!hasSingleInstanceLock) {
 			(app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(app.getAppPath(), "..", ".."));
 		const settingsStore = new AppSettingsStore(app.getPath("userData"));
 		await settingsStore.ensurePermissionPolicy();
+		await settingsStore.ensurePiRetrySettings();
 		const recentProjects = new RecentProjectStore(app.getPath("userData"), {
 			discoverKnownRoots: process.env.CODEPIDDY_DISABLE_PROJECT_DISCOVERY !== "1",
 		});

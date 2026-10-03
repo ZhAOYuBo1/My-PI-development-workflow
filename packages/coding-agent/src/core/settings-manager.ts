@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model, Transport } from "@earendil-works/pi-ai";
+import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS, type Model, type Transport } from "@earendil-works/pi-ai";
 import type { TuiMode as RendererTuiMode, ScrollViewScrollbar, TerminalCapabilities } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -40,9 +40,9 @@ export interface ProviderRetrySettings {
 
 export interface RetrySettings {
 	enabled?: boolean; // default: true
-	maxRetries?: number; // default: 5
-	baseDelayMs?: number; // default: 1000 (exponential backoff: 1s, 2s, 4s, 5s, 5s)
-	maxAgentDelayMs?: number; // default: 5000
+	maxRetries?: number; // default: 3
+	baseDelayMs?: number; // default: 2000 (exponential backoff: 2s, 4s, 8s)
+	maxAgentDelayMs?: number; // default: 60000
 	provider?: ProviderRetrySettings;
 }
 
@@ -927,9 +927,9 @@ export class SettingsManager {
 	getRetrySettings(): { enabled: boolean; maxRetries: number; baseDelayMs: number; maxAgentDelayMs: number } {
 		return {
 			enabled: this.getRetryEnabled(),
-			maxRetries: this.settings.retry?.maxRetries ?? 5,
-			baseDelayMs: this.settings.retry?.baseDelayMs ?? 1000,
-			maxAgentDelayMs: this.settings.retry?.maxAgentDelayMs ?? 5000,
+			maxRetries: this.settings.retry?.maxRetries ?? 3,
+			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
+			maxAgentDelayMs: this.settings.retry?.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
 		};
 	}
 
@@ -990,12 +990,6 @@ export class SettingsManager {
 		this.save();
 	}
 
-	/**
-	 * `getShellPath` 保持上游行为：只读 settings.json 的 `shellPath`。
-	 * 宿主应用（如 CodePIddy）需要设置 bash 路径时，应写 `PI_CODING_AGENT_DIR` 指向的
-	 * settings.json，而不是往这里加环境变量旁路 —— 后者会让宿主依赖私有补丁，
-	 * 用户从 npm 升级 Pi 后静默失效。
-	 */
 	getShellPath(): string | undefined {
 		const shellPath = this.settings.shellPath;
 		return shellPath ? normalizePath(shellPath) : shellPath;
