@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-29 已提交并推送到 origin/main（`396006e`）；批次 30（重试策略改走 settings.json + agent_before_settle 扩展）已改完，待验收提交。
+再读 PRODUCT.md、DESIGN.md。批次 1-30 已提交并推送；批次 31（设置页分区 + MCP / Provider 配置）已改完，待验收提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
 后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
@@ -55,7 +55,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 30：重试改为不侵入实现）
+## 当前状态（2026-10-03 批次 31：设置页分区 + MCP / Provider 配置）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -97,13 +97,15 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - 已提交：`dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 - 已提交：`dc6c403 docs: record README push`（批次 26 文档）
 - 已提交：`396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
-- 待验收：批次 30 重试策略改走 settings.json + `agent_before_settle` 扩展，core 补丁已回退
+- 已提交：`f4a86c9 feat(desktop): move gateway retry policy out of Pi core`（批次 30）
+- 已提交：`b6bb6c5 docs(desktop): record newest-Pi development stance`
+- 待验收：批次 31 设置页左侧分区导航 + MCP 服务 / Provider 与模型配置
 
-批次 1-29 已提交；批次 30 待验收。详细过程见下方进度日志。
+批次 1-30 已提交；批次 31 待验收。详细过程见下方进度日志。
 
 ### 下一步
 
-批次 30 待用户验收后提交推送。之后从新增需求里挑：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
+批次 31 待用户验收后提交推送。之后从新增需求里挑：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -713,6 +715,23 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - 重启真实客户端后：`~/.pi/agent/settings.json` 出现 `retry: { maxRetries: 5, baseDelayMs: 1000, maxAgentDelayMs: 5000 }`；Pi 进程命令行确认加载 `dist/runtime-extensions/retry.js`。
 - 已知边界：命中 Pi 内置模式又命中网关模式的错误，最多会尝试 `2 × maxRetries` 次（内置一层 + 扩展一层）。
 
+### 2026-10-03 批次 31：设置页分区 + MCP / Provider 配置（待验收）
+
+用户反馈：设置页所有内容混在一页太乱，希望像参考项目一样分类；并且要在客户端里直接配置 MCP 服务和 Provider，而不是手改 `settings.json` / `models.json`。
+
+落地内容：
+
+- **设置页分区**：`.settings-page` 改成「左侧分类导航 + 右侧内容」。分组：`常规`（Pi 运行时、Shell）、`集成`（Provider 与模型、MCP 服务、Tavily Search）、`Agent`（默认权限、Agent Skills）。一次只渲染一个分类，导航 208px、次级底色列、选中项白底抬起。
+- **MCP 服务**：新增 `McpSettings.tsx`，读写 Pi 原生 `~/.pi/agent/mcp.json` 的 `mcpServers`；支持 stdio（command / args / env）和 HTTP（url / headers）、禁用开关、增删改。内置 `web_search`（Tavily MCP）单独标注，Key 仍走 Tavily Search 设置。
+- **Provider 与模型**：新增 `ProviderSettings.tsx`，读写 Pi 原生 `~/.pi/agent/models.json`；支持 Provider ID / API 类型 / baseUrl / 模型列表的增删改。API Key 用 Electron safeStorage 加密存在本机 secrets，models.json 只写 `$CODEPIDDY_PROVIDER_<ID>_API_KEY` 引用，启动 Agent 时通过环境变量注入；已有明文 Key 在用户不修改 Key 时原样保留。
+- **IPC**：shared 新增 `McpServerSummary/Input`、`ProviderSummary/Input`；main 新增 6 个 handler（list/save/delete × MCP/Provider）和 `ipc-validation` 解析；preload 暴露对应方法。
+
+验证：
+
+- 隔离 `PI_CODING_AGENT_DIR` 的真实 Electron e2e：MCP save → list 1 → delete → 0；Provider save → list 1 → delete → 0；models.json 里 `apiKey` 是 `$CODEPIDDY_PROVIDER_E2E_PROVIDER_API_KEY`，明文 `test-key` 没有落盘。
+- Playwright demo：设置页导航 7 项（Pi 运行时 / Shell / Provider 与模型 / MCP 服务 / Tavily Search / 默认权限 / Agent Skills）；MCP 页 2 行（内置 web_search + demo 服务）；Provider 页 1 行。
+- `npm run check`、desktop typecheck、`npm run build:codepiddy` 全绿。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
@@ -724,6 +743,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 7. [x] **变更 diff 证据**：批次 28 新增 `@codepiddy/review-extension`，Write / Edit 前后快照生成 unified patch；同时修复 Agent 操作菜单定位。
 8. [x] **工作区面板默认收起**：批次 29 启动不再自动展开右侧面板，只保留宽度记忆。
 9. [x] **重试不侵入化**：批次 30 把退避参数写进 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁已回退。
+10. [x] **设置页分区与集成配置**：批次 31 设置页改成左侧分类导航；新增 MCP 服务和 Provider / 模型的客户端配置。
 
 ## 未提交状态
 
@@ -733,13 +753,13 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 - `396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 
-批次 30 已改完，待用户验收后提交。改动范围：
+批次 31 已改完，待用户验收后提交。改动范围：
 
-- `packages/codepiddy-retry-extension/`：新增 retry 扩展（模式匹配、退避、`agent_before_settle` 兜底、7 项单测）。
-- `settings-store.ts` / `main/index.ts`：启动时把 `retry` 默认值合并写进 Pi 原生 settings.json。
-- `build-main.mjs` / `build-codepiddy-runtime.mjs` / `main/index.ts`：打包并在启动参数里加载 `retry.js`。
-- `packages/ai/src/utils/retry.ts` / `packages/coding-agent/src/core/settings-manager.ts`：回退到 `9cf21c8` 上游基线。
-- `package.json` / `package-lock.json`：新增 retry workspace，提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+- `App.tsx` / `styles.css`：设置页改成左侧分类导航 + 右侧单分类内容。
+- `components/McpSettings.tsx`：MCP 服务增删改，读写 `~/.pi/agent/mcp.json`。
+- `components/ProviderSettings.tsx`：Provider / 模型增删改，读写 `~/.pi/agent/models.json`。
+- `codepiddy-shared` / `main/index.ts` / `ipc-validation.ts` / `settings-store.ts` / `preload`：新增 MCP 与 Provider 的 IPC 和存储逻辑。
+- `DESIGN.md`：新增 Settings 一节。
 
 注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
@@ -792,7 +812,8 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 | 2026-10-03 | 记入 core 更新边界审计：重试默认值和 gateway 并发错误模式曾是 core 补丁，更新后失效 | 用户要求确认外壳没有依赖私有 core 修改 |
 | 2026-10-03 | 退避参数写 Pi 原生 settings.json，网关并发错误用 `agent_before_settle` 扩展兜底，core 补丁回退 | 用户要求功能不侵入且 Pi 更新后仍然有效 |
 | 2026-10-03 | 开发只适配最新 Pi；更新器的回退 / 自动回退保留给用户侧 | 用户明确：开发不需要旧版本兼容，回退是用户更新失败时的保护 |
+| 2026-10-03 | 设置页改左侧分类导航；MCP / Provider 直接在客户端配置，写 Pi 原生 mcp.json / models.json | 用户要求设置分类清晰，并参考项目做到客户端内配置 |
 
 ## 待用户确认
 
-- 批次 30（重试策略改走 settings.json + `agent_before_settle` 扩展）待验收。
+- 批次 31（设置页分区 + MCP / Provider 配置）待验收。

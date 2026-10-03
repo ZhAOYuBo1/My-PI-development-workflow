@@ -11,9 +11,12 @@ import type {
 	ForkAgentSessionInput,
 	InvokeAgentBuiltinCommandInput,
 	LaneKind,
+	McpServerInput,
 	PermissionDefaults,
 	PermissionState,
 	ProjectUiState,
+	ProviderInput,
+	ProviderModelSummary,
 	RenameWorkItemInput,
 	ResetAgentInput,
 	SendAgentPromptInput,
@@ -287,6 +290,74 @@ export function parseTerminalId(value: unknown): string {
 
 export function parseBoundedText(value: unknown, label: string, maximum: number, allowEmpty = false): string {
 	return text(value, label, maximum, allowEmpty);
+}
+
+function nonNegativeInteger(value: unknown, label: string): number {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`${label} 必须是非负整数`);
+	return value;
+}
+
+function stringRecordInput(value: unknown, label: string): Record<string, string> {
+	const input = record(value, label);
+	return Object.fromEntries(
+		Object.entries(input).map(([key, entry]) => [
+			text(key, `${label}键`, 200),
+			text(entry, `${label}值`, 4000, true),
+		]),
+	);
+}
+
+export function parseMcpServerInput(value: unknown): McpServerInput {
+	const input = record(value, "MCP Server");
+	if (input.transport !== "stdio" && input.transport !== "http") throw new Error("MCP transport 无效");
+	let args: string[] | undefined;
+	if (input.args !== undefined) {
+		if (!Array.isArray(input.args)) throw new Error("MCP args 必须是数组");
+		args = input.args.slice(0, 100).map((item) => text(item, "MCP arg", 2000, true));
+	}
+	return {
+		name: text(input.name, "MCP 服务名", 100),
+		transport: input.transport,
+		...(input.command === undefined ? {} : { command: text(input.command, "MCP command", 2000, true) }),
+		...(args === undefined ? {} : { args }),
+		...(input.url === undefined ? {} : { url: text(input.url, "MCP url", 2000, true) }),
+		...(input.env === undefined ? {} : { env: stringRecordInput(input.env, "MCP env ") }),
+		...(input.headers === undefined ? {} : { headers: stringRecordInput(input.headers, "MCP headers ") }),
+		disabled: input.disabled === true,
+	};
+}
+
+export function parseProviderInput(value: unknown): ProviderInput {
+	const input = record(value, "Provider");
+	if (
+		input.api !== "openai-completions" &&
+		input.api !== "openai-responses" &&
+		input.api !== "anthropic-messages" &&
+		input.api !== "google-generative-ai"
+	) {
+		throw new Error("Provider API 类型无效");
+	}
+	if (!Array.isArray(input.models)) throw new Error("Provider models 必须是数组");
+	const models = input.models.slice(0, 50).map((item): ProviderModelSummary => {
+		const model = record(item, "Provider model");
+		return {
+			id: text(model.id, "模型 ID", 200),
+			name: text(model.name, "模型名称", 200, true),
+			contextWindow: nonNegativeInteger(model.contextWindow, "上下文窗口"),
+			maxTokens: nonNegativeInteger(model.maxTokens, "最大 Token"),
+			reasoning: model.reasoning === true,
+			input: Array.isArray(model.input)
+				? model.input.filter((entry): entry is "text" | "image" => entry === "text" || entry === "image")
+				: ["text"],
+		};
+	});
+	return {
+		id: text(input.id, "Provider ID", 100),
+		baseUrl: text(input.baseUrl, "baseUrl", 2000),
+		api: input.api,
+		...(input.apiKey === undefined ? {} : { apiKey: text(input.apiKey, "API Key", 1000, true) }),
+		models,
+	};
 }
 
 function permissionState(value: unknown, label: string): PermissionState {

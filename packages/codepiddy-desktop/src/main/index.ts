@@ -57,10 +57,12 @@ import {
 	parseExtensionUiResponseInput,
 	parseForkAgentSessionInput,
 	parseInvokeAgentBuiltinCommandInput,
+	parseMcpServerInput,
 	parsePermissionDefaults,
 	parseProjectId,
 	parseProjectRoot,
 	parseProjectUiState,
+	parseProviderInput,
 	parseRenameWorkItemInput,
 	parseResetAgentInput,
 	parseRoleSkillAssignmentsInput,
@@ -129,6 +131,12 @@ const channels = {
 	settingsSetPermissions: "codepiddy:settings:permissions:set",
 	settingsSaveTavily: "codepiddy:settings:tavily:save",
 	settingsSaveShell: "codepiddy:settings:shell:save",
+	settingsListMcp: "codepiddy:settings:mcp:list",
+	settingsSaveMcp: "codepiddy:settings:mcp:save",
+	settingsDeleteMcp: "codepiddy:settings:mcp:delete",
+	settingsListProviders: "codepiddy:settings:providers:list",
+	settingsSaveProvider: "codepiddy:settings:providers:save",
+	settingsDeleteProvider: "codepiddy:settings:providers:delete",
 	settingsStatus: "codepiddy:settings:status",
 	piRuntimeStatus: "codepiddy:pi-runtime:status",
 	piRuntimeCheck: "codepiddy:pi-runtime:check",
@@ -1021,6 +1029,7 @@ class AgentManager {
 			cwd: agent.projectRoot,
 			env: {
 				...(packaged ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+				...(await this.settingsStore.getProviderEnv()),
 				TSX_TSCONFIG_PATH: path.join(this.repositoryRoot, "tsconfig.json"),
 				...(compiledRuntime
 					? {
@@ -1619,6 +1628,20 @@ function registerIpcHandlers(
 	ipcMain.handle(channels.settingsClearTavily, () => settingsStore.clearTavilyApiKey());
 	ipcMain.handle(channels.settingsSaveShell, (_event, rawShellPath: unknown) =>
 		settingsStore.setShellPath(parseBoundedText(rawShellPath, "Shell 路径", 1024)),
+	);
+	ipcMain.handle(channels.settingsListMcp, () => settingsStore.listMcpServers());
+	ipcMain.handle(channels.settingsSaveMcp, (_event, raw: unknown) =>
+		settingsStore.saveMcpServer(parseMcpServerInput(raw)),
+	);
+	ipcMain.handle(channels.settingsDeleteMcp, (_event, rawName: unknown) =>
+		settingsStore.deleteMcpServer(parseBoundedText(rawName, "MCP 服务名", 100)),
+	);
+	ipcMain.handle(channels.settingsListProviders, () => settingsStore.listProviders());
+	ipcMain.handle(channels.settingsSaveProvider, (_event, raw: unknown) =>
+		settingsStore.saveProvider(parseProviderInput(raw)),
+	);
+	ipcMain.handle(channels.settingsDeleteProvider, (_event, rawId: unknown) =>
+		settingsStore.deleteProvider(parseBoundedText(rawId, "Provider ID", 100)),
 	);
 	ipcMain.handle(channels.settingsListSkills, (_event, rawProjectRoot?: unknown) => {
 		const projectRoot = rawProjectRoot === undefined ? undefined : requireOpenProjectRoot(rawProjectRoot);

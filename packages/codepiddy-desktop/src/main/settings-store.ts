@@ -4,7 +4,13 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type {
 	AgentRole,
+	McpServerInput,
+	McpServerSummary,
 	PermissionDefaults,
+	ProviderApi,
+	ProviderInput,
+	ProviderModelSummary,
+	ProviderSummary,
 	RoleSkillAssignments,
 	SetRoleSkillAssignmentsInput,
 	SettingsStatus,
@@ -37,6 +43,61 @@ const DEFAULT_RETRY_SETTINGS = {
 
 function isNotFound(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+	if (!isRecord(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+	);
+}
+
+/** Provider Key 通过环境变量注入 Pi；models.json 只写 `$ENV_NAME` 引用。 */
+function providerEnvName(id: string): string {
+	return `CODEPIDDY_PROVIDER_${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+}
+
+function isProviderApi(value: unknown): value is ProviderApi {
+	return (
+		value === "openai-completions" ||
+		value === "openai-responses" ||
+		value === "anthropic-messages" ||
+		value === "google-generative-ai"
+	);
+}
+
+function normalizeMcpServer(name: string, value: Record<string, unknown>): McpServerSummary {
+	const url = typeof value.url === "string" && value.url.trim() ? value.url.trim() : null;
+	return {
+		name,
+		transport: url ? "http" : "stdio",
+		command: typeof value.command === "string" ? value.command : null,
+		args: Array.isArray(value.args) ? value.args.filter((item): item is string => typeof item === "string") : [],
+		url,
+		env: stringRecord(value.env),
+		headers: stringRecord(value.headers),
+		disabled: value.disabled === true,
+		source: "global",
+	};
+}
+
+function normalizeProviderModel(value: unknown): ProviderModelSummary | null {
+	if (!isRecord(value) || typeof value.id !== "string" || value.id.trim() === "") return null;
+	const id = value.id.trim();
+	return {
+		id,
+		name: typeof value.name === "string" && value.name.trim() ? value.name.trim() : id,
+		contextWindow: typeof value.contextWindow === "number" ? value.contextWindow : 128_000,
+		maxTokens: typeof value.maxTokens === "number" ? value.maxTokens : 8192,
+		reasoning: value.reasoning === true,
+		input: Array.isArray(value.input)
+			? value.input.filter((item): item is "text" | "image" => item === "text" || item === "image")
+			: ["text"],
+	};
 }
 
 /**
@@ -82,6 +143,8 @@ export class AppSettingsStore {
 	private readonly permissionPolicyPath: string;
 	private readonly shellPathFile: string;
 	private readonly piSettingsPath: string;
+	private readonly mcpConfigPath: string;
+	private readonly modelsConfigPath: string;
 
 	constructor(userDataPath: string) {
 		const settingsDirectory = path.join(userDataPath, "settings");
@@ -91,6 +154,8 @@ export class AppSettingsStore {
 		this.permissionPolicyPath = path.join(userDataPath, "permissions", "policy", "pi-permissions.jsonc");
 		this.shellPathFile = path.join(settingsDirectory, "shell.json");
 		this.piSettingsPath = path.join(resolvePiAgentDir(), "settings.json");
+		this.mcpConfigPath = path.join(resolvePiAgentDir(), "mcp.json");
+		this.modelsConfigPath = path.join(resolvePiAgentDir(), "models.json");
 	}
 
 	/**
@@ -302,6 +367,151 @@ export class AppSettingsStore {
 		];
 		await this.writeRoleSkillAssignments(assignments);
 		return assignments;
+	}
+
+	private async readJsonRecord(filePath: string): Promise<Record<string, unknown>> {
+		try {
+			const parsed: unknown = JSON.parse(await readFile(filePath, "utf8"));
+			if (isRecord(parsed)) return parsed;
+		} catch (error) {
+			if (!isNotFound(error)) throw error;
+		}
+		return {};
+	}
+
+	private async writeJsonRecord(filePath: string, value: Record<string, unknown>): Promise<void> {
+		await mkdir(path.dirname(filePath), { recursive: true });
+		await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+	}
+
+	async listMcpServers(): Promise<McpServerSummary[]> {
+		const config = await this.readJsonRecord(this.mcpConfigPath);
+		const servers = isRecord(config.mcpServers) ? config.mcpServers : {};
+		return Object.entries(servers)
+			.filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]))
+			.map(([name, value]) => normalizeMcpServer(name, value))
+			.sort((left, right) => left.name.localeCompare(right.name));
+	}
+
+	async saveMcpServer(input: McpServerInput): Promise<McpServerSummary[]> {
+		const name = input.name.trim();
+		if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("MCP 服务名只能包含字母、数字、点、下划线和连字符");
+		if (input.transport === "stdio" && !input.command?.trim()) throw new Error("stdio 服务需要 command");
+		if (input.transport === "http" && !input.url?.trim()) throw new Error("http 服务需要 url");
+		const config = await this.readJsonRecord(this.mcpConfigPath);
+		const servers = isRecord(config.mcpServers) ? { ...config.mcpServers } : {};
+		const entry: Record<string, unknown> = {};
+		if (input.transport === "http") {
+			entry.type = "http";
+			entry.url = input.url!.trim();
+			const headers = Object.fromEntries(
+				Object.entries(input.headers ?? {}).filter(([key, value]) => key.trim() && value.trim()),
+			);
+			if (Object.keys(headers).length > 0) entry.headers = headers;
+		} else {
+			entry.command = input.command!.trim();
+			const args = (input.args ?? []).map((arg) => arg.trim()).filter(Boolean);
+			if (args.length > 0) entry.args = args;
+			const env = Object.fromEntries(
+				Object.entries(input.env ?? {}).filter(([key, value]) => key.trim() && value.trim()),
+			);
+			if (Object.keys(env).length > 0) entry.env = env;
+		}
+		if (input.disabled) entry.disabled = true;
+		servers[name] = entry;
+		await this.writeJsonRecord(this.mcpConfigPath, { ...config, mcpServers: servers });
+		return this.listMcpServers();
+	}
+
+	async deleteMcpServer(name: string): Promise<McpServerSummary[]> {
+		const config = await this.readJsonRecord(this.mcpConfigPath);
+		const servers = isRecord(config.mcpServers) ? { ...config.mcpServers } : {};
+		delete servers[name];
+		await this.writeJsonRecord(this.mcpConfigPath, { ...config, mcpServers: servers });
+		return this.listMcpServers();
+	}
+
+	async listProviders(): Promise<ProviderSummary[]> {
+		const config = await this.readJsonRecord(this.modelsConfigPath);
+		const providers = isRecord(config.providers) ? config.providers : {};
+		const secrets = await this.readSecrets();
+		const keys = secrets.providerApiKeys ?? {};
+		return Object.entries(providers)
+			.filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]))
+			.map(([id, value]) => ({
+				id,
+				baseUrl: typeof value.baseUrl === "string" ? value.baseUrl : "",
+				api: isProviderApi(value.api) ? value.api : "openai-completions",
+				apiKeyConfigured:
+					Boolean(keys[id]) ||
+					(typeof value.apiKey === "string" && value.apiKey.length > 0 && !value.apiKey.startsWith("$")),
+				models: Array.isArray(value.models)
+					? value.models
+							.map(normalizeProviderModel)
+							.filter((model): model is ProviderModelSummary => model !== null)
+					: [],
+			}))
+			.sort((left, right) => left.id.localeCompare(right.id));
+	}
+
+	async saveProvider(input: ProviderInput): Promise<ProviderSummary[]> {
+		const id = input.id.trim();
+		if (!/^[A-Za-z0-9._-]+$/.test(id)) throw new Error("Provider ID 只能包含字母、数字、点、下划线和连字符");
+		if (!input.baseUrl.trim()) throw new Error("baseUrl 不能为空");
+		if (!isProviderApi(input.api)) throw new Error("Provider API 类型无效");
+		const models = input.models
+			.map((model) => normalizeProviderModel(model))
+			.filter((model): model is ProviderModelSummary => model !== null);
+		if (models.length === 0) throw new Error("至少需要一个模型");
+		const config = await this.readJsonRecord(this.modelsConfigPath);
+		const providers = isRecord(config.providers) ? { ...config.providers } : {};
+		const existing = isRecord(providers[id]) ? (providers[id] as Record<string, unknown>) : {};
+		const entry: Record<string, unknown> = {
+			...existing,
+			baseUrl: input.baseUrl.trim(),
+			api: input.api,
+			models: models.map((model) => ({ ...model, input: model.input.length > 0 ? model.input : ["text"] })),
+		};
+		const secrets = await this.readSecrets();
+		const keys = { ...(secrets.providerApiKeys ?? {}) };
+		if (input.apiKey !== undefined) {
+			const apiKey = input.apiKey.trim();
+			if (apiKey) keys[id] = this.encrypt(apiKey);
+			else delete keys[id];
+			secrets.providerApiKeys = keys;
+			await this.writeSecrets(secrets);
+		}
+		if (keys[id]) entry.apiKey = `$${providerEnvName(id)}`;
+		else if (typeof existing.apiKey === "string" && !existing.apiKey.startsWith("$")) entry.apiKey = existing.apiKey;
+		else delete entry.apiKey;
+		providers[id] = entry;
+		await this.writeJsonRecord(this.modelsConfigPath, { ...config, providers });
+		return this.listProviders();
+	}
+
+	async deleteProvider(id: string): Promise<ProviderSummary[]> {
+		const config = await this.readJsonRecord(this.modelsConfigPath);
+		const providers = isRecord(config.providers) ? { ...config.providers } : {};
+		delete providers[id];
+		await this.writeJsonRecord(this.modelsConfigPath, { ...config, providers });
+		const secrets = await this.readSecrets();
+		if (secrets.providerApiKeys?.[id]) {
+			const keys = { ...secrets.providerApiKeys };
+			delete keys[id];
+			secrets.providerApiKeys = keys;
+			await this.writeSecrets(secrets);
+		}
+		return this.listProviders();
+	}
+
+	async getProviderEnv(): Promise<Record<string, string>> {
+		const secrets = await this.readSecrets();
+		const env: Record<string, string> = {};
+		for (const [id, encrypted] of Object.entries(secrets.providerApiKeys ?? {})) {
+			const value = this.decrypt(encrypted);
+			if (value) env[providerEnvName(id)] = value;
+		}
+		return env;
 	}
 
 	async status(): Promise<SettingsStatus> {

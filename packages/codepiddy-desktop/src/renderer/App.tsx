@@ -23,9 +23,11 @@ import type {
 	WorkItemSummary,
 } from "@codepiddy/shared";
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AppIcon } from "./components/app-icon.tsx";
+import { AppIcon, type AppIconName } from "./components/app-icon.tsx";
 import { FileMentionMenu } from "./components/FileMentionMenu.tsx";
+import { McpSettings } from "./components/McpSettings.tsx";
 import { MessageContent } from "./components/message-content.tsx";
+import { ProviderSettings } from "./components/ProviderSettings.tsx";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.tsx";
 import { StreamStats } from "./components/StreamStats.tsx";
 import { estimateTokens, extractUsageOutput, type FinalStreamStats, formatElapsed } from "./components/stream-stats.ts";
@@ -894,6 +896,33 @@ function TranscriptMinimap({
 
 const demoMode = import.meta.env.DEV && new URLSearchParams(window.location.search).has("demo");
 
+type SettingsSectionId = "runtime" | "shell" | "providers" | "mcp" | "search" | "permissions" | "skills";
+
+const SETTINGS_NAV: { label: string; items: { id: SettingsSectionId; label: string; icon: AppIconName }[] }[] = [
+	{
+		label: "常规",
+		items: [
+			{ id: "runtime", label: "Pi 运行时", icon: "settings" },
+			{ id: "shell", label: "Shell", icon: "terminal" },
+		],
+	},
+	{
+		label: "集成",
+		items: [
+			{ id: "providers", label: "Provider 与模型", icon: "globe" },
+			{ id: "mcp", label: "MCP 服务", icon: "plug" },
+			{ id: "search", label: "Tavily Search", icon: "search" },
+		],
+	},
+	{
+		label: "Agent",
+		items: [
+			{ id: "permissions", label: "默认权限", icon: "shield" },
+			{ id: "skills", label: "Agent Skills", icon: "sparkles" },
+		],
+	},
+];
+
 const demoSessionSnapshot: AgentSessionSnapshot = {
 	sessionId: "demo-session",
 	sessionName: "FEAT-001 Coding Agent",
@@ -1059,6 +1088,7 @@ export function App() {
 	const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null);
 	const [piRuntimeStatus, setPiRuntimeStatus] = useState<PiRuntimeStatus | null>(null);
 	const [piRuntimeBusy, setPiRuntimeBusy] = useState<"check" | "install" | "rollback" | null>(null);
+	const [settingsSection, setSettingsSection] = useState<SettingsSectionId>("runtime");
 	const [piUpdateConfirm, setPiUpdateConfirm] = useState(false);
 	const [permissionDefaults, setPermissionDefaults] = useState<PermissionDefaults>({
 		read: "allow",
@@ -3224,14 +3254,6 @@ export function App() {
 		}
 	}
 
-	async function openPiConfigFolder(): Promise<void> {
-		try {
-			await window.codepiddy.openPiConfigFolder();
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : "打开 Pi 配置目录失败");
-		}
-	}
-
 	async function openPermissionPolicyFolder(): Promise<void> {
 		try {
 			await window.codepiddy.openPermissionPolicyFolder();
@@ -3369,328 +3391,348 @@ export function App() {
 		if (selection.type === "settings") {
 			return (
 				<div className="settings-page">
-					<h1>设置</h1>
-					<section className="settings-card pi-runtime-card">
-						<div className="settings-card-heading">
-							<div>
-								<h2>Pi 运行时</h2>
-								<p>单独更新 Agent 内核，不替换 CodePIddy 客户端或项目文件。</p>
+					<aside className="settings-nav" aria-label="设置分类">
+						{SETTINGS_NAV.map((group) => (
+							<div className="settings-nav-group" key={group.label}>
+								<span className="settings-nav-label">{group.label}</span>
+								{group.items.map((item) => (
+									<button
+										key={item.id}
+										type="button"
+										className={`settings-nav-item${settingsSection === item.id ? " active" : ""}`}
+										onClick={() => setSettingsSection(item.id)}
+									>
+										<AppIcon name={item.icon} size={14} />
+										<span>{item.label}</span>
+									</button>
+								))}
 							</div>
-							<div className="settings-status">{piRuntimeStatus?.restartRequired ? "待重启" : "运行中"}</div>
-						</div>
-						{piRuntimeStatus ? (
-							<div className="pi-runtime-versions">
-								<span>
-									正在使用 <strong>v{piRuntimeStatus.runningVersion}</strong>
-								</span>
-								{piRuntimeStatus.restartRequired ? <span>重启后 v{piRuntimeStatus.currentVersion}</span> : null}
-								<span>内置 v{piRuntimeStatus.bundledVersion}</span>
-								{piRuntimeStatus.rollbackVersion ? (
-									<span>可回退 v{piRuntimeStatus.rollbackVersion}</span>
+						))}
+					</aside>
+					<div className="settings-content">
+						<section className="settings-card pi-runtime-card" hidden={settingsSection !== "runtime"}>
+							<div className="settings-card-heading">
+								<div>
+									<h2>Pi 运行时</h2>
+									<p>单独更新 Agent 内核，不替换 CodePIddy 客户端或项目文件。</p>
+								</div>
+								<div className="settings-status">{piRuntimeStatus?.restartRequired ? "待重启" : "运行中"}</div>
+							</div>
+							{piRuntimeStatus ? (
+								<div className="pi-runtime-versions">
+									<span>
+										正在使用 <strong>v{piRuntimeStatus.runningVersion}</strong>
+									</span>
+									{piRuntimeStatus.restartRequired ? (
+										<span>重启后 v{piRuntimeStatus.currentVersion}</span>
+									) : null}
+									<span>内置 v{piRuntimeStatus.bundledVersion}</span>
+									{piRuntimeStatus.rollbackVersion ? (
+										<span>可回退 v{piRuntimeStatus.rollbackVersion}</span>
+									) : null}
+									{piRuntimeStatus.latestVersion ? <span>可用 v{piRuntimeStatus.latestVersion}</span> : null}
+								</div>
+							) : null}
+							{piRuntimeStatus?.warning ? <p className="pi-runtime-warning">{piRuntimeStatus.warning}</p> : null}
+							{piUpdateConfirm ? (
+								<div className="pi-runtime-confirm">
+									<p>
+										将从 npm 安装 Pi v{piRuntimeStatus?.latestVersion} 到独立目录。校验 RPC
+										与内置扩展通过后才启用；现有会话不会自动中断。
+									</p>
+									<button className="secondary-button" type="button" onClick={() => setPiUpdateConfirm(false)}>
+										取消
+									</button>
+									<button
+										className="primary-button"
+										type="button"
+										onClick={() => void runPiRuntimeAction("install")}
+									>
+										确认安装
+									</button>
+								</div>
+							) : null}
+							<div className="settings-actions">
+								<button
+									className="secondary-button"
+									type="button"
+									disabled={piRuntimeBusy !== null}
+									onClick={() => void runPiRuntimeAction("check")}
+								>
+									{piRuntimeBusy === "check" ? "检查中…" : "检查更新"}
+								</button>
+								{piRuntimeStatus?.updateAvailable ? (
+									<button
+										className="primary-button"
+										type="button"
+										disabled={piRuntimeBusy !== null || !piRuntimeStatus.npmAvailable}
+										onClick={() => setPiUpdateConfirm(true)}
+									>
+										{piRuntimeBusy === "install"
+											? "安装并校验中…"
+											: `更新到 v${piRuntimeStatus.latestVersion}`}
+									</button>
 								) : null}
-								{piRuntimeStatus.latestVersion ? <span>可用 v{piRuntimeStatus.latestVersion}</span> : null}
+								{piRuntimeStatus && (piRuntimeStatus.rollbackVersion || piRuntimeStatus.warning) ? (
+									<button
+										className="secondary-button"
+										type="button"
+										disabled={piRuntimeBusy !== null}
+										onClick={() => void runPiRuntimeAction("rollback")}
+									>
+										{piRuntimeBusy === "rollback"
+											? "回退中…"
+											: piRuntimeStatus.rollbackVersion
+												? `回退到 v${piRuntimeStatus.rollbackVersion}`
+												: "清除无效更新记录"}
+									</button>
+								) : null}
+								{piRuntimeStatus?.restartRequired ? (
+									<button
+										className="secondary-button"
+										type="button"
+										disabled={piRuntimeBusy !== null}
+										onClick={() => void window.codepiddy.restartCodePIddy()}
+									>
+										重启客户端以生效
+									</button>
+								) : null}
 							</div>
-						) : null}
-						{piRuntimeStatus?.warning ? <p className="pi-runtime-warning">{piRuntimeStatus.warning}</p> : null}
-						{piUpdateConfirm ? (
-							<div className="pi-runtime-confirm">
-								<p>
-									将从 npm 安装 Pi v{piRuntimeStatus?.latestVersion} 到独立目录。校验 RPC
-									与内置扩展通过后才启用；现有会话不会自动中断。
-								</p>
-								<button className="secondary-button" type="button" onClick={() => setPiUpdateConfirm(false)}>
-									取消
-								</button>
-								<button
-									className="primary-button"
-									type="button"
-									onClick={() => void runPiRuntimeAction("install")}
-								>
-									确认安装
-								</button>
-							</div>
-						) : null}
-						<div className="settings-actions">
-							<button
-								className="secondary-button"
-								type="button"
-								disabled={piRuntimeBusy !== null}
-								onClick={() => void runPiRuntimeAction("check")}
-							>
-								{piRuntimeBusy === "check" ? "检查中…" : "检查更新"}
-							</button>
-							{piRuntimeStatus?.updateAvailable ? (
-								<button
-									className="primary-button"
-									type="button"
-									disabled={piRuntimeBusy !== null || !piRuntimeStatus.npmAvailable}
-									onClick={() => setPiUpdateConfirm(true)}
-								>
-									{piRuntimeBusy === "install" ? "安装并校验中…" : `更新到 v${piRuntimeStatus.latestVersion}`}
-								</button>
-							) : null}
-							{piRuntimeStatus && (piRuntimeStatus.rollbackVersion || piRuntimeStatus.warning) ? (
-								<button
-									className="secondary-button"
-									type="button"
-									disabled={piRuntimeBusy !== null}
-									onClick={() => void runPiRuntimeAction("rollback")}
-								>
-									{piRuntimeBusy === "rollback"
-										? "回退中…"
-										: piRuntimeStatus.rollbackVersion
-											? `回退到 v${piRuntimeStatus.rollbackVersion}`
-											: "清除无效更新记录"}
-								</button>
-							) : null}
-							{piRuntimeStatus?.restartRequired ? (
-								<button
-									className="secondary-button"
-									type="button"
-									disabled={piRuntimeBusy !== null}
-									onClick={() => void window.codepiddy.restartCodePIddy()}
-								>
-									重启客户端以生效
-								</button>
-							) : null}
-						</div>
-						<small>
-							{piRuntimeStatus?.npmAvailable
-								? "更新失败时保持当前版本；新版运行异常时自动回退到上一个可用版本。"
-								: "安装更新需要本机 Node.js/npm；当前内置版本仍可正常使用。"}
-						</small>
-					</section>
-					<section className="settings-card permission-settings-card">
-						<div className="settings-card-heading">
-							<div>
-								<h2>默认权限</h2>
-								<p>所有 Agent 共用。按工具类型分别设置；“修改文件”不包含 Bash 命令。</p>
-							</div>
-							<div className="skill-settings-actions">
-								<div className="settings-status">全局</div>
-								<button
-									className="secondary-button"
-									type="button"
-									onClick={() => void openPermissionPolicyFolder()}
-								>
-									打开权限配置目录
-								</button>
-							</div>
-						</div>
-						<div className="permission-setting-list">
-							<PermissionSettingRow
-								label="读取文件"
-								description="read、grep、find 和 ls"
-								value={permissionDefaults.read}
-								onChange={(read) => void updatePermissionDefaults({ read })}
-							/>
-							<PermissionSettingRow
-								label="修改文件"
-								description="write 和 edit"
-								value={permissionDefaults.write}
-								onChange={(write) => void updatePermissionDefaults({ write })}
-							/>
-							<PermissionSettingRow
-								label="命令执行"
-								description="Bash，可执行任意命令；Coding Agent 常用"
-								value={permissionDefaults.bash}
-								onChange={(bash) => void updatePermissionDefaults({ bash })}
-							/>
-							<PermissionSettingRow
-								label="MCP 工具"
-								description="调用已配置的 MCP 服务"
-								value={permissionDefaults.mcp}
-								onChange={(mcp) => void updatePermissionDefaults({ mcp })}
-							/>
-							<PermissionSettingRow
-								label="Skill"
-								description="读取和使用 Agent Skill"
-								value={permissionDefaults.skills}
-								onChange={(skills) => void updatePermissionDefaults({ skills })}
-							/>
-							<PermissionSettingRow
-								label="其他工具"
-								description="未单独列出的工具，如 web_search"
-								value={permissionDefaults.otherTools}
-								onChange={(otherTools) => void updatePermissionDefaults({ otherTools })}
-							/>
-							<PermissionSettingRow
-								label="项目外路径"
-								description="通过文件工具访问项目目录之外"
-								value={permissionDefaults.externalDirectory}
-								onChange={(externalDirectory) =>
-									setPermissionDefaults((current) => ({ ...current, externalDirectory }))
-								}
-							/>
-						</div>
-						{permissionError ? (
-							<p className="permission-settings-error" role="alert">
-								{permissionError}
-							</p>
-						) : null}
-						<div className="permission-settings-footer">
 							<small>
-								直接允许命令执行可运行任意命令。改动即时保存，对所有 Agent
-								的后续工具调用生效；已弹出的请求仍需处理。
+								{piRuntimeStatus?.npmAvailable
+									? "更新失败时保持当前版本；新版运行异常时自动回退到上一个可用版本。"
+									: "安装更新需要本机 Node.js/npm；当前内置版本仍可正常使用。"}
 							</small>
-							<span className="settings-status">{permissionSaving ? "保存中" : "已保存"}</span>
-						</div>
-					</section>
-					<section className="settings-card">
-						<div>
-							<h2>Tavily Search</h2>
-							<p>API Key 使用 Electron safeStorage 加密保存在本机，不会写入项目或日志。</p>
-						</div>
-						<div className="settings-status">{settingsStatus?.tavilyApiKeyConfigured ? "已配置" : "未配置"}</div>
-						<input
-							type="password"
-							value={tavilyApiKey}
-							onChange={(event) => setTavilyApiKey(event.target.value)}
-							placeholder="tvly-…"
-						/>
-						<div className="settings-actions">
-							<button
-								className="primary-button"
-								type="button"
-								onClick={() => void saveTavilyKey()}
-								disabled={!tavilyApiKey.trim()}
-							>
-								保存
-							</button>
-							<button
-								className="secondary-button"
-								type="button"
-								onClick={() => void clearTavilyKey()}
-								disabled={!settingsStatus?.tavilyApiKeyConfigured}
-							>
-								清除
-							</button>
-						</div>
-						<small>修改后，新启动或重新启动的 Agent 才会使用新 Key。</small>
-					</section>
-
-					<section className="settings-card">
-						<div>
-							<h2>Shell</h2>
-							<p>
-								Agent 的 <code>bash</code> 工具需要一个 bash 可执行文件。留空则自动探测（Program Files 下的 Git
-								Bash、PATH 上的 bash.exe）；Git for Windows 装在非标准目录时填这里，否则工具会报 “No bash shell
-								found”。
-							</p>
-						</div>
-						<div className="settings-status">{settingsStatus?.shellPath ? "已配置" : "自动探测"}</div>
-						{settingsStatus?.shellPath ? (
-							<code className="settings-shell-current">{settingsStatus.shellPath}</code>
-						) : null}
-						<input
-							type="text"
-							value={shellPath}
-							onChange={(event) => setShellPath(event.target.value)}
-							placeholder="留空自动探测，或填 bash.exe 完整路径"
-						/>
-						<div className="settings-actions">
-							<button
-								className="primary-button"
-								type="button"
-								disabled={shellPath.trim().length === 0}
-								onClick={() => void saveShellPath(shellPath)}
-							>
-								保存
-							</button>
-							<button
-								className="secondary-button"
-								type="button"
-								disabled={!settingsStatus?.shellPath}
-								onClick={() => void saveShellPath("")}
-							>
-								清除
-							</button>
-						</div>
-						<small>修改后，新启动或重置后的 Agent 才会使用新路径。</small>
-					</section>
-
-					<section className="settings-card skill-settings-card">
-						<div className="settings-card-heading">
-							<div>
-								<h2>Agent Skills</h2>
-								<p>每种 Agent 独立选择 Skill。修改会应用到新启动或重置后的 Agent。</p>
+						</section>
+						<section
+							className="settings-card permission-settings-card"
+							hidden={settingsSection !== "permissions"}
+						>
+							<div className="settings-card-heading">
+								<div>
+									<h2>默认权限</h2>
+									<p>所有 Agent 共用。按工具类型分别设置；“修改文件”不包含 Bash 命令。</p>
+								</div>
+								<div className="skill-settings-actions">
+									<div className="settings-status">全局</div>
+									<button
+										className="secondary-button"
+										type="button"
+										onClick={() => void openPermissionPolicyFolder()}
+									>
+										打开权限配置目录
+									</button>
+								</div>
 							</div>
-							<div className="skill-settings-actions">
-								<div className="settings-status">{availableSkills.length} 个可用</div>
+							<div className="permission-setting-list">
+								<PermissionSettingRow
+									label="读取文件"
+									description="read、grep、find 和 ls"
+									value={permissionDefaults.read}
+									onChange={(read) => void updatePermissionDefaults({ read })}
+								/>
+								<PermissionSettingRow
+									label="修改文件"
+									description="write 和 edit"
+									value={permissionDefaults.write}
+									onChange={(write) => void updatePermissionDefaults({ write })}
+								/>
+								<PermissionSettingRow
+									label="命令执行"
+									description="Bash，可执行任意命令；Coding Agent 常用"
+									value={permissionDefaults.bash}
+									onChange={(bash) => void updatePermissionDefaults({ bash })}
+								/>
+								<PermissionSettingRow
+									label="MCP 工具"
+									description="调用已配置的 MCP 服务"
+									value={permissionDefaults.mcp}
+									onChange={(mcp) => void updatePermissionDefaults({ mcp })}
+								/>
+								<PermissionSettingRow
+									label="Skill"
+									description="读取和使用 Agent Skill"
+									value={permissionDefaults.skills}
+									onChange={(skills) => void updatePermissionDefaults({ skills })}
+								/>
+								<PermissionSettingRow
+									label="其他工具"
+									description="未单独列出的工具，如 web_search"
+									value={permissionDefaults.otherTools}
+									onChange={(otherTools) => void updatePermissionDefaults({ otherTools })}
+								/>
+								<PermissionSettingRow
+									label="项目外路径"
+									description="通过文件工具访问项目目录之外"
+									value={permissionDefaults.externalDirectory}
+									onChange={(externalDirectory) =>
+										setPermissionDefaults((current) => ({ ...current, externalDirectory }))
+									}
+								/>
+							</div>
+							{permissionError ? (
+								<p className="permission-settings-error" role="alert">
+									{permissionError}
+								</p>
+							) : null}
+							<div className="permission-settings-footer">
+								<small>
+									直接允许命令执行可运行任意命令。改动即时保存，对所有 Agent
+									的后续工具调用生效；已弹出的请求仍需处理。
+								</small>
+								<span className="settings-status">{permissionSaving ? "保存中" : "已保存"}</span>
+							</div>
+						</section>
+						<section className="settings-card" hidden={settingsSection !== "search"}>
+							<div>
+								<h2>Tavily Search</h2>
+								<p>API Key 使用 Electron safeStorage 加密保存在本机，不会写入项目或日志。</p>
+							</div>
+							<div className="settings-status">
+								{settingsStatus?.tavilyApiKeyConfigured ? "已配置" : "未配置"}
+							</div>
+							<input
+								type="password"
+								value={tavilyApiKey}
+								onChange={(event) => setTavilyApiKey(event.target.value)}
+								placeholder="tvly-…"
+							/>
+							<div className="settings-actions">
 								<button
-									className="secondary-button"
+									className="primary-button"
 									type="button"
-									onClick={() => void openBuiltinSkillsFolder()}
+									onClick={() => void saveTavilyKey()}
+									disabled={!tavilyApiKey.trim()}
 								>
-									打开内置 Skill 文件夹
+									保存
 								</button>
 								<button
 									className="secondary-button"
 									type="button"
-									disabled={!project}
-									onClick={() => void openProjectSkillsFolder()}
+									onClick={() => void clearTavilyKey()}
+									disabled={!settingsStatus?.tavilyApiKeyConfigured}
 								>
-									打开项目 Skill 文件夹
+									清除
 								</button>
 							</div>
-						</div>
-						<div className="role-skill-grid">
-							{(["requirement-analysis", "coding", "bug-fix", "review"] as const).map((role) => (
-								<section className="role-skill-card" key={role}>
-									<div className="role-skill-heading">
-										<h3>{roleLabels[role]}</h3>
-										<span>{roleSkillAssignments[role].length} 个</span>
-									</div>
-									<div className="role-skill-list">
-										{availableSkills.map((skill) => {
-											const checked = roleSkillAssignments[role].includes(skill.id);
-											return (
-												<label className={`role-skill-option ${checked ? "selected" : ""}`} key={skill.id}>
-													<input
-														type="checkbox"
-														checked={checked}
-														disabled={roleSkillSaving !== null}
-														onChange={(event) =>
-															void toggleRoleSkill(role, skill.id, event.target.checked)
-														}
-													/>
-													<span>
-														<strong>{skill.name}</strong>
-														<small>{skill.description || skill.filePath}</small>
-													</span>
-													<em>{skill.source}</em>
-												</label>
-											);
-										})}
-										{availableSkills.length === 0 ? (
-											<div className="provider-empty">
-												<AppIcon name="sparkles" size={15} />
-												<span>未发现可用 Skill。将 Skill 放入项目或 Pi 的 skills 目录后刷新。</span>
-											</div>
-										) : null}
-									</div>
-								</section>
-							))}
-						</div>
-					</section>
+							<small>修改后，新启动或重新启动的 Agent 才会使用新 Key。</small>
+						</section>
 
-					<section className="settings-card pi-config-card">
-						<div className="settings-card-heading">
+						<section className="settings-card" hidden={settingsSection !== "shell"}>
 							<div>
-								<h2>Pi Provider 与模型</h2>
-								<p>CodePIddy 不再维护自定义 Provider 表单，直接使用 Pi 原生配置，避免两套配置漂移。</p>
+								<h2>Shell</h2>
+								<p>
+									Agent 的 <code>bash</code> 工具需要一个 bash 可执行文件。留空则自动探测（Program Files 下的
+									Git Bash、PATH 上的 bash.exe）；Git for Windows 装在非标准目录时填这里，否则工具会报 “No bash
+									shell found”。
+								</p>
 							</div>
-							<button className="secondary-button" type="button" onClick={() => void openPiConfigFolder()}>
-								打开配置目录
-							</button>
+							<div className="settings-status">{settingsStatus?.shellPath ? "已配置" : "自动探测"}</div>
+							{settingsStatus?.shellPath ? (
+								<code className="settings-shell-current">{settingsStatus.shellPath}</code>
+							) : null}
+							<input
+								type="text"
+								value={shellPath}
+								onChange={(event) => setShellPath(event.target.value)}
+								placeholder="留空自动探测，或填 bash.exe 完整路径"
+							/>
+							<div className="settings-actions">
+								<button
+									className="primary-button"
+									type="button"
+									disabled={shellPath.trim().length === 0}
+									onClick={() => void saveShellPath(shellPath)}
+								>
+									保存
+								</button>
+								<button
+									className="secondary-button"
+									type="button"
+									disabled={!settingsStatus?.shellPath}
+									onClick={() => void saveShellPath("")}
+								>
+									清除
+								</button>
+							</div>
+							<small>修改后，新启动或重置后的 Agent 才会使用新路径。</small>
+						</section>
+
+						<section className="settings-card skill-settings-card" hidden={settingsSection !== "skills"}>
+							<div className="settings-card-heading">
+								<div>
+									<h2>Agent Skills</h2>
+									<p>每种 Agent 独立选择 Skill。修改会应用到新启动或重置后的 Agent。</p>
+								</div>
+								<div className="skill-settings-actions">
+									<div className="settings-status">{availableSkills.length} 个可用</div>
+									<button
+										className="secondary-button"
+										type="button"
+										onClick={() => void openBuiltinSkillsFolder()}
+									>
+										打开内置 Skill 文件夹
+									</button>
+									<button
+										className="secondary-button"
+										type="button"
+										disabled={!project}
+										onClick={() => void openProjectSkillsFolder()}
+									>
+										打开项目 Skill 文件夹
+									</button>
+								</div>
+							</div>
+							<div className="role-skill-grid">
+								{(["requirement-analysis", "coding", "bug-fix", "review"] as const).map((role) => (
+									<section className="role-skill-card" key={role}>
+										<div className="role-skill-heading">
+											<h3>{roleLabels[role]}</h3>
+											<span>{roleSkillAssignments[role].length} 个</span>
+										</div>
+										<div className="role-skill-list">
+											{availableSkills.map((skill) => {
+												const checked = roleSkillAssignments[role].includes(skill.id);
+												return (
+													<label
+														className={`role-skill-option ${checked ? "selected" : ""}`}
+														key={skill.id}
+													>
+														<input
+															type="checkbox"
+															checked={checked}
+															disabled={roleSkillSaving !== null}
+															onChange={(event) =>
+																void toggleRoleSkill(role, skill.id, event.target.checked)
+															}
+														/>
+														<span>
+															<strong>{skill.name}</strong>
+															<small>{skill.description || skill.filePath}</small>
+														</span>
+														<em>{skill.source}</em>
+													</label>
+												);
+											})}
+											{availableSkills.length === 0 ? (
+												<div className="provider-empty">
+													<AppIcon name="sparkles" size={15} />
+													<span>未发现可用 Skill。将 Skill 放入项目或 Pi 的 skills 目录后刷新。</span>
+												</div>
+											) : null}
+										</div>
+									</section>
+								))}
+							</div>
+						</section>
+
+						<div className="settings-section-slot" hidden={settingsSection !== "providers"}>
+							<ProviderSettings />
 						</div>
-						<div className="pi-config-paths">
-							<code>~/.pi/agent/models.json</code>
-							<span>自定义 Provider 与模型</span>
-							<code>~/.pi/agent/settings.json</code>
-							<span>Pi 全局设置</span>
+						<div className="settings-section-slot" hidden={settingsSection !== "mcp"}>
+							<McpSettings />
 						</div>
-					</section>
+					</div>
 				</div>
 			);
 		}

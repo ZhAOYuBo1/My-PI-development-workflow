@@ -231,6 +231,12 @@ export interface CodePIddyClientApi extends ProjectClientApi {
 	saveTavilyApiKey(apiKey: string): Promise<SettingsStatus>;
 	clearTavilyApiKey(): Promise<SettingsStatus>;
 	saveShellPath(shellPath: string): Promise<SettingsStatus>;
+	listMcpServers(): Promise<McpServerSummary[]>;
+	saveMcpServer(input: McpServerInput): Promise<McpServerSummary[]>;
+	deleteMcpServer(name: string): Promise<McpServerSummary[]>;
+	listProviders(): Promise<ProviderSummary[]>;
+	saveProvider(input: ProviderInput): Promise<ProviderSummary[]>;
+	deleteProvider(id: string): Promise<ProviderSummary[]>;
 	listAgentSkills(projectRoot?: string): Promise<AgentSkillSummary[]>;
 	getRoleSkillAssignments(): Promise<RoleSkillAssignments>;
 	setRoleSkillAssignments(input: SetRoleSkillAssignmentsInput): Promise<RoleSkillAssignments>;
@@ -338,6 +344,65 @@ export interface SettingsStatus {
 	encryptionAvailable: boolean;
 	/** 用户配置的 bash 路径；为 null 表示交给 pi 自动探测。 */
 	shellPath: string | null;
+}
+
+export type McpTransport = "stdio" | "http";
+
+export interface McpServerSummary {
+	name: string;
+	transport: McpTransport;
+	command: string | null;
+	args: string[];
+	url: string | null;
+	env: Record<string, string>;
+	headers: Record<string, string>;
+	disabled: boolean;
+	source: "global" | "builtin";
+}
+
+export interface McpServerInput {
+	name: string;
+	transport: McpTransport;
+	command?: string;
+	args?: string[];
+	url?: string;
+	env?: Record<string, string>;
+	headers?: Record<string, string>;
+	disabled?: boolean;
+}
+
+export const PROVIDER_APIS = [
+	"openai-completions",
+	"openai-responses",
+	"anthropic-messages",
+	"google-generative-ai",
+] as const;
+export type ProviderApi = (typeof PROVIDER_APIS)[number];
+
+export interface ProviderModelSummary {
+	id: string;
+	name: string;
+	contextWindow: number;
+	maxTokens: number;
+	reasoning: boolean;
+	input: ("text" | "image")[];
+}
+
+export interface ProviderSummary {
+	id: string;
+	baseUrl: string;
+	api: ProviderApi;
+	apiKeyConfigured: boolean;
+	models: ProviderModelSummary[];
+}
+
+export interface ProviderInput {
+	id: string;
+	baseUrl: string;
+	api: ProviderApi;
+	/** 省略表示保持已有 Key；空字符串表示清除。 */
+	apiKey?: string;
+	models: ProviderModelSummary[];
 }
 
 export interface PiRuntimeStatus {

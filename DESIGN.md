@@ -299,6 +299,14 @@ components:
 - **Terminal:** 面板内嵌项目根目录下的真实 PTY 会话（xterm.js + node-pty），不是自绘的输入行。shell、参数、字体和光标形状读取 Windows Terminal 的默认 profile（稳定版 / 预览版 / 非打包版的标准路径，没有配置时回退 PATH），PSReadLine、Tab 补全、Ctrl+C、选择复制等原生行为全部保留。顶部只显示 shell 名称和运行状态；ANSI 调色板按浅色背景重取，保证命令与参数在白底上可读。关闭项目或退出应用时同步结束终端进程。
 - **Empty:** 三个视图都使用现有 `state-mark` 空态，说明当前会话会产生什么内容，而不是只显示“暂无数据”。
 
+### Settings
+
+设置页是左侧分类导航 + 右侧内容，一次只显示一个分类：`常规`（Pi 运行时、Shell）、`集成`（Provider 与模型、MCP 服务、Tavily Search）、`Agent`（默认权限、Agent Skills）。导航是 208px 的次级底色列，选中项白底抬起；不再把所有设置堆在同一页。
+
+- **Provider 与模型**：读写 Pi 原生 `~/.pi/agent/models.json`。API Key 用 Electron safeStorage 加密保存在本机，models.json 里只写 `$ENV` 引用，启动 Agent 时通过环境变量注入，不落明文。
+- **MCP 服务**：读写 Pi 原生 `~/.pi/agent/mcp.json` 的 `mcpServers` 对象，支持 stdio / HTTP、参数、环境变量、Headers 和禁用开关。内置 `web_search`（Tavily MCP）单独标注，Key 在 Tavily Search 里配置。
+- 两类配置都只影响新启动或重置后的 Agent；正在运行的 Agent 不受影响。
+
 ### Tool Card（签名组件）
 
 Agent 工具调用的卡片是整个客户端最有辨识度的元素。它有三种形态：运行中展开显示实时输出（左侧状态点呼吸、等宽输出区用内嵌底）、完成后折叠为单行摘要（图标 + 工具名 + 状态 + 耗时）、失败时保留错误红描边并默认展开。摘要行的信息密度要高，但行高不超过 32px。
