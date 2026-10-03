@@ -1,47 +1,85 @@
 /**
- * 重新生成 README 用的三张界面截图。
+ * 重新生成 README 用的界面截图。
  *
- * 走 Electron e2e 那条路（Playwright 直接驱动本机 Electron，不需要额外下载浏览器内核），
- * 项目目录、会话历史都由本脚本和 scripts/fixtures/shot-pi-rpc.mjs 造出来，因此截图内容可重复。
+ * 浏览器 demo（?demo=1）负责有完整演示数据的视图（会话 + 更改 diff、设置页）；
+ * Electron + shot-pi-rpc 假实现负责需要真实 IPC 的视图（文件预览、内置终端）。
+ * 项目目录、工作项和会话历史全部由脚本自己造，不依赖本机任何真实项目。
  *
+ *   npm run build:codepiddy
  *   node --import tsx packages/codepiddy-desktop/scripts/capture-screenshots.mts
  *
- * 注意：会重建 dist/renderer，Electron 正在运行时不要执行。
+ * 脚本会临时起一个 Vite（端口 5179）和一个 Electron 实例，结束时都会关掉。
  */
-import { spawnSync } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron as electron } from "@playwright/test";
+import { _electron as electron, chromium } from "@playwright/test";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(scriptDirectory, "..");
 const repositoryRoot = path.resolve(desktopRoot, "..", "..");
 const outputDirectory = path.join(repositoryRoot, "docs", "images");
-// 右侧文件管理器会占掉约 40% 宽度，窗口太窄会把转录流挤到出现横向滚动，所以取 1600。
+const fixture = path.join(scriptDirectory, "fixtures", "shot-pi-rpc.mjs");
+
+const DEV_SERVER_PORT = 5179;
+const DEV_SERVER_URL = `http://127.0.0.1:${DEV_SERVER_PORT}`;
 const VIEWPORT = { width: 1600, height: 900 };
 
 const SAMPLE_FILES: Array<[string, string]> = [
-	["package.json", '{\n  "name": "login-service",\n  "private": true\n}\n'],
 	["README.md", "# 登录服务\n\n支持账号密码登录，并为后续第三方登录预留扩展点。\n"],
-	["src/auth/login.ts", "export async function login(input: LoginInput) {\n  return authService.authenticate(input);\n}\n"],
-	["src/auth/session.ts", "export function issueSession(userId: string) {\n  return { userId, issuedAt: Date.now() };\n}\n"],
-	["src/auth/provider.ts", "export interface AuthProvider {\n  login(input: LoginInput): Promise<Session>;\n}\n"],
-	["src/routes/index.ts", "export const routes = [\n  { path: '/login', handler: login },\n  { path: '/logout', handler: logout },\n];\n"],
+	["package.json", '{\n  "name": "login-service",\n  "private": true\n}\n'],
+	[
+		"src/auth/login.ts",
+		"export async function login(input: LoginInput) {\n  return authService.authenticate(input);\n}\n",
+	],
+	[
+		"src/auth/session.ts",
+		"export function issueSession(userId: string) {\n  return { userId, issuedAt: Date.now() };\n}\n",
+	],
+	[
+		"src/auth/provider.ts",
+		"export interface AuthProvider {\n  login(input: LoginInput): Promise<Session>;\n}\n",
+	],
 	["docs/api.md", "# API\n\n## POST /login\n\n请求体 `{ username, password }`。\n"],
 ];
 
-function buildRenderer(): void {
-	const result = spawnSync("npm", ["run", "build:renderer"], {
-		cwd: desktopRoot,
-		shell: true,
-		stdio: "inherit",
-	});
-	if (result.status !== 0) throw new Error("构建 renderer 失败");
+async function waitForServer(url: string): Promise<void> {
+	for (let attempt = 0; attempt < 80; attempt += 1) {
+		try {
+			const response = await fetch(url);
+			if (response.ok) return;
+		} catch {
+			// 还没起来，继续等。
+		}
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(`Vite dev server did not start at ${url}`);
 }
 
-async function main(): Promise<void> {
+async function captureDemoViews(): Promise<void> {
+	const browser = await chromium.launch();
+	try {
+		const page = await browser.newPage({ viewport: VIEWPORT });
+		await page.goto(`${DEV_SERVER_URL}/?demo=1`, { waitUntil: "networkidle" });
+		await page.waitForTimeout(900);
+		await page.locator(".agent-row").filter({ hasText: "Coding Agent" }).first().click();
+		await page.waitForTimeout(800);
+
+		await page.locator(".work-panel-tab").filter({ hasText: "更改" }).first().click();
+		await page.waitForTimeout(600);
+		await page.screenshot({ path: path.join(outputDirectory, "codepiddy-overview.png") });
+
+		await page.getByRole("button", { name: "设置", exact: true }).first().click();
+		await page.waitForTimeout(700);
+		await page.screenshot({ path: path.join(outputDirectory, "codepiddy-settings.png") });
+	} finally {
+		await browser.close();
+	}
+}
+
+async function captureElectronViews(): Promise<void> {
 	const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "codepiddy-shots-"));
 	const projectRoot = path.join(temporaryRoot, "login-service");
 	const userDataRoot = path.join(temporaryRoot, "user-data");
@@ -52,16 +90,13 @@ async function main(): Promise<void> {
 		await writeFile(target, content, "utf8");
 	}
 
-	buildRenderer();
-	await mkdir(outputDirectory, { recursive: true });
-
 	const app = await electron.launch({
 		args: [desktopRoot],
 		cwd: desktopRoot,
 		env: {
 			...process.env,
 			CODEPIDDY_REPO_ROOT: repositoryRoot,
-			CODEPIDDY_PI_CLI: path.join(scriptDirectory, "fixtures", "shot-pi-rpc.mjs"),
+			CODEPIDDY_PI_CLI: fixture,
 			CODEPIDDY_NODE_EXECUTABLE: process.execPath,
 			CODEPIDDY_USER_DATA: userDataRoot,
 			CODEPIDDY_TEST_PROJECT_ROOT: projectRoot,
@@ -72,19 +107,9 @@ async function main(): Promise<void> {
 	try {
 		const page = await app.firstWindow();
 		await page.waitForLoadState("domcontentloaded");
-		// setViewportSize 对 Electron 无效，必须直接改 BrowserWindow，否则布局宽度不变。
 		await app.evaluate(({ BrowserWindow }, size) => {
 			BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height);
 		}, VIEWPORT);
-		await page.waitForTimeout(500);
-		const shoot = async (name: string): Promise<void> => {
-			// 转录流默认停在最底部，截图要展示完整一轮，所以先回到顶部。
-			const transcript = page.locator(".transcript");
-			if (await transcript.count()) await transcript.evaluate((element) => (element.scrollTop = 0));
-			await page.waitForTimeout(500);
-			await page.screenshot({ path: path.join(outputDirectory, name) });
-			console.log(`captured ${name}`);
-		};
 
 		await page.getByRole("button", { name: "打开项目", exact: true }).click();
 		await page.getByRole("button", { name: "创建新需求" }).click();
@@ -93,23 +118,7 @@ async function main(): Promise<void> {
 		await page.getByRole("button", { name: "创建", exact: true }).click();
 		const workItem = page.locator(".work-item-row").filter({ hasText: "FEAT-001" });
 		await workItem.waitFor();
-		// 两条 lane 都放一个工作项，侧栏才不会只有一条需求。
-		await page.getByRole("button", { name: "创建修漏洞" }).click();
-		await page.getByLabel("标题", { exact: true }).fill("项目切换后白屏");
-		await page.getByLabel("初始描述").fill("从大型项目切换到空项目时界面偶发白屏。");
-		await page.getByRole("button", { name: "创建", exact: true }).click();
-		await page.locator(".work-item-row").filter({ hasText: "BUG-001" }).waitFor();
-		// 新建工作项会自动展开并选中它，所以回到 FEAT-001 前要先确认它还展开着。
-		const requirementRow = page.getByRole("button", { name: /需求分析 Agent/ });
-		if (!(await requirementRow.isVisible())) {
-			await workItem.locator(".chevron-button").click();
-			await requirementRow.waitFor();
-		}
-		await requirementRow.click();
-		const createRequirementAgent = page.getByRole("button", { name: "创建 Agent" });
-		if (await createRequirementAgent.isVisible()) await createRequirementAgent.click();
-		await page.locator(".content-header").getByRole("button", { name: "批准需求" }).click();
-		const codingRow = page.locator(".agent-row, .tree-label").filter({ hasText: "Coding Agent" }).first();
+		const codingRow = page.locator(".agent-row").filter({ hasText: "Coding Agent" }).first();
 		if (!(await codingRow.isVisible())) {
 			await workItem.locator(".chevron-button").click();
 			await codingRow.waitFor();
@@ -118,24 +127,54 @@ async function main(): Promise<void> {
 		const createAgent = page.getByRole("button", { name: "创建 Agent" });
 		if (await createAgent.isVisible()) await createAgent.click();
 		await page.locator(".composer textarea").waitFor();
-		for (const name of ["src", "auth", "login.ts"]) {
-			await page.locator(".file-tree-row").filter({ hasText: name }).first().click();
-			await page.waitForTimeout(250);
+		await page.waitForTimeout(1500);
+
+		const fileRow = page.locator(".file-tree-row").filter({ hasText: "README.md" }).first();
+		if ((await fileRow.count()) > 0 && (await fileRow.isVisible())) {
+			await fileRow.click();
+			await page.waitForTimeout(700);
 		}
-		await shoot("codepiddy-agent.png");
+		await page.screenshot({ path: path.join(outputDirectory, "codepiddy-files.png") });
 
-		await page.locator(".tree-label").filter({ hasText: "FEAT-001" }).first().click();
-		await shoot("codepiddy-overview.png");
-
-		await page.getByRole("button", { name: "设置" }).click();
-		await page.getByRole("heading", { name: "设置" }).waitFor();
-		await shoot("codepiddy-settings.png");
+		await page.locator(".work-panel-tab").filter({ hasText: "终端" }).first().click();
+		await page.locator(".terminal-host .xterm").waitFor();
+		await page.waitForTimeout(3000);
+		await page.locator(".xterm-helper-textarea").focus();
+		await page.keyboard.type("Get-ChildItem");
+		await page.keyboard.press("Enter");
+		await page.waitForTimeout(1600);
+		await page.screenshot({ path: path.join(outputDirectory, "codepiddy-terminal.png") });
 	} finally {
 		await app.close().catch(() => undefined);
-		await rm(path.join(desktopRoot, "dist", "renderer"), { recursive: true, force: true });
 		await rm(temporaryRoot, { recursive: true, force: true });
 	}
-	console.log("截图已写入", outputDirectory);
+}
+
+async function main(): Promise<void> {
+	await mkdir(outputDirectory, { recursive: true });
+	let vite: ChildProcess | null = null;
+	try {
+		vite = spawn(
+			process.execPath,
+			[
+				path.join(repositoryRoot, "node_modules", "vite", "bin", "vite.js"),
+				"--host",
+				"127.0.0.1",
+				"--port",
+				String(DEV_SERVER_PORT),
+			],
+			{
+			cwd: desktopRoot,
+			stdio: "ignore",
+			},
+		);
+		await waitForServer(`${DEV_SERVER_URL}/?demo=1`);
+		await captureDemoViews();
+	} finally {
+		vite?.kill();
+	}
+	await captureElectronViews();
+	console.log(`screenshots written to ${outputDirectory}`);
 }
 
 await main();

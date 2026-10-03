@@ -21,7 +21,7 @@
 
 ```text
 继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-22 已提交，工作树干净，待办清单已清空；下一步是推送 origin/main，并在真实项目做工作区面板 / 终端的手工回归。
+再读 PRODUCT.md、DESIGN.md。批次 1-26 已提交（内置终端换成 xterm + node-pty 真 PTY 并读取本机 Windows Terminal 默认 profile；README 重写并补回截图），待办清单已清空。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端和结构清理都已验收或待验收，不要重做。
 当前 HEAD 以 `git log -1` 为准。
 
@@ -52,7 +52,7 @@
 - 不改业务逻辑、IPC、core、coding-agent。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 22 已验收）
+## 当前状态（2026-10-03 批次 26：准备推送）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -73,6 +73,8 @@
 - 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并显示左侧文件列表 + 右侧完整 diff，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
 - 结构：旧玻璃层（`--cp-glass-*`、白色叠加、backdrop-filter 卡片）已整段删除，最终值合并进文件末尾的设计系统层；不再靠“后面再覆盖”维持外观。
 - `.impeccable/design.json`：`DESIGN.md` 的 schemaVersion 2 sidecar，含 OKLCH tonal ramps、阴影/动效/断点、9 个可渲染组件和叙事规则。
+- 内置终端：`xterm.js + node-pty` 真 PTY。右侧面板里是原生 shell，PSReadLine / Tab / Ctrl+C / vim / 选择复制全部由 shell 自己处理；shell、参数、字体、光标形状来自本机 Windows Terminal 的 `settings.json` 默认 profile（标准路径，不写死机器），ANSI 调色板按浅色背景重新取值。行式输入框、`TabExpansion2` helper、cwd marker 都已删除。
+- README 已重写并补回截图（`docs/images/`）；截图由 `packages/codepiddy-desktop/scripts/capture-screenshots.mts` 生成，脚本自己造临时项目，不依赖本机真实项目。
 
 ### 本轮改动清单
 
@@ -88,12 +90,13 @@
 - 已提交：`b5e30b2 feat(desktop): use meteor stream icon`（批次 21）
 - 已提交：`deb8d69 feat(desktop): mirror meteor stream icon`（批次 21）
 - 已提交：`6b6b95b feat(desktop): consolidate stylesheet layers and add design sidecar`（批次 22）
+- 待验收：内置终端真 PTY + Windows Terminal 配置适配（批次 24-25，取代批次 23 的补全方案）
 
 批次 1-21 的 UI 调整均已提交；详细过程见下方进度日志。
 
 ### 下一步
 
-待办清单已清空，改版收尾。下一步建议：把 `main` 上积压的提交推到 `origin/main`，再在真实项目里做一轮工作区面板 / 终端的手工回归。
+批次 23-26 已验收 / 待推送。提交后把 `main` 推到 `origin/main`。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -567,16 +570,106 @@
 
 用户已验收，随 `6b6b95b feat(desktop): consolidate stylesheet layers and add design sidecar` 提交。
 
+### 2026-10-03 批次 23：内置终端 Tab 补全（待验收）
+
+用户反馈：内置终端没有 Tab 补全 / 切换，要求补齐。
+
+根因：终端是行式 PowerShell（`-Command -` 从 stdin 读命令），Tab 键既不会传给子进程，壳子也没有补全通道。要在壳子这一层补，不能改 Pi 核心。
+
+实现：
+
+- shared 新增 `TerminalCompleteInput` / `TerminalCompletionItem` / `TerminalCompleteResult`，`CodePIddyClientApi` 增加 `completeTerminal`。
+- main 新增 `codepiddy:terminal:complete`，以及 `parseTerminalCompleteInput`（允许空行、保留原始空格、校验 cursor 在 `[0, line.length]`）。
+- 每个终端会话懒加载一个常驻补全 helper：`pwsh -NoLogo -NoProfile -NonInteractive -EncodedCommand <script>`。脚本循环读 stdin 的 base64 JSON 请求，用 `TabExpansion2 -inputScript -cursorColumn` 取 `CompletionMatches`，按行回 JSON；helper 随终端会话回收。
+- 请求带 `cwd`，helper 每次先 `Set-Location -LiteralPath`，所以 `cd` 之后的路径补全跟随真实目录。
+- `findCompletionTokenStart` 处理未闭合引号（`"C:\Program Files\...`）和分隔符（`; | & ( , {`），把 token 起点一起返回给渲染层。
+- renderer 输入框捕获 Tab：首次请求补全并应用第一个候选；连续 Tab 在候选间循环，Shift+Tab 反向，Esc 回到补全前的整行；多候选时在输出区打印一行候选（最多 16 个 + 剩余数量）。
+- 非 PowerShell 的 shell 目前返回空候选（不做半成品补全），Tab 不改变输入。
+
+验证：
+
+- main helper 原型（真实 pwsh）：`Get-Ch` → `Get-ChildItem`；`Get-ChildItem .\pack` → `.\package.json` 等；`Get-ChildItem -Pa` → `-Path`。首次请求约 0.9s（PowerShell 启动），后续约 3ms。
+- renderer 循环（Playwright + stub client）：单候选替换、双候选 Tab/Shift+Tab 循环、Esc 还原都正确。
+- 真实 Electron e2e（fixture 项目）：`Get-Ch` + Tab → `Get-ChildItem`；`Get-ChildItem .\` + Tab → `Get-ChildItem .\.codepiddy`。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+
+### 2026-10-03 批次 24：内置终端换成真 PTY（待验收）
+
+用户反馈批次 23 的 Tab 补全没修好，要求不要自己实现终端，直接用原生终端能力（参考 Codex 右侧面板里嵌的 Windows Terminal）。
+
+调查结论：参考项目 PI-Desktop 在 ADR `0108` 里已经删掉内置交互终端和 PTY/xterm 依赖，把交互 shell 交给外部终端，没有现成实现可抄。要复刻 Codex 的效果，只能自己上 `xterm.js + node-pty`。
+
+实现：
+
+- 新增依赖（exact）：`@xterm/xterm@6.0.0`、`@xterm/addon-fit@0.11.0`、`node-pty@1.1.0`。node-pty 走包内 N-API prebuild（`prebuilds/win32-x64`），不需要 node-gyp 编译。本机 VS 缺 Spectre 缓解库，`electron-rebuild` 会失败；已验证 prebuild 在 Electron 44 下可直接加载并跑通 ConPTY。
+- main：`TerminalSession` 从行式子进程换成 `IPty`；`startTerminal` 用 `pty.spawn`，不传 `-NoProfile`，和 Windows Terminal 默认 PowerShell profile 一致，PSReadLine / 别名 / 提示符 / 用户函数全部按原样生效；新增 `resizeTerminal`；`writeTerminal` 直接写原始字节。
+- 删除批次 23 的 `completeTerminal` IPC、TabExpansion2 helper、token 起点推断，以及 renderer 的候选循环 / 命令历史 / cwd marker。
+- 修掉一个关键 bug：`writeTerminal` 原来复用 `rawText` 校验，trim 后会拒绝纯控制字符，导致 Tab(`\t`) 和 Enter(`\r`) 被静默丢弃；改成允许原始字节流的 `terminalData`。
+- renderer：`WorkPanel` 的终端换成 xterm 实例 + FitAddon；`onData` 写 PTY，`onTerminalEvent` 写 xterm；ResizeObserver 做 fit + resize；Ctrl+C 有选区时复制、否则透传给 shell；清空按钮用 `terminal.clear()`。
+- 样式：删除旧 `.terminal-output` / `.terminal-input-row` / `.terminal-prompt` / `.terminal-cwd`，新增 `.terminal-host`；`main.tsx` 引入 `@xterm/xterm/css/xterm.css`。
+- 打包：`build-main.mjs` 把 `node-pty` 标为 external；`package.json` 增加 `npmRebuild: false`（用 prebuild，避免 Spectre 编译失败）和 `asarUnpack: ["node_modules/node-pty/**/*"]`。
+
+验证：
+
+- PTY 原型（真 pwsh）：`Get-Ch` + Tab → `Get-ChildItem`，逐字符写入同样生效；PSReadLine 2.4.5 已加载。
+- 真实 Electron e2e（fixture 项目）：终端显示真实 PowerShell 7.6.5 banner 和 prompt；`Get-Ch` + Tab → `Get-ChildItem`；Enter 执行后打印目录；`Get-Location` 打印项目路径。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。Vite 有一条 chunk >500kB 的 advisory（xterm 进主包，702kB / 197kB gzip），未处理。
+
+### 2026-10-03 批次 25：终端跟随 Windows Terminal 配置 + 浅色配色修正（待验收）
+
+用户反馈三点：`cd .\test\` 后面的文字是浅灰、白底看不清；不要显示 PowerShell 的“有新版本可用”提示；实现必须通用，不能按当前这台机器写死。
+
+实现：
+
+- 新增 `packages/codepiddy-desktop/src/main/windows-terminal.ts`，只读 Windows Terminal 的标准配置路径（稳定版、预览版、非打包版三种 `settings.json`），解析 `defaultProfile` 并取对应 profile 的 `commandline` / `source` / `font` / `cursorShape`。没有 WT 配置时回退到 PATH 上的 pwsh / `powershell.exe`。
+- 支持常见 profile 来源：显式 `commandline`（做 `%VAR%` 展开和引号拆分）、`Windows.Terminal.PowershellCore`（用 `Get-AppxPackage` 定位商店版 pwsh 的真实安装路径，因为 app execution alias 不能被 `CreateProcess` 直接启动）、`Windows.Terminal.Powershell`、`Windows.Terminal.Wsl`。
+- 终端启动环境加 `POWERSHELL_UPDATECHECK=Off`，关闭启动时的版本提示。
+- 浅色 ANSI 调色板重取：`white` / `brightWhite` 从近白改成 `#4a4c50` / `#17181a`，`yellow` 改深琥珀 `#8a5a00`，`brightGreen` / `brightMagenta` / `brightCyan` 换成白底对比度 ≥4.5:1 的值。PSReadLine 的默认文字和参数颜色因此可读。
+- `TerminalSessionInfo` 增加 `profileName` / `fontFamily` / `fontSize` / `cursorStyle`；渲染层应用 WT profile 的字体和光标形状。
+
+验证：
+
+- `readWindowsTerminalProfile()` 在本机解析出 `PowerShell` profile → 商店版 `pwsh.exe`（7.6.6），与用户本地 Windows Terminal 默认 profile 一致。
+- 真实 Electron e2e：终端显示 PowerShell 7.6.6、无更新提示、Tab 补全和命令执行正常；截图确认命令文字在白底上清晰可读。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+
+### 2026-10-03 批次 26：README 重写 + 截图重生成
+
+旧 `README.md` 已经过期：引用的 `docs/images/*` 在之前的清理里被删掉，正文还写着「需求批准门」「半透明 + 背景模糊 + 内高光」，右侧面板还叫「文件管理器」。旧的截图脚本 `capture-screenshots.mts` 也引用了已经不存在的「批准需求」按钮，跑不起来。
+
+- 重写 `README.md` 为常规 GitHub 结构：徽章、hero 图、定位说明、界面分节（会话与工作区 / 更改 / 终端 / 设置）、两条工作流、内置 Skill、下载与运行、本地开发、验证、截图重生成、目录结构、更新 Pi 内核、安全、上游与 License。
+- 正文按当前事实更新：`文件 / 更改 / 终端` 三视图、按轮折叠（运行中的最新一轮展开，其余默认收起）、按轮持久化的文件级 diff、内嵌真 PTY 终端（跟随 Windows Terminal 默认 profile）、浅色中性 + 蓝色强调。
+- 重写 `packages/codepiddy-desktop/scripts/capture-screenshots.mts`：浏览器 demo（`?demo=1`）负责会话 + 更改 diff 和设置页，Electron + `shot-pi-rpc` 假实现负责文件预览和内置终端；脚本自己造临时项目，结束时清理 Vite / Electron / 临时目录。
+- 生成 `docs/images/codepiddy-overview.png`、`codepiddy-files.png`、`codepiddy-terminal.png`、`codepiddy-settings.png`。
+
+验证：截图脚本跑通（无 DeprecationWarning）；`npm run check` 全绿。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
 2. [x] **工作区面板多视图**：批次 19-21 已实现并在真实 Electron 中验证，随 `b2644f5`、`b5e30b2` 提交。
 3. [x] **结构清理**：批次 22 删除旧玻璃层，白色叠加只剩侧栏 sheen 两处；已验收。
 4. [x] **`.impeccable/design.json` sidecar**：批次 22 已写入 schemaVersion 2；已验收。
+5. [x] **内置终端**：批次 24-25 用 `xterm + node-pty` 真 PTY，并读取本机 Windows Terminal 默认 profile；待验收。
 
 ## 未提交状态
 
-批次 1-22 已提交，工作树干净。根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
+批次 1-22 已提交。批次 23-26（内置终端 + README）改动未提交，准备推送：
+
+- 修改：`packages/codepiddy-shared/src/index.ts`
+- 修改：`packages/codepiddy-desktop/package.json`、`package-lock.json`、`scripts/build-main.mjs`
+- 修改：`packages/codepiddy-desktop/src/main/index.ts`、`src/main/ipc-validation.ts`、`src/preload/index.ts`
+- 新增：`packages/codepiddy-desktop/src/main/windows-terminal.ts`
+- 修改：`packages/codepiddy-desktop/src/renderer/main.tsx`、`src/renderer/components/WorkPanel.tsx`、`src/renderer/styles.css`
+- 修改：`README.md`、`packages/codepiddy-desktop/scripts/capture-screenshots.mts`
+- 新增：`docs/images/codepiddy-overview.png`、`codepiddy-files.png`、`codepiddy-terminal.png`、`codepiddy-settings.png`
+- 文档：本文件（批次 23-26 记录）
+
+注意：`package-lock.json` 有改动（新增 xterm / node-pty），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
+
+另外：`npx impeccable install` 把 Impeccable 装进了项目内的 `.github/` 与 `.pi/skills/impeccable/`（engine v0.1.11，122 个文件约 38.5MB，含两个 17MB 的 `impeccable.exe`）。体积太大，未提交，保持 untracked。
+
+根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
 ## 决策记录
 
