@@ -465,6 +465,8 @@ async function probePiUpdate(
 			path.join(extensions, "permission.js"),
 			"--extension",
 			path.join(extensions, "tavily-tool.js"),
+			"--extension",
+			path.join(extensions, "review.js"),
 			"--approve",
 		],
 	});
@@ -1069,6 +1071,10 @@ class AgentManager {
 				compiledRuntime
 					? path.join(extensionRoot, "tavily-tool.js")
 					: path.join(this.repositoryRoot, "packages", "codepiddy-tavily-tool-extension", "index.ts"),
+				"--extension",
+				compiledRuntime
+					? path.join(extensionRoot, "review.js")
+					: path.join(this.repositoryRoot, "packages", "codepiddy-review-extension", "index.ts"),
 				...roleSkillPaths.flatMap((skillPath) => ["--skill", skillPath]),
 				"--name",
 				`${agent.workItemId} ${roleLabel(agent.role)}`,

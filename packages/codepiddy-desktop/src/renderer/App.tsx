@@ -323,6 +323,22 @@ function historyTimestamp(message: Record<string, unknown>): string | null {
 	return null;
 }
 
+/**
+ * 取 tool result 里的 unified patch。review 扩展会在 Write / Edit 完成后写入
+ * details.patch；Pi core 自己的 Edit 结果也有 patch。没有 @@ 的 details.diff
+ * 是旧版展示格式，不能当 diff 解析。
+ */
+function patchFromDetails(details: unknown): string | null {
+	if (!isRecord(details)) return null;
+	if (typeof details.patch === "string" && details.patch.includes("@@")) return details.patch;
+	if (typeof details.diff === "string" && details.diff.includes("@@")) return details.diff;
+	return null;
+}
+
+function extractToolResultPatch(result: unknown): string | null {
+	return isRecord(result) ? patchFromDetails(result.details) : null;
+}
+
 function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 	const items: TranscriptItem[] = [];
 	for (const [index, message] of messages.entries()) {
@@ -333,13 +349,7 @@ function normalizeHistory(messages: unknown[]): TranscriptItem[] {
 		if (!text && !(role === "user" && images.length > 0)) continue;
 		const createdAt = historyTimestamp(message);
 		if (role === "toolResult") {
-			const details = isRecord(message.details) ? message.details : null;
-			const patch =
-				details && typeof details.patch === "string"
-					? details.patch
-					: details && typeof details.diff === "string"
-						? details.diff
-						: null;
+			const patch = patchFromDetails(message.details);
 			items.push({
 				id: typeof message.toolCallId === "string" ? message.toolCallId : `history-tool-${index}`,
 				type: "tool",
@@ -1130,13 +1140,8 @@ export function App() {
 	);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
 	const [collapsedRounds, setCollapsedRounds] = useState<Record<string, boolean>>({});
-	const [workPanelVisible, setWorkPanelVisible] = useState<boolean>(() => {
-		try {
-			return window.localStorage.getItem("codepiddy.work-panel.visible") !== "0";
-		} catch {
-			return true;
-		}
-	});
+	// 右侧工作区面板启动时始终收起；宽度记忆仍然保留，只有可见性不跨会话恢复。
+	const [workPanelVisible, setWorkPanelVisible] = useState(false);
 	const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 	const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>(
 		demoMode ? { "CODE-001": { label: "Pi 正在处理", kind: "working", queued: 0 } } : {},
@@ -1766,7 +1771,9 @@ export function App() {
 							? {
 									...item,
 									status: "completed",
-									text: extractMessageText(event.result) || item.text || "已完成",
+									text:
+										extractToolResultPatch(event.result) ??
+										(extractMessageText(event.result) || item.text || "已完成"),
 									isError: event.isError === true,
 									completedAt: Date.now(),
 								}
@@ -3732,15 +3739,7 @@ export function App() {
 								<IconButton
 									label={workPanelVisible ? "隐藏文件管理器" : "显示文件管理器"}
 									active={workPanelVisible}
-									onClick={() =>
-										setWorkPanelVisible((current) => {
-											const next = !current;
-											try {
-												window.localStorage.setItem("codepiddy.work-panel.visible", next ? "1" : "0");
-											} catch {}
-											return next;
-										})
-									}
+									onClick={() => setWorkPanelVisible((current) => !current)}
 								>
 									<AppIcon name="panel" />
 								</IconButton>

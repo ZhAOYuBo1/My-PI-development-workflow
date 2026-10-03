@@ -71,8 +71,11 @@ export function stripAnsi(value: string): string {
 }
 
 export function inferPanelPathFromText(value: string): string | null {
-	const diffHeader = /^(?:\+\+\+|---)\s+(?:[ab]\/)?(.+?)\s*$/m.exec(value);
-	if (diffHeader?.[1] && diffHeader[1] !== "/dev/null") return normalizePanelPath(diffHeader[1]);
+	// 新文件的 patch 第一行是 `--- /dev/null`，必须优先取 +++ 的新路径。
+	const newHeader = /^\+\+\+\s+(?:[ab]\/)?(.+?)\s*$/m.exec(value);
+	if (newHeader?.[1] && newHeader[1] !== "/dev/null") return normalizePanelPath(newHeader[1]);
+	const oldHeader = /^---\s+(?:[ab]\/)?(.+?)\s*$/m.exec(value);
+	if (oldHeader?.[1] && oldHeader[1] !== "/dev/null") return normalizePanelPath(oldHeader[1]);
 	const quoted = /(?:filePath|path)["']?\s*[:=]\s*["']([^"']+)["']/i.exec(value);
 	if (quoted?.[1]) return normalizePanelPath(quoted[1]);
 	const replaced = /\bin\s+((?:[A-Za-z]:[\\/]|\/)[^\r\n]+?)(?:[.!]?\s*)$/i.exec(value);
@@ -133,6 +136,26 @@ export function normalizePanelPath(path: string): string {
 	return path.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
 }
 
+/**
+ * 严格判断一段文本是不是 unified diff。
+ *
+ * 不能用“有行以 + 或 - 开头”这种弱判断：write 的正文可能是 Markdown 列表、
+ * 分隔线或代码，`- 朝代：唐` 会被误认成删除行。必须有 @@ hunk 头，或同时出现
+ * ---/+++ 文件头，才按 diff 解析。
+ */
+export function isUnifiedDiffText(value: string): boolean {
+	if (!value) return false;
+	const lines = stripAnsi(value).replace(/\r\n?/g, "\n").split("\n");
+	let hasOldHeader = false;
+	let hasNewHeader = false;
+	for (const line of lines) {
+		if (line.startsWith("@@")) return true;
+		if (line.startsWith("--- ")) hasOldHeader = true;
+		else if (line.startsWith("+++ ")) hasNewHeader = true;
+	}
+	return hasOldHeader && hasNewHeader;
+}
+
 /** write/edit/read 参数里的文件路径（归一化后），无路径返回 null。 */
 export function extractPanelPath(toolName: string, args: string): string | null {
 	const name = toolName.toLowerCase();
@@ -162,7 +185,10 @@ export function projectToolToPanel(item: ProjectableToolItem): WorkPanelEntry | 
 	const name = item.name.toLowerCase();
 	const record = parseToolArgs(item.args);
 	if (name === "write") {
-		const body = firstString(record, CONTENT_KEYS) ?? item.text;
+		// 扩展会在 tool result 里带上执行前后生成的 patch；有 patch 就用 patch，
+		// 否则退回 write 的正文，整文件按新增渲染。
+		const patch = isUnifiedDiffText(item.text) ? item.text : null;
+		const body = patch ?? firstString(record, CONTENT_KEYS) ?? item.text;
 		if (!body && item.status !== "running") return null;
 		return {
 			id: item.id,
@@ -196,7 +222,14 @@ export function projectToolToPanel(item: ProjectableToolItem): WorkPanelEntry | 
 				: oldText !== null && newText !== null
 					? buildTextDiff(oldText, newText)
 					: null;
-		const body = generatedDiff || firstString(record, ["diff"]) || newText || item.text || "";
+		const argsDiff = firstString(record, ["diff"]);
+		const body =
+			(isUnifiedDiffText(item.text) ? item.text : null) ??
+			generatedDiff ??
+			(argsDiff && isUnifiedDiffText(argsDiff) ? argsDiff : null) ??
+			newText ??
+			item.text ??
+			"";
 		if (!body && item.status !== "running") return null;
 		return {
 			id: item.id,
@@ -247,17 +280,25 @@ export function projectToolToPanel(item: ProjectableToolItem): WorkPanelEntry | 
 /** 工具输出里已有 +/-/@@ 标记时直接采用；write 的原始内容按整文件新增展示。 */
 export function panelDiffLines(entry: WorkPanelEntry): PanelDiffLine[] {
 	const lines = stripAnsi(entry.body).replace(/\r\n?/g, "\n").split("\n");
-	while (lines.length > 0 && /^(?:---|\+\+\+)\s/.test(lines[0]!)) lines.shift();
+	const unified = isUnifiedDiffText(entry.body);
+	if (unified) {
+		while (lines.length > 0 && /^(?:---|\+\+\+)\s/.test(lines[0]!)) lines.shift();
+	}
 	if (lines.at(-1) === "") lines.pop();
-	const marked = lines.some((line) => line.startsWith("@@") || /^[+-](?![+-])/.test(line));
 	const statusOnly =
-		!marked &&
+		!unified &&
 		/^(?:successfully|file\s+(?:created|written)|created\s+file|wrote\s+file|updated\s+file|modified\s+file)/i.test(
 			lines.join("\n").trimStart(),
 		);
 	if (statusOnly) return [];
-	if (!marked && entry.toolName.toLowerCase() === "write") {
-		return lines.map((text) => ({ type: "add", text }));
+	const toolName = entry.toolName.toLowerCase();
+	if (!unified) {
+		// 没有结构化 diff 时不再猜测符号：write/edit 的正文就是变更后的内容，按新增展示；
+		// 其他工具输出按普通文本展示，不染色。
+		if (toolName === "write" || toolName === "edit") {
+			return lines.map((text) => ({ type: "add" as const, text }));
+		}
+		return lines.map((text) => ({ type: "context" as const, text }));
 	}
 	return lines.map((line) => {
 		if (line.startsWith("@@")) return { type: "hunk", text: line };

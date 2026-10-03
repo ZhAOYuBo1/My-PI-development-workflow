@@ -95,3 +95,28 @@ CodePIddy 不复制插件体系。当前落地的是三个 host-owned 视图：
 3. `终端`：面板内嵌项目根目录的 PowerShell 会话，通过最小 IPC 转发输入输出；输出可选择复制，工作目录随 `cd` 更新。这不沿用参考项目的插件视图模型。
 
 这样能先把“文件面板不是静态树，而是工作区”这个信息架构建立起来，同时保持业务边界不变。
+
+### 它的 diff 证据是怎么产生的
+
+参考项目的 ReviewTab 不解析 tool 文本，也不看当前 Git 工作区。`host-core` 在 Write / Edit 执行前抓取旧文件字节，执行后生成一份 message-owned 的结构化证据，挂在 tool result 的 `details.review` 上：
+
+```ts
+type ReviewChange = {
+  version: 1;
+  snapshotId: string;
+  path: string;
+  operation: "write" | "edit" | "delete";
+  status: "added" | "modified" | "deleted";
+  additions: number;
+  deletions: number;
+  hunks: DiffHunk[];
+};
+```
+
+渲染层只展示这份证据，并从消息持久化里恢复；它不重新计算 diff，所以重启后和运行中的结果一致。二进制、超大文件和失败的调用不产生 hunks。
+
+CodePIddy 按同一思路实现，但用的是 Pi 自带的扩展点，不改 Pi core：
+
+- `@codepiddy/review-extension` 在 `tool_call`（执行前）解析 write / edit 的路径并读取旧内容：文件不存在记为“新文件”，二进制或超过 64KB 则跳过。
+- 在 `tool_result`（执行后）读取新内容，用 `diff.createTwoFilesPatch` 生成 unified patch，写回 `details.patch` / `details.diff` / `details.review`。
+- 桌面端优先展示 `details.patch`；拿不到 patch 时才把 write 的正文整块按新增展示。`panelDiffLines` 只在出现 `@@` hunk 头或 `---/+++` 文件头时按 diff 解析，绝不靠“行首是 + / -”猜测。

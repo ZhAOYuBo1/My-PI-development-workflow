@@ -65,3 +65,9 @@ packages/agent/docs/extensions/pi-server-artifact/index.md
 # Playwright Electron E2E artifacts
 **/test-results/
 **/playwright-report/
+
+# Impeccable local install (reinstall with: npx impeccable install)
+.github/agents/
+.github/hooks/
+.github/skills/
+.pi/skills/impeccable/

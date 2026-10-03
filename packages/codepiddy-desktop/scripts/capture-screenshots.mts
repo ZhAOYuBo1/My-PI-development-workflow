@@ -15,7 +15,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron as electron, chromium } from "@playwright/test";
+import { _electron as electron, chromium, type Page } from "@playwright/test";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(scriptDirectory, "..");
@@ -58,6 +58,15 @@ async function waitForServer(url: string): Promise<void> {
 	throw new Error(`Vite dev server did not start at ${url}`);
 }
 
+/** 工作区面板启动默认收起，截图脚本显式打开。 */
+async function ensureWorkPanelOpen(page: Page): Promise<void> {
+	const openButton = page.getByRole("button", { name: "显示文件管理器" });
+	if ((await openButton.count()) > 0) {
+		await openButton.first().click();
+		await page.waitForTimeout(300);
+	}
+}
+
 async function captureDemoViews(): Promise<void> {
 	const browser = await chromium.launch();
 	try {
@@ -66,6 +75,7 @@ async function captureDemoViews(): Promise<void> {
 		await page.waitForTimeout(900);
 		await page.locator(".agent-row").filter({ hasText: "Coding Agent" }).first().click();
 		await page.waitForTimeout(800);
+		await ensureWorkPanelOpen(page);
 
 		await page.locator(".work-panel-tab").filter({ hasText: "更改" }).first().click();
 		await page.waitForTimeout(600);
@@ -128,6 +138,7 @@ async function captureElectronViews(): Promise<void> {
 		if (await createAgent.isVisible()) await createAgent.click();
 		await page.locator(".composer textarea").waitFor();
 		await page.waitForTimeout(1500);
+		await ensureWorkPanelOpen(page);
 
 		const fileRow = page.locator(".file-tree-row").filter({ hasText: "README.md" }).first();
 		if ((await fileRow.count()) > 0 && (await fileRow.isVisible())) {

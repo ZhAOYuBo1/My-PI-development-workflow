@@ -20,9 +20,11 @@
 ### 恢复提示词（压缩后直接发这一段）
 
 ```text
-继续 CodePIddy 客户端 UI 改版。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-26 已提交并推送到 origin/main（内置终端换成 xterm + node-pty 真 PTY 并读取本机 Windows Terminal 默认 profile；README 重写并补回截图），待办清单已清空。
-字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端和结构清理都已验收或待验收，不要重做。
+继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
+再读 PRODUCT.md、DESIGN.md。批次 1-26 已提交并推送到 origin/main；批次 27（收尾清理）、批次 28（变更 diff 扩展 + Agent 操作菜单修复）、批次 29（工作区面板默认收起）已改完，待验收提交。
+字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
+Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
+后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
 当前 HEAD 以 `git log -1` 为准。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
@@ -48,11 +50,12 @@
 
 ## 范围
 
-- 只改 `packages/codepiddy-desktop/src/renderer/`（样式、图标、组件呈现）。
-- 不改业务逻辑、IPC、core、coding-agent。
+- 主体改 `packages/codepiddy-desktop/src/renderer/`（样式、图标、组件呈现）。
+- 需要时改外壳自己的 `packages/codepiddy-desktop/src/main` / `preload`、`packages/codepiddy-shared`、`packages/codepiddy-core`，以及独立的 `packages/codepiddy-*-extension`。
+- **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 26：准备推送）
+## 当前状态（2026-10-03 批次 29：工作区面板默认收起）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -70,7 +73,7 @@
 - 流式统计：`⚡` 字体字符已移除，改为 12×12 内联 SVG，避免字体缺字时出现豆腐块。
 - 思考强度：滑块改为轻量 canvas 波场，低档慢而疏、高档快而密，最高档有短促落点扫光；拖拽加入轻微磁吸。
 - 会话树弹窗：标题与摘要合并成安静头部，节点按深度使用 token 缩进；当前节点使用蓝色淡底和半像素强调环，Fork 按钮在悬停/聚焦时出现；空态补齐状态标识和说明。
-- 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并显示左侧文件列表 + 右侧完整 diff，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
+- 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并显示左侧文件列表 + 右侧完整 diff，patch 由 `@codepiddy/review-extension` 在 Write / Edit 前后抓快照生成并写回 tool result，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
 - 结构：旧玻璃层（`--cp-glass-*`、白色叠加、backdrop-filter 卡片）已整段删除，最终值合并进文件末尾的设计系统层；不再靠“后面再覆盖”维持外观。
 - `.impeccable/design.json`：`DESIGN.md` 的 schemaVersion 2 sidecar，含 OKLCH tonal ramps、阴影/动效/断点、9 个可渲染组件和叙事规则。
 - 内置终端：`xterm.js + node-pty` 真 PTY。右侧面板里是原生 shell，PSReadLine / Tab / Ctrl+C / vim / 选择复制全部由 shell 自己处理；shell、参数、字体、光标形状来自本机 Windows Terminal 的 `settings.json` 默认 profile（标准路径，不写死机器），ANSI 调色板按浅色背景重新取值。行式输入框、`TabExpansion2` helper、cwd marker 都已删除。
@@ -90,13 +93,18 @@
 - 已提交：`b5e30b2 feat(desktop): use meteor stream icon`（批次 21）
 - 已提交：`deb8d69 feat(desktop): mirror meteor stream icon`（批次 21）
 - 已提交：`6b6b95b feat(desktop): consolidate stylesheet layers and add design sidecar`（批次 22）
-- 待验收：内置终端真 PTY + Windows Terminal 配置适配（批次 24-25，取代批次 23 的补全方案）
+- 已提交：`0c1f84c feat(desktop): embed a real PTY terminal`（批次 23-25）
+- 已提交：`dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
+- 已提交：`dc6c403 docs: record README push`（批次 26 文档）
+- 待验收：批次 27 收尾清理（Impeccable 目录 gitignore + 终端按需加载 + 文档同步）
+- 待验收：批次 28 变更 diff 扩展 + Agent 操作菜单修复
+- 待验收：批次 29 工作区面板启动默认收起
 
-批次 1-21 的 UI 调整均已提交；详细过程见下方进度日志。
+批次 1-26 已提交；批次 27-29 待验收。详细过程见下方进度日志。
 
 ### 下一步
 
-批次 23-26 已验收 / 待推送。提交后把 `main` 推到 `origin/main`。
+批次 27-29 待用户验收后提交推送。之后从新增需求里挑：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -152,7 +160,7 @@
 - [x] `npm run typecheck --workspace=@codepiddy/desktop` 通过（2026-10-02 批次 8）
 - [x] `npm run build:codepiddy` 通过（2026-10-02 批次 8 复跑）
 - [x] 截图对比（2026-10-02：`.artifacts/ui-*.png`、`conv-*.png`、`spacing-*.png`，含 900px 窄窗）
-- [~] 用户持续确认中（批次 1-18 已验收，批次 19 待验收）
+- [x] 用户持续确认（批次 1-27 已验收）
 
 ## 进度日志
 
@@ -644,13 +652,59 @@
 
 验证：截图脚本跑通（无 DeprecationWarning）；`npm run check` 全绿。
 
+### 2026-10-03 批次 27：收尾清理（待验收）
+
+设计改版待办清空后的三件遗留清理。
+
+- `.gitignore` 新增 Impeccable 本地安装目录（`.github/agents/`、`.github/hooks/`、`.github/skills/`、`.pi/skills/impeccable/`），`git status` 不再出现约 38MB 的未跟踪文件；本地安装保留，需要空间时可直接删除后重装。
+- 终端改为按需加载：新增 `terminal-pane.tsx`，把 xterm / FitAddon / xterm.css / ANSI 主题从 `WorkPanel.tsx` 拆出；`WorkPanel` 用 `lazy` + `Suspense` 在第一次切到“终端”标签时加载，加载期间显示一行轻量提示。原先常驻挂载的行为不变，切走再切回不会重启 PTY。
+- `panel-icon-button.tsx`：把工作面板的图标按钮从 `WorkPanel.tsx` 抽成共用组件，供文件视图和终端视图复用。
+- `DESIGN.md`：Work Panel 的 Terminal 一节改成真 PTY 事实（Windows Terminal 默认 profile、PSReadLine / Tab / 选择复制原生行为）；删除 “Don't 用蓝色作为品牌强调色” 这条与 Blue-Is-Action Rule 冲突的旧禁令。
+- 验证：`npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。构建产物主包 367.9kB（gzip 112.3kB），xterm 独立为 `terminal-pane` chunk 335.8kB（gzip 85.0kB），500kB 告警消失；Playwright demo 验证首次进入页面 0 个 `terminal-pane` 请求，切到“终端”后 1 个，面板正常挂载（浏览器无 IPC，按预期显示桌面端提示）。
+
+### 2026-10-03 批次 28：变更 diff 走扩展快照 + Agent 操作菜单（待验收）
+
+用户反馈两件事：更改视图的 diff 不对（Markdown 列表行被当成删除、正文新增不是绿色）；右上角“...”点了没反应。
+
+根因：
+
+- diff 不对：`write` 的 tool result 没有 patch，面板拿到的是 write 的正文；`panelDiffLines` 用“行首是 + / -”判断是不是 diff，Markdown 的 `- 朝代：唐` 被当成删除行，其余行成了 context。
+- 菜单：`.agent-actions-menu-wrap` 是 `position: static`，菜单的定位祖先是 `.agent-pane`，`top: 100%` 把它放到整个面板底部（被 `.main-pane` 的 `overflow: hidden` 裁掉），看起来像没反应。
+
+按参考项目 PI-Desktop 的 message-owned review 思路实现（它在 host-core 里于 Write / Edit 执行前抓快照，把结构化 hunks 挂到 `details.review`）：
+
+- 新增 `packages/codepiddy-review-extension`：Pi 扩展，`tool_call` 执行前读旧文件（缺失 = 新文件，二进制 / 超 64KB 跳过），`tool_result` 执行后读新文件，用 `diff@8.0.4` 生成 unified patch，写回 `details.patch` / `details.diff` / `details.review`。**不改 Pi core**。
+- 打包与启动接线：`build-main.mjs` → `dist/runtime-extensions/review.js`；`build-codepiddy-runtime.mjs` → `.artifacts/codepiddy-runtime/extensions/review.js`；`startProcess` 与 runtime probe 都加 `--extension review.js`（开发态走源码 `packages/codepiddy-review-extension/index.ts`）。
+- 桌面端：`tool_execution_end` 优先取 `event.result.details.patch`；`projectToolToPanel` 优先用 patch；`panelDiffLines` 改成严格判断（必须有 `@@` hunk 头或 `---/+++` 文件头），非 diff 的 write / edit 正文整块按新增；`inferPanelPathFromText` 优先取 `+++` 路径，修掉 `--- /dev/null` 导致的新文件路径丢失。
+- 菜单：`.agent-actions-menu-wrap` 改 `position: relative`，菜单 `right: 0`，现在在按钮正下方展开。
+
+验证：
+
+- `@codepiddy/review-extension` 单测 3 项、desktop `work-panel` 单测 4 项全绿。
+- 扩展集成验证（真实构建产物 `review.js` + 临时文件）：诗 → Markdown 覆盖，additions 6 / deletions 2，patch 含 `-《金缕衣》` 和 `+- 朝代：唐`。
+- Playwright demo：菜单在按钮下方 8px 展开，四项 menuitem 可见。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿；主包 368.3kB / gzip 112.5kB，xterm chunk 保持按需。
+
+### 2026-10-03 批次 29：工作区面板启动默认收起（待验收）
+
+用户反馈：不希望一打开客户端右侧工作区面板就是展开的，默认关闭。
+
+- `App.tsx` 的 `workPanelVisible` 从“读 localStorage，默认 true”改成启动固定 `false`；标题栏 panel 图标继续在当前会话里切换，宽度记忆 `codepiddy.work-panel.width` 保持不变。
+- `capture-screenshots.mts` 增加 `ensureWorkPanelOpen()`，截图脚本在点标签前显式打开面板，否则 README 截图会拍到收起状态。
+- `DESIGN.md` 的 Work Panel 增加 Visibility 规则：只记忆宽度，不记忆可见性。
+
+验证：Playwright demo 实测进入会话后 `.work-panel` 数量为 0（收起），标题栏显示“显示文件管理器”按钮；点击后 `.work-panel` 数量为 1。`npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
 2. [x] **工作区面板多视图**：批次 19-21 已实现并在真实 Electron 中验证，随 `b2644f5`、`b5e30b2` 提交。
 3. [x] **结构清理**：批次 22 删除旧玻璃层，白色叠加只剩侧栏 sheen 两处；已验收。
 4. [x] **`.impeccable/design.json` sidecar**：批次 22 已写入 schemaVersion 2；已验收。
-5. [x] **内置终端**：批次 24-25 用 `xterm + node-pty` 真 PTY，并读取本机 Windows Terminal 默认 profile；待验收。
+5. [x] **内置终端**：批次 24-25 用 `xterm + node-pty` 真 PTY，并读取本机 Windows Terminal 默认 profile；已验收。
+6. [x] **收尾清理**：批次 27 把 Impeccable 安装目录加入 `.gitignore`，终端改为按需加载以消除大包告警，并同步过期设计文档。
+7. [x] **变更 diff 证据**：批次 28 新增 `@codepiddy/review-extension`，Write / Edit 前后快照生成 unified patch；同时修复 Agent 操作菜单定位。
+8. [x] **工作区面板默认收起**：批次 29 启动不再自动展开右侧面板，只保留宽度记忆。
 
 ## 未提交状态
 
@@ -659,11 +713,19 @@
 - `0c1f84c feat(desktop): embed a real PTY terminal`（批次 23-25）
 - `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 
-工作树除 Impeccable 的 untracked 安装目录外是干净的。
+批次 27-29 已改完，待用户验收后提交。改动范围：
 
-注意：`package-lock.json` 有改动（新增 xterm / node-pty），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
+- `.gitignore`：加入 Impeccable 本地安装目录，工作树恢复干净。
+- `WorkPanel.tsx` / `terminal-pane.tsx` / `panel-icon-button.tsx` / `main.tsx` / `styles.css`：终端拆成按需加载模块，消除 xterm 进主包的 702kB 告警。
+- `DESIGN.md` / `reference-pi-desktop.md`：Terminal 一节改成真 PTY 事实，删掉与 Blue-Is-Action 冲突的旧禁令；补记参考项目的 message-owned review 机制。
+- `packages/codepiddy-review-extension/`：新增 Pi 扩展，执行前后快照生成 patch，写回 tool result details。
+- `App.tsx` / `work-panel.ts` / `styles.css`：优先展示 details.patch，严格 diff 判定，修复新文件路径推断和 Agent 操作菜单定位。
+- `App.tsx` / `capture-screenshots.mts`：工作区面板启动默认收起，截图脚本显式打开。
+- `package.json` / `package-lock.json`：新增 review workspace 与 `diff@8.0.4` 依赖，提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
-另外：`npx impeccable install` 把 Impeccable 装进了项目内的 `.github/` 与 `.pi/skills/impeccable/`（engine v0.1.11，122 个文件约 38.5MB，含两个 17MB 的 `impeccable.exe`）。体积太大，未提交，保持 untracked。
+注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
+
+另外：`npx impeccable install` 把 Impeccable 装进了项目内的 `.github/` 与 `.pi/skills/impeccable/`（engine v0.1.11，122 个文件约 38.5MB，含两个 17MB 的 `impeccable.exe`）。体积太大，不提交；批次 27 已把它们加入 `.gitignore`，本地仍可继续使用，需要回收空间时直接删除目录即可。
 
 根目录不再保留原始 `流星.svg`，唯一下载源文件为 `codepiddy-icons/meteor.svg`，旧 `codepiddy-icons/lightning.svg` 已删除。参考仓库 `E:\mypi-refs\dsh-effort-dial` 已删除。后续如再改锁文件仍需 `PI_ALLOW_LOCKFILE_CHANGE=1`。
 
@@ -680,7 +742,8 @@
 | 2026-10-02 | 跳过 AI 生成的效果图环节 | 当前运行环境没有原生图像生成能力，`DESIGN.md` 即为视觉契约 |
 | 2026-10-02 | UI 字体采用 `Monaspace Argon + Maple Mono NF CN` | 用户要求英文和中文分别优化，且两份字体均适合作为技术工具字体 |
 | 2026-10-02 | app icon 使用透明黑白矢量，不再保留图片底模 | 用户确认原图白色背景造成分层 |
+| 2026-10-03 | 变更 diff 走 Pi 扩展快照（`tool_call` 前抓旧内容、`tool_result` 后写 patch），不改 Pi core | 用户明确要求 Pi core 可更新，增强只能走扩展点 |
 
 ## 待用户确认
 
-- 暂无
+- 批次 27（收尾清理）、批次 28（变更 diff 扩展 + Agent 操作菜单）和批次 29（工作区面板默认收起）待验收。
