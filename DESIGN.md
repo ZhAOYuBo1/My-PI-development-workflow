@@ -286,6 +286,10 @@ components:
 - **Typography:** 会话标题 13px/500，元信息 11.5px/400 弱墨色。
 - **States:** 悬停 `#17181a0a`，选中纯白抬起，未读用强调色圆点而不是加粗整行。
 
+### Message Actions
+
+- 用户消息的灰色气泡只包裹角色、正文和图片，`复制` 放在气泡外；每轮最终 AI 回复的 `复制` 旁边显示 `Fork`。Fork 使用 `GitBranch` 图标，点击后从该轮对应用户消息的 Pi entryId 创建分支，并把原消息填回输入框；不要求打开会话树。操作按钮保持 24px 高度、透明底、悬停加深，Fork 悬停时才使用强调蓝。
+
 ### Work Panel
 
 右侧工作区是转录流的伴随面板，固定提供三个视图：`文件`、`更改`、`终端`。文件和更改只投影现有 tool 事件；终端是项目根目录下的真实 PTY 会话。
@@ -295,7 +299,7 @@ components:
 - **Tabs:** 顶部 44px 工具栏内放 28px 视图标签；当前标签用白底 + raised 投影。数量只显示在“更改”标签内，使用小号 pill，不抢主标签。
 - **Files:** 文件树行高 28px，目录和文件共用 Lucide 图标；选中行白底抬起。选中文件后整块面板切换为全宽预览，返回键回到树，不做左右双栏挤压。
 - **Viewer:** 预览头显示文件名、相对路径、大小和复制/换行操作；Markdown 复用现有渲染，代码保留行号并默认自动换行。
-- **Changes:** 从最新一轮对话中的 `edit / write` 工具事件按文件分组。左列是更改文件列表，右列是选中文件的完整 diff；新增行用绿色、删除行用红色，显示行号、相对路径和 `+ / −` 统计，并提供“在文件中打开”回到 Files。diff 不是从 tool 文本猜出来的：`@codepiddy/review-extension` 在 Write / Edit 执行前抓旧内容、执行后生成 unified patch，写回 tool result 的 `details.patch`；桌面端优先展示这份 patch，拿不到 patch 时才把 write 的正文整块按新增展示。只有同时出现 `@@` hunk 头或 `---/+++` 文件头才算 diff，避免 Markdown 列表的 `- ` 行被误判成删除。按项目 + 工作项 + Agent 角色 + 轮次持久化最近 80 条变更，重启客户端或更新 Pi 核心后仍可查看。
+- **Changes:** 从最新一轮对话中的 `edit / write` 工具事件按文件分组，纵向堆叠成可展开卡片。每张卡片默认折叠，头部显示文件名、相对路径和 `+ / −` 统计；展开后原地显示该文件完整 diff，新增行绿色、删除行红色，带行号和 hunk 头，并提供“在文件中打开”回到 Files。展开区有独立最大高度和滚动，长 diff 不会把整个面板拉长。diff 不是从 tool 文本猜出来的：`@codepiddy/review-extension` 在 Write / Edit 执行前抓旧内容、执行后生成 unified patch，写回 tool result 的 `details.patch`；桌面端优先展示这份 patch，拿不到 patch 时才把 write 的正文整块按新增展示。只有同时出现 `@@` hunk 头或 `---/+++` 文件头才算 diff，避免 Markdown 列表的 `- ` 行被误判成删除。按项目 + 工作项 + Agent 角色 + 轮次持久化最近 80 条变更，重启客户端或更新 Pi 核心后仍可查看。
 - **Terminal:** 面板内嵌项目根目录下的真实 PTY 会话（xterm.js + node-pty），不是自绘的输入行。shell、参数、字体和光标形状读取 Windows Terminal 的默认 profile（稳定版 / 预览版 / 非打包版的标准路径，没有配置时回退 PATH），PSReadLine、Tab 补全、Ctrl+C、选择复制等原生行为全部保留。顶部只显示 shell 名称和运行状态；ANSI 调色板按浅色背景重取，保证命令与参数在白底上可读。关闭项目或退出应用时同步结束终端进程。
 - **Empty:** 三个视图都使用现有 `state-mark` 空态，说明当前会话会产生什么内容，而不是只显示“暂无数据”。
 

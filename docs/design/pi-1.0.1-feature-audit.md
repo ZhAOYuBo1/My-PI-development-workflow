@@ -1,0 +1,286 @@
+# Pi 1.0.1 客户端功能审计
+
+审计日期：2026-10-03  
+审计对象：`@earendil-works/pi-coding-agent` 1.0.1  
+审计范围：Pi 1.0.1 文档、RPC、SDK、原生 MCP 与当前 CodePIddy 外壳
+
+## 当前版本事实
+
+- 当前机器实际运行的 Pi 运行时是 `1.0.1`：
+  `%APPDATA%\@codepiddy\desktop\pi-updates\active.json`
+- 仓库内置运行时已替换为固定 `1.0.1` bundle：
+  `packages/coding-agent-runtime/dist/bundle` + `packages/coding-agent-runtime/package.json`。
+- `packages/coding-agent` 等上游源码仍保留在仓库中，但客户端内置运行时不再由它们构建，也不再在 build 时联网升级。
+- Pi 1.0.1 已原生依赖 `@earendil-works/pi-mcp`，MCP 不再依赖外部插件。
+- 客户端当前使用的 RPC 接口在 1.0.1 下已验证：
+  `get_state`、`get_messages`、`get_session_tree`、`get_available_models`、`get_commands`。
+- Pi 1.0.1 的 `/login`、`/logout` 是交互式 TUI 命令；RPC 没有直接暴露认证命令。SDK 公开了
+  `ModelRuntime.login()` / `ModelRuntime.logout()`，因此客户端应直接提供 Provider 登录界面，
+  通过外壳侧 helper 调用 SDK，不把 `/login`、`/logout` 放进客户端命令体系，也不修改 Pi core。
+
+## MCP 结论
+
+### 当前状态
+
+- 用户自定义 MCP 服务已经读写 Pi 原生 `~/.pi/agent/mcp.json`。
+- `web_search` 目前走 `packages/codepiddy-tavily-tool-extension`：
+  - 通过 `CODEPIDDY_TAVILY_MCP_ENTRY` 注入本地 Tavily MCP 脚本；
+  - 扩展内部创建 MCP client，并注册裸工具名 `web_search`。
+- 这条 Tavily 通道和 Pi 原生 MCP 是两套生命周期、两套配置来源。
+
+### 目标状态
+
+- 不再维护 `CODEPIDDY_TAVILY_MCP_ENTRY` 这类独立注入通道。
+- 客户端继续保留独立的 `web_search` / Tavily 设置入口和 Key 输入。
+- Tavily Key 继续由客户端加密保存，启动 Agent 时只注入 `TAVILY_API_KEY` 环境变量。
+- `web_search` 服务写入 Pi 原生 MCP 配置，建议形态：
+
+```json
+{
+  "mcpServers": {
+    "web_search": {
+      "command": "node",
+      "args": ["<packaged-or-dev-tavily-search-mcp.js>"],
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      },
+      "description": "Tavily web search",
+      "exposure": "direct",
+      "toolExposure": {
+        "web_search": "direct"
+      }
+    }
+  }
+}
+```
+
+- 配置统一后，`web_search` 会由 Pi 原生 MCP 连接、重连、权限、曝光和日志系统管理。
+- 需要确认的命名问题：Pi 原生 MCP 工具名固定为 `mcp__<server>__<tool>`，因此实际工具名会变成
+  `mcp__web_search__web_search`。当前 Pi 1.0.1 没有发现原生别名机制。若模型侧必须保持裸名
+  `web_search`，需要单独决定名称适配策略；否则应接受原生 MCP 命名。
+
+### Pi 1.0.1 原生 MCP 能力
+
+- 用户级 `~/.pi/agent/mcp.json`
+- 项目级 `.pi/mcp.json`
+- 项目级只覆盖 `enabled`、`exposure`、`toolExposure`
+- stdio：`command`、`args`、`env`、`cwd`
+- HTTP：`url`、`headers`
+- `timeout`
+- `enabled`
+- `exposure`: `codemode` / `deferred` / `direct` / `hidden`
+- `toolExposure`: 精确名与 `*` 模式
+- `description`
+- OAuth：`clientId`、`clientSecret`、`callbackPort`、`callbackUrl`、`scope`
+- `oauth.clientName`
+- `oauth.clientRegistration: "cimd"`
+- `oauth.authServerMetadataUrl`
+- `auth.provider`
+- 环境变量插值 `${NAME}`
+- 命令型值 `!command`
+- MCP resources
+- MCP 权限 annotations
+- `~/.pi/agent/mcp-auth.json`
+- `~/.pi/agent/mcp.log`
+- `/mcp`
+- `pi mcp add/remove/list/login/logout`
+
+## Pi 1.0.1 功能面与客户端覆盖
+
+状态说明：
+
+- `已覆盖`：客户端已有可用入口或已有外壳实现。
+- `部分覆盖`：有基础实现，但缺少 Pi 1.0.1 的完整能力。
+- `缺失`：客户端没有对应入口或实现。
+- `TUI-only`：属于 Pi 终端界面能力，本轮客户端明确不需要复刻。
+
+### 模型、认证与 Provider
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| `/model` | 已覆盖 | 模型选择器、模型搜索、当前模型 |
+| `/thinking` | 已覆盖 | Thinking 波场选择器 |
+| Provider API Key | 部分覆盖 | `ProviderSettings` 可写 `models.json`，Key 加密保存 |
+| Provider 登录 | 已完成验证，待验收 | 客户端设置页入口；隔离目录下 API Key 登录成功写入 `auth.json` |
+| Provider 退出 | 已实现，待验收 | 客户端设置页入口，调用 `ModelRuntime.logout()` |
+| OAuth 登录 | 已接入，待真实 Provider 验收 | auth URL、manual code、device code、进度和取消事件已打通；仍需真实账号端到端验收 |
+| 环境变量 Key | 部分覆盖 | 启动 Agent 时已有 Provider env 注入基础 |
+| `!command` Key | 缺失 | Pi 原生支持命令型 Key，客户端没有配置入口 |
+| `/scoped-models` | 缺失 | 交互式模型循环范围配置 |
+| `/llama` | 缺失 | llama.cpp router、模型管理和分类 |
+| 自定义 Provider | 部分覆盖 | `models.json` 支持基础 Provider，没有 Provider extension 管理 |
+| 虚拟模型 | 缺失 | 没有虚拟模型注册和路由状态 UI |
+| Classifier models | 缺失 | Pi 1.0.1 可通过 codemode 调用，客户端无 UI |
+| Image models | 缺失 | Pi 1.0.1 支持 codemode 图片生成，客户端无 UI |
+
+### 会话、上下文与分支
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| `/new` | 已覆盖 | 新建 Session |
+| `/resume` | 已覆盖 | 文件选择恢复 JSONL |
+| `/name` | 部分覆盖 | 客户端要求传参，不能像 Pi 一样仅查询当前名称 |
+| `/session` | 部分覆盖 | 当前主要打开会话树，不是完整 stats 面板 |
+| `/tree` | 已覆盖 | 会话树弹窗 |
+| `/fork` | 已覆盖 | 会话树 Fork 和消息级 Fork |
+| `/clone` | 已覆盖 | 克隆当前 Session |
+| `/compact` | 已覆盖 | 手动压缩 |
+| `/import` | 缺失 | 没有独立导入命令，只有 `/resume` 文件选择 |
+| 自动压缩设置 | 部分覆盖 | 有 compact 操作，没有完整设置 UI |
+| 分支摘要设置 | 缺失 | Pi 1.0.1 有 branch summary 配置 |
+| Per-model compaction overrides | 缺失 | `compaction.modelOverrides` 无 UI |
+| Session 存储控制 | 缺失 | session dir、in-memory、外部存储等无 UI |
+
+### MCP
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| 原生 `mcp.json` | 部分覆盖 | 基础 stdio/http 服务可配置 |
+| 项目级 `.pi/mcp.json` | 缺失 | 没有项目 override UI |
+| `enabled` | 部分覆盖 | 当前用 `disabled` 字段，不是 1.0.1 的 `enabled` |
+| `exposure` | 缺失 | 无 UI |
+| `toolExposure` | 缺失 | 无 UI |
+| `description` | 缺失 | 无 UI |
+| `timeout` | 缺失 | 无 UI |
+| MCP OAuth | 缺失 | 无登录、退出、重连 UI |
+| CIMD / clientName / authServerMetadataUrl | 缺失 | 无高级字段 |
+| `auth.provider` | 缺失 | 无 UI |
+| MCP resources | 缺失 | 无资源浏览入口 |
+| MCP permissions annotations | 部分覆盖 | 有统一 MCP 权限开关，但没有按 annotation 展示 |
+| `/mcp` | 缺失 | 命令菜单没有入口 |
+| `pi mcp add/remove/list/login/logout` | 缺失 | 没有 CLI 包装入口 |
+| Tavily `web_search` | 需要迁移 | 当前是独立扩展通道，目标是原生 MCP |
+
+### 导出、分享与诊断
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| `/copy` | 已覆盖 | 复制最后 Assistant 消息 |
+| `/export` | 已覆盖 | HTML / JSONL |
+| `/share` | 缺失 | 没有上传 Session、返回 viewer link |
+| `/bug` | 缺失 | 没有 Pi bug report / zip 导出 |
+| `/changelog` | 已覆盖 | 客户端自定义输出 |
+| `/hotkeys` | 已覆盖 | 客户端自定义输出 |
+
+### 运行时、工具与资源
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| Codemode | 部分覆盖 | Pi 后端已有，客户端没有设置、脚本状态或结果面板 |
+| Tool Search | 部分覆盖 | Pi 后端已有，客户端只展示工具调用结果 |
+| Extensions | 部分覆盖 | 客户端自带权限、Tavily、review、retry 扩展，没有通用管理 UI |
+| Tool exposure | 缺失 | 没有按工具设置 direct/deferred/codemode/hidden |
+| Tool rendering | 缺失 | Pi 1.0.1 支持任意工具 renderer，客户端没有扩展入口 |
+| Skills | 已覆盖 | 角色 Skill 分配 |
+| Prompt Templates | 缺失 | 没有模板管理 UI |
+| Packages | 缺失 | 没有 Pi package 安装、更新、移除 UI |
+| Shell aliases | 缺失 | 没有设置 UI |
+| Cache Warming | 缺失 | 没有设置、状态或费用提示 |
+| Retry 设置 | 部分覆盖 | 通过 Pi settings 写默认值，没有完整设置 UI |
+| Telemetry | 缺失 | 没有 Pi 原生 telemetry 设置 UI |
+| Update / rollback | 已覆盖 | 客户端 Pi 运行时更新和回退 |
+
+### 交互、终端与 UI
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| Settings | 部分覆盖 | 已有客户端自己的设置页，不等于 Pi 全量 settings |
+| Themes | TUI-only | 不需要在客户端复刻 |
+| Keybindings | TUI-only | 不需要在客户端复刻 |
+| Fullscreen TUI | TUI-only | 不需要在客户端复刻 |
+| Terminal setup | TUI-only | 不需要在客户端复刻 |
+| Windows/WSL 说明 | TUI-only | 客户端已有自己的内置终端方案 |
+| Quiet startup | TUI-only | 不需要在客户端复刻 |
+
+### SDK、RPC 与集成
+
+| Pi 1.0.1 功能 | 客户端状态 | 备注 |
+| --- | --- | --- |
+| RPC 命令 | 部分覆盖 | 当前客户端使用其中一部分 |
+| RPC Extension UI | 部分覆盖 | 已有 select/confirm/input/editor/notify 的基础处理 |
+| SDK Session lifecycle | 部分覆盖 | 外壳主要走 RPC，没有直接接 SDK |
+| SDK Auth | 已完成验证，待验收 | 客户端通过 helper 调 `ModelRuntime.login/logout` |
+| SDK ModelRuntime | 缺失 | 尚未直接接入外壳 |
+
+## 后续任务清单
+
+### 阶段 0：清理和控制版本（已完成）
+
+1. 已回退构建时自动安装 Pi 的改动。
+2. 已恢复“内置 Pi 版本由仓库固定、由开发手动升级”的构建方式。
+3. 已手动把客户端内置 Pi 替换为固定 `1.0.1` bundle。
+4. 已用 RPC smoke test 验证固定 bundle 的 state / messages / tree / models / commands。
+
+### 阶段 1：MCP 统一
+
+5. 保留客户端 Tavily / `web_search` 独立设置卡和加密 Key。
+6. 删除 `CODEPIDDY_TAVILY_MCP_ENTRY` 独立注入通道。
+7. 将 `web_search` 写入 Pi 原生 `mcp.json`，env 使用 `${TAVILY_API_KEY}`。
+8. 决定原生 MCP 工具名策略：
+   - 接受 `mcp__web_search__web_search`
+   - 或评估是否保留极薄的名称适配层
+9. 升级 MCP 设置 UI：项目级 override、enabled、exposure、toolExposure、description、timeout、OAuth。
+10. 增加 `/mcp` 命令入口和 `pi mcp` 包装。
+
+### 阶段 2：认证与 Provider
+
+11. 审核并验收客户端设置页的 Provider 登录 / 退出 UI；不接入 `/login`、`/logout` 命令。
+12. 支持 Provider OAuth、API Key、device code、manual code 和浏览器回调。
+13. 登录成功后刷新 Provider、模型列表和当前 Agent 配置。
+14. 增加 Provider 状态、退出登录和凭据来源显示。
+15. 增加 `!command` Key 和 `auth.provider` 配置。
+
+### 阶段 3：会话和命令补齐
+
+16. `/scoped-models`
+17. `/import`
+18. `/trust` 持久化
+19. `/session` 完整统计信息
+20. `/name` 无参查询
+21. `/llama`
+22. `/share`
+23. `/bug`
+
+### 阶段 4：高级运行时能力
+
+24. Cache Warming 设置和状态
+25. 自动压缩、分支摘要、per-model compaction overrides
+26. Codemode 设置和运行结果视图
+27. Tool Search / Tool Exposure 设置
+28. Prompt Templates
+29. Pi Packages
+30. Shell aliases
+31. Telemetry 设置
+32. 自定义 Provider / 虚拟模型 / classifier / image models
+
+### 阶段 5：回归和收尾
+
+33. 用 Pi 1.0.1 回归会话、Fork、模型、Thinking、压缩、diff、终端、MCP、登录。
+34. 跑：
+   - `npm run check`
+   - `npm run typecheck --workspace=@codepiddy/desktop`
+   - `npm run build:codepiddy`
+35. 更新 `PRODUCT.md`、`DESIGN.md`、`docs/design/redesign-plan.md` 和本文件。
+36. 按验收结果拆分提交并推送。
+
+## 当前未提交的原型代码
+
+以下代码是审计过程中已经写入但尚未验收的原型，后续必须先审核，再决定保留或回退：
+
+- 固定内置 Pi 1.0.1 bundle：
+  `packages/coding-agent-runtime/`、`scripts/build-codepiddy-runtime.mjs`
+- 统一自定义下拉菜单：
+  `packages/codepiddy-desktop/src/renderer/components/select-menu.tsx`、
+  `packages/codepiddy-desktop/src/renderer/components/ProviderSettings.tsx`、
+  `packages/codepiddy-desktop/src/renderer/components/McpSettings.tsx`、
+  `packages/codepiddy-desktop/src/renderer/App.tsx`、`styles.css`
+- 登录 helper 和 IPC：
+  `packages/codepiddy-desktop/scripts/pi-auth-helper.mjs`、
+  `packages/codepiddy-desktop/src/main/pi-auth.ts`、
+  `packages/codepiddy-shared/src/index.ts`、
+  `packages/codepiddy-desktop/src/preload/index.ts`
+- 设置页 Provider 登录入口和弹窗：
+  `packages/codepiddy-desktop/src/renderer/App.tsx`、
+  `packages/codepiddy-desktop/src/renderer/styles.css`
+
+`packages/coding-agent-runtime` 是仓库内固定版本，不由 build 更新；升级时必须手动替换该目录并跑 RPC smoke test。

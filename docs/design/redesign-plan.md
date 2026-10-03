@@ -4,7 +4,7 @@
 
 ## 如何续接（压缩后先读这里）
 
-1. 读 [PRODUCT.md](../../PRODUCT.md)（定位、边界、反参考）→ [DESIGN.md](../../DESIGN.md)（配色、字体、层次、组件规则）→ [reference-pi-desktop.md](./reference-pi-desktop.md)（主参考项目拆解）→ [reference-dsh-effort-dial.md](./reference-dsh-effort-dial.md)（思考强度波场拆解）。
+1. 读 [PRODUCT.md](../../PRODUCT.md)（定位、边界、反参考）→ [DESIGN.md](../../DESIGN.md)（配色、字体、层次、组件规则）→ [reference-pi-desktop.md](./reference-pi-desktop.md)（主参考项目拆解）→ [reference-dsh-effort-dial.md](./reference-dsh-effort-dial.md)（思考强度波场拆解）→ [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)（Pi 1.0.1 功能审计和后续清单）。
 2. 翻到本文件底部「进度日志」，读最后一条，确认上一批做到哪、验证到什么程度。
 3. 恢复环境：
    - 依赖已装过，需要时 `npm install --ignore-scripts`
@@ -22,11 +22,11 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-35 已提交并推送到 origin/main（`3f5284a`），待办清单已清空。
-字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README、截图、设置分区、MCP / Provider 配置、Agent 会话新建 / 切换 / 删除、会话 Fork、快速定位条都已验收，不要重做。
+再读 PRODUCT.md、DESIGN.md、docs/design/pi-1.0.1-feature-audit.md。批次 1-35 已提交并推送到 origin/main（`c8e863d`），批次 36 更改 diff 卡片堆叠、批次 37 用户消息级快捷 Fork 已实现并完成截图验证，正在等待验收，工作树尚未提交。
+客户端设置页的 Provider 登录/退出已经完成实现和隔离验证，正在等待验收；登录不接入 /login、/logout 命令。内置 Pi 已改为仓库内固定 1.0.1 bundle，build 不再联网或自动升级；所有下拉列表已统一为自定义 SelectMenu。
+字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README、截图、设置分区、MCP / Provider 配置、Agent 会话新建 / 切换 / 删除、会话 Fork、快速定位条都已验收，不要重做。文件搜索和终端多标签已取消，不再推进。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result / agent_before_settle）或 packages/codepiddy-desktop 自己的 main / renderer。
 UI 改完 build 通过后自动重启客户端，不用询问用户。
-后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
 当前 HEAD 以 `git log -1` 为准。
 
 仓库在 E:\mypi，依赖已装好。改完必须跑：
@@ -57,7 +57,7 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 35：对话快速定位条升级）
+## 当前状态（2026-10-03 批次 38：Pi 1.0.1 审计与客户端 Provider 登录，待验收）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -75,11 +75,17 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - 流式统计：`⚡` 字体字符已移除，改为 12×12 内联 SVG，避免字体缺字时出现豆腐块。
 - 思考强度：滑块改为轻量 canvas 波场，低档慢而疏、高档快而密，最高档有短促落点扫光；拖拽加入轻微磁吸。
 - 会话树弹窗：标题与摘要合并成安静头部，节点按深度使用 token 缩进；当前节点使用蓝色淡底和半像素强调环，Fork 按钮在悬停/聚焦时出现；空态补齐状态标识和说明。
-- 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并显示左侧文件列表 + 右侧完整 diff，patch 由 `@codepiddy/review-extension` 在 Write / Edit 前后抓快照生成并写回 tool result，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
+- 消息操作：用户消息的灰色气泡只包裹正文，`复制` 放在气泡外；每轮最终 AI 回复的 `复制` 旁边显示 `Fork`，从该轮对应用户消息的 Pi entryId 创建分支并把原消息填回输入框。
+- 工作区面板：右侧从单一文件树升级为 `文件 / 更改 / 终端` 三视图；文件预览改为全宽切换；更改按文件分组并纵向堆叠为默认折叠的卡片，点开后原地显示该文件完整 diff，patch 由 `@codepiddy/review-extension` 在 Write / Edit 前后抓快照生成并写回 tool result，历史按项目 + 工作项持久化；终端通过最小 IPC 接入项目根目录 PowerShell，输出可选择复制并同步真实 `cwd`。
 - 结构：旧玻璃层（`--cp-glass-*`、白色叠加、backdrop-filter 卡片）已整段删除，最终值合并进文件末尾的设计系统层；不再靠“后面再覆盖”维持外观。
 - `.impeccable/design.json`：`DESIGN.md` 的 schemaVersion 2 sidecar，含 OKLCH tonal ramps、阴影/动效/断点、9 个可渲染组件和叙事规则。
 - 内置终端：`xterm.js + node-pty` 真 PTY。右侧面板里是原生 shell，PSReadLine / Tab / Ctrl+C / vim / 选择复制全部由 shell 自己处理；shell、参数、字体、光标形状来自本机 Windows Terminal 的 `settings.json` 默认 profile（标准路径，不写死机器），ANSI 调色板按浅色背景重新取值。行式输入框、`TabExpansion2` helper、cwd marker 都已删除。
 - README 已重写并补回截图（`docs/images/`）；截图由 `packages/codepiddy-desktop/scripts/capture-screenshots.mts` 生成，脚本自己造临时项目，不依赖本机真实项目。
+- Pi 版本现状：当前机器实际运行 `1.0.1`，仓库内置运行时也已固定为 `1.0.1` bundle（`packages/coding-agent-runtime`）；build 只复制该固定目录，不联网、不自动升级。
+- Pi 1.0.1 原生 MCP：`@earendil-works/pi-mcp` 已内置；客户端基础 MCP 已读写原生 `mcp.json`。`web_search` 仍需迁移到原生 MCP 配置，但客户端保留独立 Tavily 设置和加密 Key。
+- 完整功能审计、MCP 方案、缺失功能矩阵和分阶段任务清单见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
+- 客户端设置页 Provider 登录/退出已完成实现和隔离验证，待验收；不接入 `/login`、`/logout` 命令。
+- 设置页和登录弹窗的所有下拉列表已统一为自定义 `SelectMenu`，列表最大高度受控，不再使用系统原生超长弹层。
 
 ### 本轮改动清单
 
@@ -101,13 +107,15 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 - 已提交：`396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 - 已提交：`f4a86c9 feat(desktop): move gateway retry policy out of Pi core`（批次 30）
 - 已提交：`b6bb6c5 docs(desktop): record newest-Pi development stance`
-- 待验收：批次 31 设置页左侧分区导航 + MCP 服务 / Provider 与模型配置
+- 待验收：批次 36 更改 diff 卡片堆叠
+- 待验收：批次 37 用户消息级快捷 Fork
+- 待验收：批次 38 Pi 1.0.1 固定内置版本、客户端 Provider 登录与统一 SelectMenu
 
-批次 1-30 已提交；批次 31 待验收。详细过程见下方进度日志。
+批次 1-35 已提交；批次 36-38 待验收。详细过程见下方进度日志和 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
 
 ### 下一步
 
-批次 31 待用户验收后提交推送。之后从新增需求里挑：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
+批次 36-38 待用户验收后提交推送。批次 38 的版本控制收口已完成：build 只复制固定 bundle，后续升级必须手动替换 `packages/coding-agent-runtime`。文件搜索和终端多标签已取消，不作为后续待办。
 
 ### 改版前的基线（历史记录，仅作对照）
 
@@ -783,6 +791,63 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 
 验证：demo 只有 1 个 turn（`turns.length < 2`），定位条按设计不渲染；代码通过 typecheck、`npm run check`、`npm run build:codepiddy`。真实会话（68 条消息、多轮）重启后可见 dock 放大效果。
 
+### 2026-10-03 批次 36：更改 diff 卡片堆叠（待验收）
+
+参考项目 PI-Desktop 的 `ReviewTab` / `ReviewChangeCard`：文件变更不是左右分栏，而是纵向堆叠的可展开卡片；卡片默认折叠，展开后显示该文件的 hunk 和行级 diff。
+
+- `WorkPanel.tsx` 删除 `selectedChangeKey` 和左右分栏浏览状态，改为 `ChangeStack` + `ChangeStackCard`。
+- 每个文件一张卡片，头部显示展开箭头、文件名、相对路径和 `+ / −` 统计；默认 `aria-expanded="false"`，点击后在原位置展开。
+- 展开区域显示完整 diff，新增绿色、删除红色、保留行号和 hunk 头；展开区最大高度 `min(360px, 42vh)`，内部滚动，长 diff 不拉长整个面板。
+- “在文件中打开”按钮保留在卡片头部；顶部汇总同时显示文件总数和总 `+ / −`。
+- 新增展开动效和 `prefers-reduced-motion` 降级；不改 `@codepiddy/review-extension` 的 patch 生成和变更持久化。
+- README 的“更改”说明与截图脚本同步：截图会展开第一张卡片，展示折叠/展开两种状态。
+
+验证：
+
+- Playwright demo：更改页初始 `cardCount=1`、`aria-expanded=false`、展开体数量 `0`；点击后 `aria-expanded=true`、展开体数量 `1`。
+- 1600px 视口无横向溢出：`bodyClientWidth=1600`、`bodyScrollWidth=1600`、面板宽度 `480px`；300px 窄面板下 stack / toggle 的 `clientWidth` 与 `scrollWidth` 一致。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+- `packages/codepiddy-desktop/test/work-panel.test.ts` 4 项通过。
+- 截图：`.artifacts/diff-stack-collapsed.png`、`.artifacts/diff-stack-expanded.png`，README 截图已重新生成。
+
+### 2026-10-03 批次 37：用户消息级快捷 Fork（待验收）
+
+用户澄清：不要标题栏 Fork 当前会话，也不要用户消息气泡里的 Fork；要在每轮最终 AI 回复的“复制”旁边直接 Fork 这一轮。
+
+- `App.tsx` 把用户消息拆成 `.message-user-bubble` 和气泡外 `.message-actions`，灰色气泡只包裹角色、正文和图片；`复制` 移到气泡外并保持右侧对齐。
+- `Fork` 只出现在每轮最终 AI 回复的操作行，和该回复的 `复制` 并排；点击后调用现有 `forkAgentSession(entryId)`，不打开会话树。
+- 用户消息的 Pi entryId 从 `agentSessionSnapshots[agentId].nodes` 的 forkable user nodes 映射到转录项，按规范化文本和 timestamp 选择匹配项；同一轮的所有 assistant 消息继承该轮的 entryId，但只有最终 AI 回复显示 Fork。
+- Fork 成功后沿用现有行为：关闭会话树、把原消息填回输入框、聚焦输入框并显示 toast；正在 Fork 的按钮显示 `Fork 中…` 并禁用。
+- 上一版误加的标题栏 Fork 和克隆会话相关改动已撤回，不保留在批次 37。
+
+验证：
+
+- Playwright demo：用户消息只有 1 个 `复制`，0 个 `Fork`，操作区 y=150.39、气泡底部 y=148.39，确认复制在气泡外；最终 AI 回复同时有 `Fork` 和 `复制`，按钮位置 x=553 / 611.8，点击 Fork 后 toast 文本为「已从该节点创建分支，原消息已填回输入框」。
+- `npm run check`、`npm run typecheck --workspace=@codepiddy/desktop`、`npm run build:codepiddy` 全绿。
+- 截图：`.artifacts/turn-fork-layout.png`、`.artifacts/turn-fork-notice.png`。
+
+### 2026-10-03 批次 38：Pi 1.0.1 固定内置版本与客户端 Provider 登录（待验收）
+
+用户要求确认 Pi 1.0.1 的原生 MCP、登录和全功能覆盖，并把缺失项留成后续任务清单。审计结果单独写入
+[pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
+
+结论摘要：
+
+- 当前机器运行 Pi `1.0.1`，仓库内置运行时也已替换为固定 `1.0.1` bundle。
+- Pi 1.0.1 原生包含 `@earendil-works/pi-mcp`，MCP 不再是外部插件。
+- 客户端基础 MCP 已经使用原生 `mcp.json`；Tavily `web_search` 仍是独立注入通道，需要迁移到原生 MCP 配置，但保留客户端 Tavily 设置卡和加密 Key。
+- `/login`、`/logout` 在 1.0.1 的原生 TUI 中可用，RPC 不暴露；SDK 提供 `ModelRuntime.login/logout`。客户端改为设置页直接提供 Provider 登录/退出，并完成隔离 API Key 登录验证，尚未验收。
+- 登录验证结果：设置页「登录 Provider」可加载 42 个 Provider；隔离目录下 API Key 登录成功写入 `auth.json`；OAuth 启动、auth URL、manual code、取消流程已验证到 helper 事件层。
+- 构建收口：`build:codepiddy-runtime` 只复制 `packages/coding-agent-runtime` 的固定 1.0.1 bundle，不联网、不自动选择版本。
+- 列表统一：设置页与登录弹窗的 `<select>` 已替换为 `SelectMenu`，最大高度 `min(320px, 46vh)`，内部滚动。
+- 审计过程中把运行时构建改成了 build 时 npm 安装 `1.0.1`，这与用户要求冲突，必须优先回退。
+
+后续先按审计文档的阶段 0 处理：
+
+1. 回退 build 自动安装 Pi。
+2. 手动替换仓库内置 Pi 为固定 `1.0.1`。
+3. 再处理 `web_search` 原生 MCP 统一、登录原型和缺失功能。
+
 ## 待办清单（按优先级，下一批从这里挑）
 
 1. [x] **会话树弹窗**：批次 18 已验收，随 `4473a98` 提交。
@@ -798,11 +863,17 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 11. [x] **会话 Fork 可发现性**：批次 32 Fork 按钮常显，Fork 后关弹窗、提示并聚焦输入框。
 12. [x] **Agent 会话新建 / 切换**：批次 33 每个 Agent 可列出、新建、切换会话，Fork 分支也在列表里，选择会持久化到重启。
 13. [x] **对话快速定位条升级**：批次 35 加 dock 余弦放大、溢出才显示，保留滚动跟随与预览。
+14. [ ] **更改 diff 卡片堆叠**：批次 36 已实现并完成截图验证，等待用户验收。
+15. [ ] **用户消息级快捷 Fork**：批次 37 已实现并完成截图验证，等待用户验收。
+16. [ ] **Pi 1.0.1 功能审计与版本收口**：批次 38 已完成文档审计、固定内置 1.0.1 bundle、客户端 Provider 登录和统一 SelectMenu，等待验收。详细清单见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)。
 
 ## 未提交状态
 
-批次 1-35 已全部提交并推送到 `origin/main`，工作树干净。最近几批：
+批次 1-35 已提交并推送到 `origin/main`；批次 36-38 尚未提交，等待验收。最近几批：
 
+- 待验收：更改 diff 卡片堆叠（`WorkPanel.tsx`、`styles.css`、README、截图和交接文档）
+- 待验收：用户消息级快捷 Fork（`App.tsx`、`styles.css`、README、DESIGN 和交接文档）
+- 待验收：Pi 1.0.1 固定内置版本、客户端 Provider 登录/退出、统一 SelectMenu（详见 [pi-1.0.1-feature-audit.md](./pi-1.0.1-feature-audit.md)）
 - `3f5284a feat(desktop): upgrade transcript minimap with dock magnification`（批次 35）
 - `e17218e docs(desktop): restart the client automatically after UI changes`
 - `0ba23e6 feat(desktop): add session deletion and fix new-session button layout`（批次 34）
@@ -865,4 +936,6 @@ UI 改完 build 通过后自动重启客户端，不用询问用户。
 
 ## 待用户确认
 
-- 暂无，批次 1-35 已验收。
+- 批次 36：更改 diff 卡片堆叠。
+- 批次 37：用户消息级快捷 Fork。
+- 批次 38：Pi 1.0.1 固定内置版本、客户端 Provider 登录/退出、统一 SelectMenu；`web_search` 原生 MCP 命名策略。
