@@ -2762,19 +2762,19 @@ textarea:focus-visible,
   position: absolute;
   top: var(--cp-space-sm);
   left: 50%;
-  width: 10px;
+  width: calc(10px * var(--minimap-magnify, 1));
   height: 2px;
   border-radius: var(--cp-radius-full);
   background: var(--cp-ink-faint);
   content: "";
   transform: translateX(-50%);
-  transition: width 140ms ease-out, height 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out;
+  transition: background 140ms ease-out, box-shadow 140ms ease-out;
 }
 .transcript-minimap-tick.tick-error::after { background: var(--cp-danger); }
 .transcript-minimap-tick.active::after { background: var(--cp-ink-secondary); }
 .transcript-minimap-tick:hover::after,
 .transcript-minimap-tick:focus-visible::after {
-  width: 22px;
+  width: calc(22px * var(--minimap-magnify, 1));
   height: 3px;
   background: var(--cp-ink);
   box-shadow: 0 3px 10px rgb(23 24 26 / 16%);

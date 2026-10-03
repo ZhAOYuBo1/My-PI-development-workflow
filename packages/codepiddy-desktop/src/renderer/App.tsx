@@ -849,17 +849,43 @@ function buildTranscriptTurns(items: TranscriptItem[]): TranscriptTurn[] {
 	return turns;
 }
 
+const MINIMAP_MAGNIFY_RADIUS = 46;
+const MINIMAP_MAGNIFY_BOOST = 1.35;
+
 function TranscriptMinimap({
 	items,
 	activeIndex,
 	onJump,
+	scrollRef,
 }: {
 	items: TranscriptItem[];
 	activeIndex: number;
 	onJump(index: number): void;
+	scrollRef: { current: HTMLDivElement | null };
 }) {
 	const turns = buildTranscriptTurns(items);
-	if (turns.length < 2) return null;
+	const tickRefs = useRef<(HTMLButtonElement | null)[]>([]);
+	const railRef = useRef<HTMLElement | null>(null);
+	const frameRef = useRef(0);
+	// 先显示再测量：测量失败时宁可多显示一条定位条，也不要整条消失。
+	const [overflowing, setOverflowing] = useState(true);
+
+	useEffect(() => {
+		const element = scrollRef.current;
+		if (!element) return;
+		const update = (): void => setOverflowing(element.scrollHeight - element.clientHeight > 1);
+		update();
+		const resizeObserver = new ResizeObserver(update);
+		const mutationObserver = new MutationObserver(update);
+		resizeObserver.observe(element);
+		mutationObserver.observe(element, { childList: true, subtree: true, characterData: true });
+		return () => {
+			resizeObserver.disconnect();
+			mutationObserver.disconnect();
+		};
+	}, [scrollRef]);
+
+	if (turns.length < 2 || !overflowing) return null;
 	const activeTurnIndex = Math.max(
 		0,
 		turns.findIndex((turn) => activeIndex >= turn.startIndex && activeIndex <= turn.endIndex),
@@ -870,8 +896,37 @@ function TranscriptMinimap({
 		Math.min(turns.length - maximumVisibleTurns, activeTurnIndex - Math.floor(maximumVisibleTurns / 2)),
 	);
 	const visibleTurns = turns.slice(visibleStart, visibleStart + maximumVisibleTurns);
+
+	function applyMagnify(clientY: number): void {
+		const rail = railRef.current;
+		if (!rail) return;
+		const y = clientY - rail.getBoundingClientRect().top;
+		cancelAnimationFrame(frameRef.current);
+		frameRef.current = requestAnimationFrame(() => {
+			for (const tick of tickRefs.current) {
+				if (!tick) continue;
+				const center = tick.offsetTop + tick.offsetHeight / 2;
+				const distance = Math.abs(y - center);
+				const falloff =
+					distance >= MINIMAP_MAGNIFY_RADIUS ? 0 : Math.cos((distance / MINIMAP_MAGNIFY_RADIUS) * (Math.PI / 2));
+				tick.style.setProperty("--minimap-magnify", String(1 + (MINIMAP_MAGNIFY_BOOST - 1) * falloff));
+			}
+		});
+	}
+
+	function resetMagnify(): void {
+		cancelAnimationFrame(frameRef.current);
+		for (const tick of tickRefs.current) tick?.style.setProperty("--minimap-magnify", "1");
+	}
+
 	return (
-		<nav className="transcript-minimap" aria-label="对话快速定位">
+		<nav
+			className="transcript-minimap"
+			aria-label="对话快速定位"
+			ref={railRef}
+			onMouseMove={(event) => applyMagnify(event.clientY)}
+			onMouseLeave={resetMagnify}
+		>
 			{visibleTurns.map((turn, visibleIndex) => {
 				const turnIndex = visibleStart + visibleIndex;
 				const offset = visibleIndex - (visibleTurns.length - 1) / 2;
@@ -880,6 +935,9 @@ function TranscriptMinimap({
 					<button
 						key={turn.id}
 						type="button"
+						ref={(element) => {
+							tickRefs.current[visibleIndex] = element;
+						}}
 						className={`transcript-minimap-tick ${turn.hasError ? "tick-error" : ""} ${turnIndex === activeTurnIndex ? "active" : ""}`}
 						style={{ top: `calc(50% + ${offset * 20}px)` }}
 						onClick={() => onJump(turn.startIndex)}
@@ -4003,6 +4061,7 @@ export function App() {
 								items={items}
 								activeIndex={activeTranscriptIndex}
 								onJump={jumpToTranscriptItem}
+								scrollRef={transcriptRef}
 							/>
 							<div className="conversation-column">
 								<div className="transcript" ref={transcriptRef} onScroll={handleTranscriptScroll}>

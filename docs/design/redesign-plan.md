@@ -22,7 +22,7 @@
 
 ```text
 继续 CodePIddy 客户端开发。先读 docs/design/redesign-plan.md（尤其「如何续接」「当前状态」「进度日志」最后三条和「待办清单」），
-再读 PRODUCT.md、DESIGN.md。批次 1-33 已提交并推送（`4205939`）；批次 34（会话删除 + 新建会话按钮单行）已改完，待验收提交；下一步是「对话快速定位条」升级（参考项目 ConversationMinimap）。
+再读 PRODUCT.md、DESIGN.md。批次 1-34 已提交并推送（`e17218e`）；批次 35（对话快速定位条 dock 放大 + 溢出显示）已改完，待验收提交。
 字体、圆角、输入区叠层、app icon、空态/错误态/加载态、运行反馈、用户选定流星、思考强度波场、会话树、工作区面板、变更历史、内部终端、结构清理、README 和截图都已验收，不要重做。
 Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩展点（tool_call / tool_result）或 packages/codepiddy-desktop 自己的 main / renderer。
 后续属于新增需求：文件搜索、diff 折叠、终端多标签，或用户指定的具体页面。
@@ -56,7 +56,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - **不改 Pi core（`packages/coding-agent`）**。Pi 可以更新，所有增强必须走它提供的扩展点（`tool_call` / `tool_result` / `tool_execution_*` 等）。
 - 不引入 Tailwind 或第二套框架，沿用现有 Vite + React + 单个 `styles.css` 的组织方式，必要时拆成多个 CSS 分片。
 
-## 当前状态（2026-10-03 批次 34：会话删除 + 定位条评估）
+## 当前状态（2026-10-03 批次 35：对话快速定位条升级）
 
 - `styles.css` 4253 行，顶部是完整的 `--cp-*` 令牌层；旧玻璃层的死规则已删除，`rgb(255 255 255 / N%)` 只剩侧栏 sheen 两处。
 - 间距令牌已建立：`--cp-space-micro` 到 `--cp-space-5xl`（2/4/6/8/12/16/24/32/40/48/64px）；组件间距声明已全部改用令牌。
@@ -771,9 +771,16 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 验证：Playwright demo 2 条会话、1 个删除按钮，删除后变 1 条；`npm run check`、`npm run build:codepiddy` 全绿。
 
-### 待办：对话快速定位条升级
+### 2026-10-03 批次 35：对话快速定位条升级（待验收）
 
-参考项目 `ConversationMinimap.tsx` 是 Codex 风格：左侧一列短横线，一个用户轮次一条；鼠标靠近时按 macOS Dock 余弦衰减放大（只横向变宽，不改变堆叠布局）；最近的轮次显示预览浮层；点击跳转；内容不足一屏时整条隐藏；滚动时跟踪当前轮次。我们现在的 `TranscriptMinimap` 只有固定 20 条、简单 tick + hover 预览，没有放大、滚动跟随和溢出判断。下一批按参考思路升级。
+参考项目 `ConversationMinimap.tsx` 的 Codex 风格：
+
+- 鼠标靠近刻度时按余弦衰减放大，只横向变宽（`--minimap-magnify` + `width: calc(10px * var(--minimap-magnify, 1))`），不改变堆叠布局。
+- rAF 节流：mousemove 每帧批量写 CSS 变量，`onMouseLeave` 复位为 1。
+- 内容不足一屏时整条隐藏：`ResizeObserver + MutationObserver` 监听 `.transcript` 的 `scrollHeight - clientHeight`；测量失败时默认显示，避免整条消失。
+- 保留原有滚动跟随（`activeTranscriptIndex`）、点击跳转、hover 预览浮层。
+
+验证：demo 只有 1 个 turn（`turns.length < 2`），定位条按设计不渲染；代码通过 typecheck、`npm run check`、`npm run build:codepiddy`。真实会话（68 条消息、多轮）重启后可见 dock 放大效果。
 
 ## 待办清单（按优先级，下一批从这里挑）
 
@@ -789,7 +796,7 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 10. [x] **设置页分区与集成配置**：批次 31 设置页改成左侧分类导航；新增 MCP 服务和 Provider / 模型的客户端配置。
 11. [x] **会话 Fork 可发现性**：批次 32 Fork 按钮常显，Fork 后关弹窗、提示并聚焦输入框。
 12. [x] **Agent 会话新建 / 切换**：批次 33 每个 Agent 可列出、新建、切换会话，Fork 分支也在列表里，选择会持久化到重启。
-13. [ ] **对话快速定位条升级**：参考 `ConversationMinimap`，加 dock 放大、滚动跟随、溢出才显示。
+13. [x] **对话快速定位条升级**：批次 35 加 dock 余弦放大、溢出才显示，保留滚动跟随与预览。
 
 ## 未提交状态
 
@@ -799,10 +806,10 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 - `dd2c0fc docs: rewrite README and refresh screenshots`（批次 26）
 - `396006e feat(desktop): add review diffs, lazy terminal and collapsed work panel`（批次 27-29）
 
-批次 34 已改完，待用户验收后提交。改动范围：
+批次 35 已改完，待用户验收后提交。改动范围：
 
-- `codepiddy-shared` / `main/index.ts` / `preload`：新增 `deleteAgentSession`。
-- `App.tsx` / `styles.css`：会话行加删除按钮；「新建会话」按钮改成单行。
+- `App.tsx`：`TranscriptMinimap` 增加 `scrollRef`、溢出检测、rAF 节流 dock 放大；传入 `transcriptRef`。
+- `styles.css`：刻度宽度改用 `--minimap-magnify`，去掉宽度 transition。
 
 注意：`package-lock.json` 有改动（批次 23-25 的 xterm / node-pty，以及批次 28 的 review workspace / diff），提交时需要 `PI_ALLOW_LOCKFILE_CHANGE=1`。批次 23 的补全实现已被批次 24 完全取代，不会单独提交。
 
@@ -860,4 +867,4 @@ Pi core 可更新，禁止改 packages/coding-agent；外壳增强走 Pi 的扩�
 
 ## 待用户确认
 
-- 批次 34（会话删除 + 新建会话按钮单行）待验收；定位条升级待开工。
+- 批次 35（对话快速定位条升级）待验收。
